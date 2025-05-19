@@ -1,14 +1,15 @@
 import React, { useEffect, useRef } from 'react'
-// @ts-ignore – LiveKit 2.13.0 không export type Room chính thức
+// @ts-ignore – LiveKit không có declaration cho Room
 const { Room } = require('livekit-client/dist/room')
-import { LocalVideoTrack } from 'livekit-client'
+// @ts-ignore – LiveKit không có declaration cho LocalVideoTrack
+const { LocalVideoTrack } = require('livekit-client/dist/webrtc')
 
 const DevVideoSingleFile: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null)
 
     useEffect(() => {
         const connectToRoom = async () => {
-            const token = 'YOUR_TOKEN_HERE' // ⚠️ thay bằng token thật
+            const token = 'YOUR_TOKEN_HERE' // ⚠️ Thay bằng token thật
             const serverUrl = 'wss://onlook-jvtj33oo.livekit.cloud'
 
             const room = new Room()
@@ -35,7 +36,7 @@ const DevVideoSingleFile: React.FC = () => {
 
     return (
         <div>
-            <h1>LiveKit 2.13.0 – Video Only (final fix)</h1>
+            <h1>LiveKit 2.13.0 – Video Only (final, stable)</h1>
             <video ref={videoRef} autoPlay muted playsInline width="100%" />
         </div>
     )
