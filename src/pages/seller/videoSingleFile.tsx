@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Room, LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
-import { connect } from 'livekit-client/dist/es5/connect';
+import { connect } from 'livekit-client/dist/es5/connect'; // ✅ đúng cho bản 1.6.5
 
 const SellerVideoSingleFilePage: React.FC = () => {
     const videoContainerRef = useRef<HTMLDivElement>(null);
@@ -52,7 +52,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
 
     return (
         <div>
-            <h2>📺 Livestream: Phát video có sẵn (file .mp4)</h2>
+            <h2>📺 Livestream: Phát video có sẵn</h2>
             <div ref={videoContainerRef} />
         </div>
     );
