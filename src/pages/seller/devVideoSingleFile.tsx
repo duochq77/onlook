@@ -1,9 +1,8 @@
 import React, { useEffect, useRef } from 'react'
 import {
-    createLocalVideoTrack,
-    createRoom,
-    type LocalVideoTrack,
-} from 'livekit-client/core'
+    Room,
+    LocalVideoTrack,
+} from 'livekit-client'
 
 const DevVideoSingleFile: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null)
@@ -13,12 +12,12 @@ const DevVideoSingleFile: React.FC = () => {
             const token = 'YOUR_TOKEN_HERE' // ⚠️ thay bằng token thật
             const serverUrl = 'wss://onlook-jvtj33oo.livekit.cloud'
 
-            const room = createRoom()
+            const room = new Room()
             await room.connect(serverUrl, token, {
                 autoSubscribe: true,
             })
 
-            const videoTrack: LocalVideoTrack = await createLocalVideoTrack()
+            const videoTrack = await LocalVideoTrack.create()
             await room.localParticipant.publishTrack(videoTrack)
 
             if (videoRef.current) {
