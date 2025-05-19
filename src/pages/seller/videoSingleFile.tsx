@@ -1,3 +1,6 @@
+// 💣 Lỗi cố ý để test xem Vercel có đọc đúng file không
+const intentionalError = testThisDoesNotExist;
+
 import React, { useEffect, useRef, useState } from 'react';
 import { LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
 import { Room } from 'livekit-client/dist/es5/room';
@@ -53,7 +56,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
 
     return (
         <div>
-            <h2>📺 Livestream: Phát file video có sẵn (file .mp4)</h2>
+            <h2>📺 Livestream: Phát file video có sẵn (.mp4)</h2>
             <div ref={videoContainerRef} />
         </div>
     );
