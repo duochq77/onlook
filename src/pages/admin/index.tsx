@@ -32,3 +32,22 @@ const AdminPage: React.FC = () => {
                 type="file"
                 accept="video/mp4"
                 onChange={(e) => setFile(e.target.files?.[0] || null)}
+            />
+            <button
+                onClick={handleUpload}
+                disabled={uploading}
+                style={{ marginTop: '1rem' }}
+            >
+                {uploading ? 'Đang tải lên...' : 'Tải lên'}
+            </button>
+
+            {uploadedUrl && (
+                <p style={{ marginTop: '1rem' }}>
+                    ✅ Đã upload: <a href={uploadedUrl} target="_blank">{uploadedUrl}</a>
+                </p>
+            )}
+        </div>
+    )
+}
+
+export default AdminPage
