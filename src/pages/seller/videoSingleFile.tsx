@@ -1,52 +1,55 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Room, LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
-import { useRouter } from 'next/router';
 
 const SellerVideoSingleFilePage: React.FC = () => {
     const videoContainerRef = useRef<HTMLDivElement>(null);
     const [room, setRoom] = useState<Room | null>(null);
-    const router = useRouter();
-
-    const roomName = 'onlook-room';
-    const identity = 'seller-' + Math.floor(Math.random() * 10000);
-    const role = 'publisher';
 
     useEffect(() => {
-        const startLivestream = async () => {
-            const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
-            const { token } = await res.json();
+        async function startLivestream() {
+            // Lấy token từ API của bạn
+            const roomName = 'onlook-room';
+            const identity = 'seller-' + Math.floor(Math.random() * 10000);
+            const role = 'publisher';
 
+            const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
+            const data = await res.json();
+            const token = data.token;
+
+            // Tạo Room và kết nối
             const room = new Room();
             await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token);
             setRoom(room);
 
-            // Tạo thẻ video phát lại
+            // Tạo video element để phát file video cục bộ
             const videoEl = document.createElement('video');
-            videoEl.src = '/full-video.mp4'; // Đặt file tại thư mục public
+            videoEl.src = '/full-video.mp4'; // file trong thư mục public
             videoEl.loop = true;
-            videoEl.muted = true; // tránh echo ở phía seller
+            videoEl.muted = true;
             await videoEl.play();
 
+            // Lấy video và audio track từ media stream
             const mediaStream = videoEl.captureStream();
             const videoTrack = mediaStream.getVideoTracks()[0];
             const audioTrack = mediaStream.getAudioTracks()[0];
 
+            // Tạo và publish LocalVideoTrack
             if (videoTrack) {
                 const localVideoTrack = new LocalVideoTrack(videoTrack);
                 await room.localParticipant.publishTrack(localVideoTrack);
 
-                // Gắn video preview
                 const attached = localVideoTrack.attach();
                 if (videoContainerRef.current) {
                     videoContainerRef.current.appendChild(attached);
                 }
             }
 
+            // Tạo và publish LocalAudioTrack
             if (audioTrack) {
                 const localAudioTrack = new LocalAudioTrack(audioTrack);
                 await room.localParticipant.publishTrack(localAudioTrack);
             }
-        };
+        }
 
         startLivestream();
 
@@ -57,7 +60,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
 
     return (
         <div>
-            <h2>🔴 Livestream: Phát file video có sẵn (có cả âm thanh)</h2>
+            <h2>Livestream: Phát file video có sẵn</h2>
             <div ref={videoContainerRef} />
         </div>
     );
