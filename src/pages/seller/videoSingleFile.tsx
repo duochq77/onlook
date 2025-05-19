@@ -1,5 +1,6 @@
+// src/pages/seller/videoSingleFile.tsx
 import React, { useEffect, useRef, useState } from 'react';
-import LiveKitClient, { Room, LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
+import { Room, LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
 import { useRouter } from 'next/router';
 
 const SellerVideoSingleFilePage: React.FC = () => {
@@ -13,10 +14,13 @@ const SellerVideoSingleFilePage: React.FC = () => {
 
     useEffect(() => {
         const startLivestream = async () => {
+            // Fetch token từ API
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
             const { token } = await res.json();
 
-            const room = await LiveKitClient.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token);
+            // Tạo Room mới
+            const room = new Room();
+            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token);
             setRoom(room);
 
             // Tạo thẻ video phát lại
@@ -32,7 +36,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
 
             if (videoTrack) {
                 const localVideoTrack = new LocalVideoTrack(videoTrack);
-                room.localParticipant.publishTrack(localVideoTrack);
+                await room.localParticipant.publishTrack(localVideoTrack);
 
                 // Gắn hiển thị
                 const attached = localVideoTrack.attach();
@@ -43,7 +47,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
 
             if (audioTrack) {
                 const localAudioTrack = new LocalAudioTrack(audioTrack);
-                room.localParticipant.publishTrack(localAudioTrack);
+                await room.localParticipant.publishTrack(localAudioTrack);
             }
         };
 
