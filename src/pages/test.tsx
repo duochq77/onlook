@@ -7,11 +7,10 @@ const TestRedirectPage = () => {
     const router = useRouter()
 
     useEffect(() => {
-        // Chuyển hướng đến trang đang cần test
-        router.push('/seller/videoSingleFile')
+        router.push('/seller/devVideoSingleFile') // điều hướng tới file test mới
     }, [router])
 
-    return <p>Đang chuyển hướng tới /seller/videoSingleFile...</p>
+    return <p>🔁 Đang điều hướng tới devVideoSingleFile.tsx...</p>
 }
 
 export default TestRedirectPage
