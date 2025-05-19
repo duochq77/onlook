@@ -1,12 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { connect, Room, LocalTrackPublication, LocalVideoTrack, LocalAudioTrack, createLocalVideoTrack } from 'livekit-client';
+import { connect, Room, LocalAudioTrack, LocalVideoTrack, createLocalVideoTrack } from 'livekit-client';
 import { connectToRoom } from '@/services/LiveKitService';
 import { supabase } from '@/services/SupabaseService';
 
 const WebcamAudioFilePage: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [room, setRoom] = useState<Room | null>(null);
-    const [audioUrl, setAudioUrl] = useState<string>('');
     const [audioElement] = useState<HTMLAudioElement>(new Audio());
     const [useSampleAudio, setUseSampleAudio] = useState<boolean>(false);
 
@@ -20,7 +19,7 @@ const WebcamAudioFilePage: React.FC = () => {
             setRoom(room);
 
             const videoTrack = await createLocalVideoTrack();
-            room.localParticipant.publishTrack(videoTrack);
+            await room.localParticipant.publishTrack(videoTrack);
             videoTrack.attach(videoRef.current!);
 
             let audioTrack: LocalAudioTrack | null = null;
@@ -39,13 +38,13 @@ const WebcamAudioFilePage: React.FC = () => {
                     const stream = audioElement.captureStream();
                     const audioMediaTrack = stream.getAudioTracks()[0];
                     audioTrack = new LocalAudioTrack(audioMediaTrack);
-                    room.localParticipant.publishTrack(audioTrack);
+                    await room.localParticipant.publishTrack(audioTrack);
                 }
             } else {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 const micTrack = stream.getAudioTracks()[0];
                 audioTrack = new LocalAudioTrack(micTrack);
-                room.localParticipant.publishTrack(audioTrack);
+                await room.localParticipant.publishTrack(audioTrack);
             }
         };
 
@@ -62,7 +61,6 @@ const WebcamAudioFilePage: React.FC = () => {
         <div className="flex flex-col items-center justify-center min-h-screen">
             <h1 className="text-2xl font-bold mb-4">Phát webcam + audio từ mic hoặc mẫu</h1>
             <video ref={videoRef} autoPlay muted className="w-full max-w-xl rounded-lg shadow" />
-
             <div className="mt-4">
                 <label className="flex items-center space-x-2">
                     <input

@@ -1,5 +1,3 @@
-// File: src/pages/api/process.ts
-
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { createClient } from '@supabase/supabase-js'
 import { exec } from 'child_process'
@@ -26,7 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Missing parameters' })
     }
 
-    const ffmpegPath = 'ffmpeg' // Giả sử đã có sẵn ffmpeg trong môi trường server
+    const ffmpegPath = 'ffmpeg' // ffmpeg phải được cài đặt trên server
     const outputPath = path.join('/tmp', outputName)
     const command = `${ffmpegPath} -i ${videoPath} -i ${audioPath} -c:v copy -c:a aac -shortest ${outputPath}`
 

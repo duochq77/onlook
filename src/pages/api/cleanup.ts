@@ -1,12 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { supabase } from '@/services/SupabaseService'
-import fs from 'fs'
-import path from 'path'
 
 /**
- * API này xoá toàn bộ file trong thư mục `outputs/[userId]/`
- * Có thể gọi sau khi seller dừng livestream
- * @route DELETE /api/cleanup?user=abc123
+ * API xoá toàn bộ file trong thư mục outputs/[userId]
+ * Phù hợp dùng sau khi seller dừng livestream
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'DELETE') return res.status(405).json({ error: 'Method not allowed' })

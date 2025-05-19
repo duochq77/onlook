@@ -1,4 +1,3 @@
-// src/pages/seller/videoSingleFile.tsx
 import React, { useEffect, useRef, useState } from 'react';
 import { connect, Room, LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
 import { useRouter } from 'next/router';
@@ -24,7 +23,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
             const videoEl = document.createElement('video');
             videoEl.src = '/full-video.mp4'; // Đặt file tại thư mục public
             videoEl.loop = true;
-            videoEl.muted = true; // để tránh echo trên seller
+            videoEl.muted = true; // tránh echo trên seller
             await videoEl.play();
 
             const mediaStream = videoEl.captureStream();
@@ -35,7 +34,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
                 const localVideoTrack = new LocalVideoTrack(videoTrack);
                 room.localParticipant.publishTrack(localVideoTrack);
 
-                // Gắn hiển thị
+                // Gắn hiển thị video cho seller
                 const attached = localVideoTrack.attach();
                 if (videoContainerRef.current) {
                     videoContainerRef.current.appendChild(attached);

@@ -1,10 +1,9 @@
-// src/pages/seller/webcamMic.tsx
 import React, { useEffect, useRef, useState } from 'react';
-import { connect, Room, LocalTrackPublication, LocalVideoTrack, LocalAudioTrack, createLocalVideoTrack, createLocalAudioTrack } from 'livekit-client';
+import { connect, Room, LocalVideoTrack, LocalAudioTrack, createLocalVideoTrack, createLocalAudioTrack } from 'livekit-client';
 import { useRouter } from 'next/router';
 
 const SellerWebcamMicPage: React.FC = () => {
-    const videoRef = useRef<HTMLVideoElement>(null);
+    const videoRef = useRef<HTMLDivElement>(null);
     const [room, setRoom] = useState<Room | null>(null);
     const router = useRouter();
 
