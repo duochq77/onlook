@@ -13,6 +13,10 @@ const nextConfig = {
     images: {
         domains: ['lh3.googleusercontent.com', 'cdn.livekit.io'],
     },
+    experimental: {
+        typedRoutes: true,
+        serverActions: true,
+    },
 }
 
-module.exports = nextConfig
+export default nextConfig
