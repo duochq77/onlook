@@ -1,63 +1,47 @@
-// src/pages/seller/videoSingleFile.tsx
-import React, { useEffect, useRef, useState } from 'react';
-import { LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
-import { connect } from 'livekit-client/dist/es5/connect'; // ✅ dùng đúng cách
-import { Room } from 'livekit-client';
+import React, { useEffect, useRef } from 'react'
+import { connect } from 'livekit-client/dist/es5/connect'
+import { LocalVideoTrack, LocalAudioTrack } from 'livekit-client'
+import { Room } from 'livekit-client/dist/es5/room' // ✅ Import đúng module Room
 
 const SellerVideoSingleFilePage: React.FC = () => {
-    const videoContainerRef = useRef<HTMLDivElement>(null);
-    const [room, setRoom] = useState<Room | null>(null);
+    const videoContainerRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
-        async function start() {
-            const roomName = 'onlook-room';
-            const identity = 'seller-' + Math.floor(Math.random() * 10000);
-            const role = 'publisher';
+        const startLivestream = async () => {
+            const res = await fetch(`/api/token?room=onlook-room&identity=seller-file&role=publisher`)
+            const { token } = await res.json()
 
-            const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
-            const data = await res.json();
-            const token = data.token;
+            const room = new Room()
+            await connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, { room })
 
-            const room = await connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token);
-            setRoom(room);
+            // Load file video từ thư mục public
+            const videoEl = document.createElement('video')
+            videoEl.src = '/full-video.mp4'
+            videoEl.loop = true
+            videoEl.muted = true
+            await videoEl.play()
 
-            const videoEl = document.createElement('video');
-            videoEl.src = '/full-video.mp4';
-            videoEl.loop = true;
-            videoEl.muted = true;
-            await videoEl.play();
+            const stream = videoEl.captureStream()
+            const videoTrack = new LocalVideoTrack(stream.getVideoTracks()[0])
+            const audioTrack = new LocalAudioTrack(stream.getAudioTracks()[0])
 
-            const stream = videoEl.captureStream();
-            const videoTrack = stream.getVideoTracks()[0];
-            const audioTrack = stream.getAudioTracks()[0];
+            await room.localParticipant.publishTrack(videoTrack)
+            await room.localParticipant.publishTrack(audioTrack)
 
-            if (videoTrack) {
-                const localVideo = new LocalVideoTrack(videoTrack);
-                await room.localParticipant.publishTrack(localVideo);
-                const el = localVideo.attach();
-                if (videoContainerRef.current) {
-                    videoContainerRef.current.appendChild(el);
-                }
-            }
-
-            if (audioTrack) {
-                const localAudio = new LocalAudioTrack(audioTrack);
-                await room.localParticipant.publishTrack(localAudio);
-            }
+            const attached = videoTrack.attach()
+            videoContainerRef.current?.appendChild(attached)
         }
 
-        start();
-        return () => {
-            room?.disconnect();
-        };
-    }, []);
+        startLivestream()
+        return () => { }
+    }, [])
 
     return (
         <div>
-            <h2>Livestream từ video có sẵn</h2>
-            <div ref={videoContainerRef}></div>
+            <h2>🔴 Test phát file video có sẵn</h2>
+            <div ref={videoContainerRef} />
         </div>
-    );
-};
+    )
+}
 
-export default SellerVideoSingleFilePage;
+export default SellerVideoSingleFilePage
