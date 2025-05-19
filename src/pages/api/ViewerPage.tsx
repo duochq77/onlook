@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+// @ts-ignore
 import { Room, RemoteTrackPublication, RemoteVideoTrack, connect } from 'livekit-client'
 
 const ViewerPage: React.FC = () => {
