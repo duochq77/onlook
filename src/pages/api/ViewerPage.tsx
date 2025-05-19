@@ -1,6 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react'
 // @ts-ignore
-import { Room, RemoteTrackPublication, RemoteVideoTrack, connect } from 'livekit-client'
+import {
+    Room,
+    RemoteTrackPublication,
+    RemoteVideoTrack,
+    RemoteParticipant,
+    Track,
+    connect
+} from 'livekit-client'
 
 const ViewerPage: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null)
@@ -12,24 +18,21 @@ const ViewerPage: React.FC = () => {
             const roomName = 'default-room'
             const identity = 'viewer-' + Math.floor(Math.random() * 10000)
 
-            console.log('🔗 Viewer connect to:', serverUrl)
-
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=subscriber`)
             const data = await res.json()
             const token = data.token
 
-            console.log('🎫 Viewer Token:', typeof token, token)
-
-            const room = await connect(serverUrl, token, {
-                autoSubscribe: true,
-            })
+            const room = await connect(serverUrl, token, { autoSubscribe: true })
             setRoom(room)
 
-            room.on('trackSubscribed', (track, publication, participant) => {
-                if (track.kind === 'video' && videoRef.current) {
-                    track.attach(videoRef.current)
+            room.on(
+                'trackSubscribed',
+                (track: Track, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+                    if (track.kind === 'video' && videoRef.current) {
+                        (track as RemoteVideoTrack).attach(videoRef.current)
+                    }
                 }
-            })
+            )
 
             room.on('disconnected', () => {
                 console.log('🚪 Viewer disconnected')
@@ -40,9 +43,7 @@ const ViewerPage: React.FC = () => {
         connectToRoom()
 
         return () => {
-            if (room) {
-                room.disconnect()
-            }
+            if (room) room.disconnect()
         }
     }, [])
 
