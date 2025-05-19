@@ -1,5 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { connect, Room, LocalVideoTrack, LocalAudioTrack } from 'livekit-client'
+import {
+    Room,
+    LocalVideoTrack,
+    createLocalVideoTrack,
+} from 'livekit-client'
 
 const DevVideoSingleFile: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null)
@@ -7,20 +11,20 @@ const DevVideoSingleFile: React.FC = () => {
 
     useEffect(() => {
         const connectToRoom = async () => {
-            const token = 'YOUR_TOKEN_HERE' // thay bằng token thật
-            const url = 'wss://onlook-jvtj33oo.livekit.cloud'
+            const token = 'YOUR_TOKEN_HERE' // ⚠️ thay bằng token thật sự
+            const serverUrl = 'wss://onlook-jvtj33oo.livekit.cloud'
 
-            const room = await connect(url, token, {
-                audio: false,
-                video: false,
+            const room = new Room()
+            await room.connect(serverUrl, token, {
+                autoSubscribe: true,
             })
 
-            const videoTrack = await LocalVideoTrack.create()
-            room.localParticipant.publishTrack(videoTrack)
+            const videoTrack: LocalVideoTrack = await createLocalVideoTrack()
+            await room.localParticipant.publishTrack(videoTrack)
 
-            const mediaStream = new MediaStream([videoTrack.mediaStreamTrack])
             if (videoRef.current) {
-                videoRef.current.srcObject = mediaStream
+                const stream = new MediaStream([videoTrack.mediaStreamTrack])
+                videoRef.current.srcObject = stream
                 videoRef.current.play()
             }
 
@@ -36,7 +40,7 @@ const DevVideoSingleFile: React.FC = () => {
 
     return (
         <div>
-            <h1>Test LiveKit 0.13.1 – Single Video</h1>
+            <h1>Test LiveKit 2.13.0 – Video Only</h1>
             <video ref={videoRef} autoPlay muted playsInline width="100%" />
         </div>
     )
