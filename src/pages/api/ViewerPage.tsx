@@ -1,6 +1,5 @@
-// pages/ViewerPage.tsx
 import React, { useEffect, useRef, useState } from 'react'
-import { Room, RemoteTrackPublication, Participant, Track, connect } from 'livekit-client'
+import { Room, RemoteTrackPublication, RemoteVideoTrack, connect } from 'livekit-client'
 
 const ViewerPage: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null)
@@ -12,13 +11,13 @@ const ViewerPage: React.FC = () => {
             const roomName = 'default-room'
             const identity = 'viewer-' + Math.floor(Math.random() * 10000)
 
-            console.log('🔗 LiveKit URL:', serverUrl)
+            console.log('🔗 Viewer connect to:', serverUrl)
 
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=subscriber`)
             const data = await res.json()
-            const token = data.token as string
+            const token = data.token
 
-            console.log('🔑 Token:', typeof token, token)
+            console.log('🎫 Viewer Token:', typeof token, token)
 
             const room = await connect(serverUrl, token, {
                 autoSubscribe: true,
@@ -28,15 +27,12 @@ const ViewerPage: React.FC = () => {
             room.on('trackSubscribed', (track, publication, participant) => {
                 if (track.kind === 'video' && videoRef.current) {
                     track.attach(videoRef.current)
-                    console.log('🎥 Đã nhận video track từ:', participant.identity)
                 }
             })
 
             room.on('disconnected', () => {
+                console.log('🚪 Viewer disconnected')
                 setRoom(null)
-                if (videoRef.current) {
-                    videoRef.current.srcObject = null
-                }
             })
         }
 
@@ -51,11 +47,12 @@ const ViewerPage: React.FC = () => {
 
     return (
         <div style={{ padding: 24 }}>
-            <h1>👀 Viewer đang xem livestream</h1>
+            <h1>👀 Giao diện người xem livestream</h1>
             <video
                 ref={videoRef}
                 autoPlay
                 playsInline
+                controls={false}
                 style={{ width: '100%', maxWidth: 600, borderRadius: 12 }}
             />
         </div>
