@@ -21,15 +21,26 @@ async function runCleanVideoWorker() {
 
         try {
             const { inputVideo, outputName } = JSON.parse(job)
+            // Đảm bảo inputVideo là đường dẫn đầy đủ trong /tmp hoặc chuẩn hóa thành đường dẫn trong /tmp
             const inputPath = inputVideo.startsWith('/tmp') ? inputVideo : path.join('/tmp', inputVideo)
             const cleanOutput = path.join('/tmp', `clean-${outputName}`)
 
+            // Lệnh tách âm thanh: giữ video sạch, bỏ âm thanh
             const command = `ffmpeg -i "${inputPath}" -c copy -an "${cleanOutput}"`
             console.log('🔧 Đang tách âm:', command)
 
             await execPromise(command)
 
             console.log(`✅ Đã tách âm thành công: clean-${outputName}`)
+
+            // Đẩy job sang queue upload nếu cần (tùy luồng xử lý)
+            await redis.rpush('ffmpeg-jobs:upload', JSON.stringify({ outputName: `clean-${outputName}` }))
+
+            // Xóa file gốc nếu muốn (có thể tùy chỉnh)
+            // if (fs.existsSync(inputPath)) {
+            //     fs.unlinkSync(inputPath)
+            //     console.log(`🗑️ Đã xoá file gốc: ${inputPath}`)
+            // }
         } catch (err) {
             console.error('❌ Lỗi tách âm:', err)
         }

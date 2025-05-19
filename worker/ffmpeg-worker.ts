@@ -1,9 +1,4 @@
 import 'dotenv/config'
-console.log("🧪 ENV CHECK: ", {
-    SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    SUPABASE_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    BUCKET: process.env.SUPABASE_STORAGE_BUCKET
-})
 import { createClient } from '@supabase/supabase-js'
 import { Redis } from '@upstash/redis'
 import { exec } from 'child_process'
@@ -69,3 +64,5 @@ function execPromise(command: string): Promise<void> {
         })
     })
 }
+
+runWorker()

@@ -2,15 +2,12 @@ import 'dotenv/config'
 import { Redis } from '@upstash/redis'
 import { exec } from 'child_process'
 import path from 'path'
-import fs from 'fs'
 
-// Khởi tạo Redis
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
     token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 })
 
-// Hàm xử lý job ghép video
 async function runVideoWorker() {
     console.log('🎬 Video Worker đã khởi động...')
 

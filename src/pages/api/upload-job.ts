@@ -7,10 +7,6 @@ const redis = new Redis({
     token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 })
 
-/**
- * API: Đẩy job xử lý ghép video/audio vào Redis queue
- * Body: { inputVideo, inputAudio, outputName }
- */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' })

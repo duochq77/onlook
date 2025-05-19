@@ -10,17 +10,6 @@ export const config = {
     }
 }
 
-/**
- * API: Upload file lên Supabase Storage
- * Phù hợp cho seller/admin upload video hoặc audio từ trình duyệt
- * 
- * Body (JSON):
- * {
- *   file: base64 string,
- *   filename: 'abc.mp4',
- *   folder: 'tmp' | 'uploads' | 'admin-assets' ...
- * }
- */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
