@@ -7,7 +7,6 @@ const SellerVideoSingleFilePage: React.FC = () => {
 
     useEffect(() => {
         async function startLivestream() {
-            // Lấy token từ API của bạn
             const roomName = 'onlook-room';
             const identity = 'seller-' + Math.floor(Math.random() * 10000);
             const role = 'publisher';
@@ -16,24 +15,20 @@ const SellerVideoSingleFilePage: React.FC = () => {
             const data = await res.json();
             const token = data.token;
 
-            // Tạo Room và kết nối
             const room = new Room();
             await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token);
             setRoom(room);
 
-            // Tạo video element để phát file video cục bộ
             const videoEl = document.createElement('video');
-            videoEl.src = '/full-video.mp4'; // file trong thư mục public
+            videoEl.src = '/full-video.mp4'; // File phải đặt trong thư mục public
             videoEl.loop = true;
             videoEl.muted = true;
             await videoEl.play();
 
-            // Lấy video và audio track từ media stream
             const mediaStream = videoEl.captureStream();
             const videoTrack = mediaStream.getVideoTracks()[0];
             const audioTrack = mediaStream.getAudioTracks()[0];
 
-            // Tạo và publish LocalVideoTrack
             if (videoTrack) {
                 const localVideoTrack = new LocalVideoTrack(videoTrack);
                 await room.localParticipant.publishTrack(localVideoTrack);
@@ -44,7 +39,6 @@ const SellerVideoSingleFilePage: React.FC = () => {
                 }
             }
 
-            // Tạo và publish LocalAudioTrack
             if (audioTrack) {
                 const localAudioTrack = new LocalAudioTrack(audioTrack);
                 await room.localParticipant.publishTrack(localAudioTrack);
@@ -60,7 +54,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
 
     return (
         <div>
-            <h2>Livestream: Phát file video có sẵn</h2>
+            <h2>🎥 Livestream: Phát video có sẵn từ file /full-video.mp4</h2>
             <div ref={videoContainerRef} />
         </div>
     );
