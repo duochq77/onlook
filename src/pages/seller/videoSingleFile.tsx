@@ -24,7 +24,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
             const videoEl = document.createElement('video');
             videoEl.src = '/full-video.mp4'; // Đặt file tại thư mục public
             videoEl.loop = true;
-            videoEl.muted = true; // để tránh echo trên seller
+            videoEl.muted = true; // tránh echo ở phía seller
             await videoEl.play();
 
             const mediaStream = videoEl.captureStream();
@@ -33,9 +33,9 @@ const SellerVideoSingleFilePage: React.FC = () => {
 
             if (videoTrack) {
                 const localVideoTrack = new LocalVideoTrack(videoTrack);
-                room.localParticipant.publishTrack(localVideoTrack);
+                await room.localParticipant.publishTrack(localVideoTrack);
 
-                // Gắn hiển thị
+                // Gắn video preview
                 const attached = localVideoTrack.attach();
                 if (videoContainerRef.current) {
                     videoContainerRef.current.appendChild(attached);
@@ -44,7 +44,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
 
             if (audioTrack) {
                 const localAudioTrack = new LocalAudioTrack(audioTrack);
-                room.localParticipant.publishTrack(localAudioTrack);
+                await room.localParticipant.publishTrack(localAudioTrack);
             }
         };
 
