@@ -1,11 +1,11 @@
-// src/pages/seller/videoSingleFile.tsx
 import React, { useEffect, useRef, useState } from 'react';
-import { connect, LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
+// import LiveKitClient mặc định, không destructuring
+import LiveKitClient from 'livekit-client';
 import { useRouter } from 'next/router';
 
 const SellerVideoSingleFilePage: React.FC = () => {
     const videoContainerRef = useRef<HTMLDivElement>(null);
-    const [room, setRoom] = useState<any>(null); // Room object
+    const [room, setRoom] = useState<any>(null);
     const router = useRouter();
 
     const roomName = 'onlook-room';
@@ -17,12 +17,12 @@ const SellerVideoSingleFilePage: React.FC = () => {
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
             const { token } = await res.json();
 
-            // Connect to room using connect()
-            const room = await connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token);
+            // Dùng LiveKitClient.connect
+            const room = await LiveKitClient.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token);
             setRoom(room);
 
             const videoEl = document.createElement('video');
-            videoEl.src = '/full-video.mp4'; // file public
+            videoEl.src = '/full-video.mp4';
             videoEl.loop = true;
             videoEl.muted = true;
             await videoEl.play();
@@ -32,7 +32,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
             const audioTrack = mediaStream.getAudioTracks()[0];
 
             if (videoTrack) {
-                const localVideoTrack = new LocalVideoTrack(videoTrack);
+                const localVideoTrack = new LiveKitClient.LocalVideoTrack(videoTrack);
                 await room.localParticipant.publishTrack(localVideoTrack);
 
                 const attached = localVideoTrack.attach();
@@ -42,7 +42,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
             }
 
             if (audioTrack) {
-                const localAudioTrack = new LocalAudioTrack(audioTrack);
+                const localAudioTrack = new LiveKitClient.LocalAudioTrack(audioTrack);
                 await room.localParticipant.publishTrack(localAudioTrack);
             }
         };
