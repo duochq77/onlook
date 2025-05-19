@@ -1,11 +1,11 @@
 // src/pages/seller/devVideoSingleFile.tsx
 
 import React, { useEffect, useRef, useState } from 'react';
-import { LocalVideoTrack, LocalAudioTrack, connect, Room as LiveKitRoom } from 'livekit-client';
+import { connect, Room, LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
 
 const DevVideoSingleFilePage: React.FC = () => {
     const videoContainerRef = useRef<HTMLDivElement>(null);
-    const [room, setRoom] = useState<LiveKitRoom | null>(null);
+    const [room, setRoom] = useState<Room | null>(null);
 
     useEffect(() => {
         const startLivestream = async () => {
@@ -47,7 +47,7 @@ const DevVideoSingleFilePage: React.FC = () => {
 
     return (
         <div>
-            <h2>🎥 Test Video + Audio từ file (devVideoSingleFile.tsx)</h2>
+            <h2>📺 Dev Video Test – Phiên bản LiveKit 0.13.1</h2>
             <div ref={videoContainerRef} />
         </div>
     );
