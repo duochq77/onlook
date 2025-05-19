@@ -1,8 +1,8 @@
 // src/pages/seller/devVideoSingleFile.tsx
 
 import React, { useEffect, useRef, useState } from 'react';
-import { connect } from 'livekit-client/dist/es5/connect';
-import { LocalVideoTrack, LocalAudioTrack } from 'livekit-client/dist/es5';
+import { connect } from 'livekit-client';
+import { LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
 
 const DevVideoSingleFilePage: React.FC = () => {
     const videoContainerRef = useRef<HTMLDivElement>(null);
