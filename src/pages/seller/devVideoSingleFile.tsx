@@ -1,58 +1,45 @@
-// src/pages/seller/devVideoSingleFile.tsx
+import React, { useEffect, useRef, useState } from 'react'
+import { connect, Room, LocalVideoTrack, LocalAudioTrack } from 'livekit-client'
 
-import React, { useEffect, useRef, useState } from 'react';
-import { connect } from 'livekit-client/dist/es5/connect';
-import { Room } from 'livekit-client/dist/room';
-import { LocalVideoTrack, LocalAudioTrack } from 'livekit-client/dist/webrtc';
-
-const DevVideoSingleFilePage: React.FC = () => {
-    const videoContainerRef = useRef<HTMLDivElement>(null);
-    const [room, setRoom] = useState<Room | null>(null);
+const DevVideoSingleFile: React.FC = () => {
+    const videoRef = useRef<HTMLVideoElement>(null)
+    const [room, setRoom] = useState<Room | null>(null)
 
     useEffect(() => {
-        const startLivestream = async () => {
-            const res = await fetch(`/api/token?room=onlook-room&identity=seller-dev&role=publisher`);
-            const { token } = await res.json();
+        const connectToRoom = async () => {
+            const token = 'YOUR_TOKEN_HERE' // thay bằng token thật
+            const url = 'wss://onlook-jvtj33oo.livekit.cloud'
 
-            const room = await connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token);
-            setRoom(room);
+            const room = await connect(url, token, {
+                audio: false,
+                video: false,
+            })
 
-            const videoEl = document.createElement('video');
-            videoEl.src = '/full-video.mp4';
-            videoEl.loop = true;
-            videoEl.muted = true;
-            await videoEl.play();
+            const videoTrack = await LocalVideoTrack.create()
+            room.localParticipant.publishTrack(videoTrack)
 
-            const stream = videoEl.captureStream();
-            const videoTrack = stream.getVideoTracks()[0];
-            const audioTrack = stream.getAudioTracks()[0];
-
-            if (videoTrack) {
-                const localVideoTrack = new LocalVideoTrack(videoTrack);
-                await room.localParticipant.publishTrack(localVideoTrack);
-                const attached = localVideoTrack.attach();
-                videoContainerRef.current?.appendChild(attached);
+            const mediaStream = new MediaStream([videoTrack.mediaStreamTrack])
+            if (videoRef.current) {
+                videoRef.current.srcObject = mediaStream
+                videoRef.current.play()
             }
 
-            if (audioTrack) {
-                const localAudioTrack = new LocalAudioTrack(audioTrack);
-                await room.localParticipant.publishTrack(localAudioTrack);
-            }
-        };
+            setRoom(room)
+        }
 
-        startLivestream();
+        connectToRoom()
 
         return () => {
-            room?.disconnect();
-        };
-    }, []);
+            room?.disconnect()
+        }
+    }, [])
 
     return (
         <div>
-            <h2>🔁 Test Dev Video (devVideoSingleFile.tsx)</h2>
-            <div ref={videoContainerRef} />
+            <h1>Test LiveKit 0.13.1 – Single Video</h1>
+            <video ref={videoRef} autoPlay muted playsInline width="100%" />
         </div>
-    );
-};
+    )
+}
 
-export default DevVideoSingleFilePage;
+export default DevVideoSingleFile
