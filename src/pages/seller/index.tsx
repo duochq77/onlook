@@ -19,7 +19,7 @@ const modes = [
     },
     {
         name: 'Phương thức 4: Video Đã Ghép Sẵn',
-        path: '/seller/videoSingleFile',
+        path: '/seller/devVideoSingleFile',
         description: 'Phát video đã có cả hình và tiếng, từ một file duy nhất.'
     }
 ];
