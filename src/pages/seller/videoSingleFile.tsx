@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Room, LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
-import { connect } from 'livekit-client/dist/es5/connect';
+import { connect } from 'livekit-client/dist/es5/connect'; // ✅ Đúng chuẩn với bản 1.6.5
 
 const SellerVideoSingleFilePage: React.FC = () => {
     const videoContainerRef = useRef<HTMLDivElement>(null);
@@ -19,7 +19,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
             setRoom(room);
 
             const videoEl = document.createElement('video');
-            videoEl.src = '/full-video.mp4';
+            videoEl.src = '/full-video.mp4'; // File phải nằm trong thư mục /public
             videoEl.loop = true;
             videoEl.muted = true;
             await videoEl.play();
@@ -52,7 +52,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
 
     return (
         <div>
-            <h2>📽️ Livestream: Phát video có sẵn (file .mp4)</h2>
+            <h2>📺 Livestream: Phát video có sẵn (file .mp4)</h2>
             <div ref={videoContainerRef} />
         </div>
     );
