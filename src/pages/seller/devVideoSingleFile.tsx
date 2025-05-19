@@ -1,6 +1,6 @@
 // src/pages/seller/devVideoSingleFile.tsx
 import React, { useEffect, useRef, useState } from 'react'
-import { connect, Room, LocalVideoTrack, LocalAudioTrack } from 'livekit-client'
+import { Room, LocalVideoTrack, LocalAudioTrack } from 'livekit-client'
 
 const DevVideoSingleFilePage: React.FC = () => {
     const videoContainerRef = useRef<HTMLDivElement>(null)
@@ -11,7 +11,8 @@ const DevVideoSingleFilePage: React.FC = () => {
             const res = await fetch(`/api/token?room=onlook-room&identity=seller-dev&role=publisher`)
             const { token } = await res.json()
 
-            const room = await connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token)
+            const room = new Room()
+            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token)
             setRoom(room)
 
             const videoEl = document.createElement('video')
@@ -45,7 +46,7 @@ const DevVideoSingleFilePage: React.FC = () => {
 
     return (
         <div>
-            <h2>📺 Test Dev Video (devVideoSingleFile.tsx)</h2>
+            <h2>🎬 Test Dev Video (LiveKit 1.6.5)</h2>
             <div ref={videoContainerRef} />
         </div>
     )
