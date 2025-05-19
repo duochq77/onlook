@@ -1,6 +1,9 @@
 import React, { useEffect, useRef } from 'react'
-import { createRoom, type LocalVideoTrack } from 'livekit-client'
-import { createLocalVideoTrack } from 'livekit-client/core'
+import {
+    createLocalVideoTrack,
+    createRoom,
+    type LocalVideoTrack,
+} from 'livekit-client/core'
 
 const DevVideoSingleFile: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null)
