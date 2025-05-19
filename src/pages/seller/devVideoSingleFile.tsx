@@ -1,20 +1,19 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef } from 'react'
 import {
-    Room,
-    LocalVideoTrack,
     createLocalVideoTrack,
+    createRoom,
+    type LocalVideoTrack,
 } from 'livekit-client'
 
 const DevVideoSingleFile: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null)
-    const [room, setRoom] = useState<Room | null>(null)
 
     useEffect(() => {
         const connectToRoom = async () => {
             const token = 'YOUR_TOKEN_HERE' // ⚠️ thay bằng token thật sự
             const serverUrl = 'wss://onlook-jvtj33oo.livekit.cloud'
 
-            const room = new Room()
+            const room = createRoom()
             await room.connect(serverUrl, token, {
                 autoSubscribe: true,
             })
@@ -27,20 +26,19 @@ const DevVideoSingleFile: React.FC = () => {
                 videoRef.current.srcObject = stream
                 videoRef.current.play()
             }
-
-            setRoom(room)
         }
 
         connectToRoom()
 
         return () => {
-            room?.disconnect()
+            // Disconnect room nếu tồn tại
+            videoRef.current?.pause()
         }
     }, [])
 
     return (
         <div>
-            <h1>Test LiveKit 2.13.0 – Video Only</h1>
+            <h1>LiveKit 2.13.0 – Video Only</h1>
             <video ref={videoRef} autoPlay muted playsInline width="100%" />
         </div>
     )
