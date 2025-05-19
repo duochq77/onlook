@@ -1,16 +1,16 @@
 // src/pages/test.tsx
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/router'
+import { useEffect } from 'react';
+import { useRouter } from 'next/router';
 
 const TestRedirectPage = () => {
-    const router = useRouter()
+    const router = useRouter();
 
     useEffect(() => {
-        router.push('/seller/devVideoSingleFile') // điều hướng tới file test mới
-    }, [router])
+        router.push('/seller/devVideoSingleFile'); // ✅ Điều hướng tới file mới
+    }, [router]);
 
-    return <p>🔁 Đang điều hướng tới devVideoSingleFile.tsx...</p>
-}
+    return <p>🔁 Đang chuyển hướng tới bản test devVideoSingleFile.tsx...</p>;
+};
 
-export default TestRedirectPage
+export default TestRedirectPage;
