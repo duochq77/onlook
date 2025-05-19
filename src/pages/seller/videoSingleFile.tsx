@@ -1,11 +1,11 @@
 // src/pages/seller/videoSingleFile.tsx
 import React, { useEffect, useRef, useState } from 'react';
-import { Room, LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
+import { connect, LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
 import { useRouter } from 'next/router';
 
 const SellerVideoSingleFilePage: React.FC = () => {
     const videoContainerRef = useRef<HTMLDivElement>(null);
-    const [room, setRoom] = useState<Room | null>(null);
+    const [room, setRoom] = useState<any>(null); // Room object
     const router = useRouter();
 
     const roomName = 'onlook-room';
@@ -14,20 +14,17 @@ const SellerVideoSingleFilePage: React.FC = () => {
 
     useEffect(() => {
         const startLivestream = async () => {
-            // Fetch token từ API
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
             const { token } = await res.json();
 
-            // Tạo Room mới
-            const room = new Room();
-            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token);
+            // Connect to room using connect()
+            const room = await connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token);
             setRoom(room);
 
-            // Tạo thẻ video phát lại
             const videoEl = document.createElement('video');
-            videoEl.src = '/full-video.mp4'; // Đặt file tại thư mục public
+            videoEl.src = '/full-video.mp4'; // file public
             videoEl.loop = true;
-            videoEl.muted = true; // để tránh echo trên seller
+            videoEl.muted = true;
             await videoEl.play();
 
             const mediaStream = videoEl.captureStream();
@@ -38,7 +35,6 @@ const SellerVideoSingleFilePage: React.FC = () => {
                 const localVideoTrack = new LocalVideoTrack(videoTrack);
                 await room.localParticipant.publishTrack(localVideoTrack);
 
-                // Gắn hiển thị
                 const attached = localVideoTrack.attach();
                 if (videoContainerRef.current) {
                     videoContainerRef.current.appendChild(attached);
