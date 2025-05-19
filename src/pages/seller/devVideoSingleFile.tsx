@@ -1,16 +1,13 @@
 import React, { useEffect, useRef } from 'react'
-import {
-    createLocalVideoTrack,
-    createRoom,
-    type LocalVideoTrack,
-} from 'livekit-client'
+import { createRoom, type LocalVideoTrack } from 'livekit-client'
+import { createLocalVideoTrack } from 'livekit-client/core'
 
 const DevVideoSingleFile: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null)
 
     useEffect(() => {
         const connectToRoom = async () => {
-            const token = 'YOUR_TOKEN_HERE' // ⚠️ thay bằng token thật sự
+            const token = 'YOUR_TOKEN_HERE' // ⚠️ thay bằng token thật
             const serverUrl = 'wss://onlook-jvtj33oo.livekit.cloud'
 
             const room = createRoom()
@@ -31,7 +28,6 @@ const DevVideoSingleFile: React.FC = () => {
         connectToRoom()
 
         return () => {
-            // Disconnect room nếu tồn tại
             videoRef.current?.pause()
         }
     }, [])
