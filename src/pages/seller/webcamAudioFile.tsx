@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/services/SupabaseService';
 
-// ✅ Import đúng chuẩn LiveKit 2.13.0
 const { Room } = require('livekit-client/dist/room');
 const {
     LocalVideoTrack,
@@ -21,7 +20,6 @@ const WebcamAudioFilePage: React.FC = () => {
             const identity = 'seller-webcam-audiofile-' + Math.floor(Math.random() * 10000);
             const role = 'publisher';
 
-            // ✅ Khởi tạo và connect Room
             const room = new Room();
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
             const { token } = await res.json();
@@ -30,13 +28,11 @@ const WebcamAudioFilePage: React.FC = () => {
             });
             setRoom(room);
 
-            // 🎥 Track video từ webcam
             const videoTrack = await createLocalVideoTrack();
             await room.localParticipant.publishTrack(videoTrack);
             videoTrack.attach(videoRef.current!);
 
-            // 🔊 Track audio: mic hoặc audio mẫu
-            let audioTrack: LocalAudioTrack | null = null;
+            let audioTrack: any = null;
             if (useSampleAudio) {
                 const { data } = await supabase.storage.from('uploads').download('sample-audio.mp3');
                 if (data) {
@@ -59,7 +55,6 @@ const WebcamAudioFilePage: React.FC = () => {
         };
 
         startStream();
-
         return () => {
             audioElement.pause();
             audioElement.src = '';
