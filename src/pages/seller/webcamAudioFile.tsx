@@ -1,12 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/services/SupabaseService';
-
-const { Room } = require('livekit-client/dist/room');
-const {
+import {
+    Room,
     LocalVideoTrack,
     LocalAudioTrack,
-    createLocalVideoTrack,
-} = require('livekit-client/dist/webrtc');
+    createLocalVideoTrack
+} from 'livekit-client';
 
 const WebcamAudioFilePage: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
