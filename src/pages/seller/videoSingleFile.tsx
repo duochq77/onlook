@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { connect, Room, LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
 import { useRouter } from 'next/router';
+
+// ✅ Import đúng theo livekit-client@2.13.0
+const { Room } = require('livekit-client/dist/room');
+const { LocalVideoTrack, LocalAudioTrack } = require('livekit-client/dist/webrtc');
 
 const SellerVideoSingleFilePage: React.FC = () => {
     const videoContainerRef = useRef<HTMLDivElement>(null);
-    const [room, setRoom] = useState<Room | null>(null);
+    const [room, setRoom] = useState<any>(null);
     const router = useRouter();
 
     const roomName = 'onlook-room';
@@ -16,14 +19,18 @@ const SellerVideoSingleFilePage: React.FC = () => {
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
             const { token } = await res.json();
 
-            const room = await connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token);
+            // ✅ Khởi tạo room theo đúng chuẩn mới
+            const room = new Room();
+            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
+                autoSubscribe: true
+            });
             setRoom(room);
 
-            // Tạo thẻ video phát lại
+            // 🎥 Tạo video element để phát file mp4 có sẵn
             const videoEl = document.createElement('video');
-            videoEl.src = '/full-video.mp4'; // Đặt file tại thư mục public
+            videoEl.src = '/full-video.mp4'; // Đặt file trong thư mục public/
             videoEl.loop = true;
-            videoEl.muted = true; // tránh echo trên seller
+            videoEl.muted = true;
             await videoEl.play();
 
             const mediaStream = videoEl.captureStream();
@@ -32,18 +39,19 @@ const SellerVideoSingleFilePage: React.FC = () => {
 
             if (videoTrack) {
                 const localVideoTrack = new LocalVideoTrack(videoTrack);
-                room.localParticipant.publishTrack(localVideoTrack);
+                await room.localParticipant.publishTrack(localVideoTrack);
 
-                // Gắn hiển thị video cho seller
+                // Gắn preview cho seller
                 const attached = localVideoTrack.attach();
                 if (videoContainerRef.current) {
+                    videoContainerRef.current.innerHTML = ''; // clear nếu có
                     videoContainerRef.current.appendChild(attached);
                 }
             }
 
             if (audioTrack) {
                 const localAudioTrack = new LocalAudioTrack(audioTrack);
-                room.localParticipant.publishTrack(localAudioTrack);
+                await room.localParticipant.publishTrack(localAudioTrack);
             }
         };
 
