@@ -1,25 +1,32 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { connect, Room, LocalVideoTrack, LocalAudioTrack, createLocalVideoTrack, createLocalAudioTrack } from 'livekit-client';
 import { useRouter } from 'next/router';
 
+const { Room } = require('livekit-client/dist/room');
+const {
+    LocalVideoTrack,
+    LocalAudioTrack,
+    createLocalVideoTrack,
+    createLocalAudioTrack,
+} = require('livekit-client/dist/webrtc');
+
 const SellerWebcamMicPage: React.FC = () => {
-    const videoRef = useRef<HTMLDivElement>(null);
-    const [room, setRoom] = useState<Room | null>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const [room, setRoom] = useState<any>(null);
     const router = useRouter();
 
     const roomName = 'onlook-room';
-    const identity = 'seller-' + Math.floor(Math.random() * 10000);
+    const identity = 'seller-webcam-mic-' + Math.floor(Math.random() * 10000);
     const role = 'publisher';
 
     useEffect(() => {
         const startLivestream = async () => {
-            const resp = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
-            const { token } = await resp.json();
+            const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
+            const { token } = await res.json();
 
-            const room = await connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
-                autoSubscribe: false,
+            const room = new Room();
+            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
+                autoSubscribe: true,
             });
-
             setRoom(room);
 
             const videoTrack = await createLocalVideoTrack();
@@ -28,14 +35,14 @@ const SellerWebcamMicPage: React.FC = () => {
             await room.localParticipant.publishTrack(videoTrack);
             await room.localParticipant.publishTrack(audioTrack);
 
-            const element = videoTrack.attach();
+            const attached = videoTrack.attach();
             if (videoRef.current) {
-                videoRef.current.appendChild(element);
+                videoRef.current.innerHTML = '';
+                videoRef.current.appendChild(attached);
             }
         };
 
         startLivestream();
-
         return () => {
             room?.disconnect();
         };
@@ -43,7 +50,7 @@ const SellerWebcamMicPage: React.FC = () => {
 
     return (
         <div>
-            <h2>🔴 Livestream: Webcam + Mic</h2>
+            <h2>🎥 Livestream webcam + mic</h2>
             <div ref={videoRef} />
         </div>
     );
