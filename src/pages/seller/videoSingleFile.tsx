@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 
-// ✅ Import đúng theo livekit-client@2.13.0
+// ✅ Import đúng chuẩn cho livekit-client@2.13.0
 const { Room } = require('livekit-client/dist/room');
 const { LocalVideoTrack, LocalAudioTrack } = require('livekit-client/dist/webrtc');
 
@@ -19,7 +19,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
             const { token } = await res.json();
 
-            // ✅ Khởi tạo room theo đúng chuẩn mới
+            // ✅ Khởi tạo Room đúng cách
             const room = new Room();
             await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
                 autoSubscribe: true
@@ -28,12 +28,13 @@ const SellerVideoSingleFilePage: React.FC = () => {
 
             // 🎥 Tạo video element để phát file mp4 có sẵn
             const videoEl = document.createElement('video');
-            videoEl.src = '/full-video.mp4'; // Đặt file trong thư mục public/
+            videoEl.src = '/full-video.mp4'; // Đặt file tại thư mục public/
             videoEl.loop = true;
             videoEl.muted = true;
             await videoEl.play();
 
-            const mediaStream = videoEl.captureStream();
+            // ✅ Ép kiểu để TypeScript không lỗi khi build
+            const mediaStream = (videoEl as any).captureStream();
             const videoTrack = mediaStream.getVideoTracks()[0];
             const audioTrack = mediaStream.getAudioTracks()[0];
 
@@ -41,10 +42,9 @@ const SellerVideoSingleFilePage: React.FC = () => {
                 const localVideoTrack = new LocalVideoTrack(videoTrack);
                 await room.localParticipant.publishTrack(localVideoTrack);
 
-                // Gắn preview cho seller
                 const attached = localVideoTrack.attach();
                 if (videoContainerRef.current) {
-                    videoContainerRef.current.innerHTML = ''; // clear nếu có
+                    videoContainerRef.current.innerHTML = ''; // clear trước
                     videoContainerRef.current.appendChild(attached);
                 }
             }
