@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-
-const { Room } = require('livekit-client/dist/room');
-const { LocalVideoTrack, LocalAudioTrack } = require('livekit-client/dist/webrtc');
+import {
+    Room,
+    LocalVideoTrack,
+    LocalAudioTrack
+} from 'livekit-client';
 
 const SellerVideoSingleFilePage: React.FC = () => {
     const videoContainerRef = useRef<HTMLDivElement>(null);
