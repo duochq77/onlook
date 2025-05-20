@@ -1,12 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import {
-    Room,
+
+// @ts-ignore
+const { Room } = require('livekit-client/dist/room');
+// @ts-ignore
+const {
     LocalVideoTrack,
     LocalAudioTrack,
     createLocalVideoTrack,
     createLocalAudioTrack,
-} from 'livekit-client/core';
+} = require('livekit-client/dist/webrtc');
 
 const SellerWebcamMicPage: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
