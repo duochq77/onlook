@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-
-// ✅ Import đúng chuẩn cho livekit-client@2.13.0
-const { Room } = require('livekit-client/dist/room');
-const { LocalVideoTrack, LocalAudioTrack } = require('livekit-client/dist/webrtc');
+import {
+    Room,
+    LocalVideoTrack,
+    LocalAudioTrack,
+} from 'livekit-client/core';
 
 const SellerVideoSingleFilePage: React.FC = () => {
     const videoContainerRef = useRef<HTMLDivElement>(null);
@@ -19,21 +20,18 @@ const SellerVideoSingleFilePage: React.FC = () => {
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
             const { token } = await res.json();
 
-            // ✅ Khởi tạo Room đúng cách
             const room = new Room();
             await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
-                autoSubscribe: true
+                autoSubscribe: true,
             });
             setRoom(room);
 
-            // 🎥 Tạo video element để phát file mp4 có sẵn
             const videoEl = document.createElement('video');
-            videoEl.src = '/full-video.mp4'; // Đặt file tại thư mục public/
+            videoEl.src = '/full-video.mp4';
             videoEl.loop = true;
             videoEl.muted = true;
             await videoEl.play();
 
-            // ✅ Ép kiểu để TypeScript không lỗi khi build
             const mediaStream = (videoEl as any).captureStream();
             const videoTrack = mediaStream.getVideoTracks()[0];
             const audioTrack = mediaStream.getAudioTracks()[0];
@@ -41,10 +39,9 @@ const SellerVideoSingleFilePage: React.FC = () => {
             if (videoTrack) {
                 const localVideoTrack = new LocalVideoTrack(videoTrack);
                 await room.localParticipant.publishTrack(localVideoTrack);
-
                 const attached = localVideoTrack.attach();
                 if (videoContainerRef.current) {
-                    videoContainerRef.current.innerHTML = ''; // clear trước
+                    videoContainerRef.current.innerHTML = '';
                     videoContainerRef.current.appendChild(attached);
                 }
             }
@@ -56,7 +53,6 @@ const SellerVideoSingleFilePage: React.FC = () => {
         };
 
         startLivestream();
-
         return () => {
             room?.disconnect();
         };
