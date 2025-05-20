@@ -1,41 +1,51 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { connect, Room, LocalAudioTrack, LocalVideoTrack, createLocalVideoTrack } from 'livekit-client';
-import { connectToRoom } from '@/services/LiveKitService';
 import { supabase } from '@/services/SupabaseService';
+
+// ✅ Import đúng chuẩn LiveKit 2.13.0
+const { Room } = require('livekit-client/dist/room');
+const {
+    LocalVideoTrack,
+    LocalAudioTrack,
+    createLocalVideoTrack,
+} = require('livekit-client/dist/webrtc');
 
 const WebcamAudioFilePage: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
-    const [room, setRoom] = useState<Room | null>(null);
+    const [room, setRoom] = useState<any>(null);
     const [audioElement] = useState<HTMLAudioElement>(new Audio());
     const [useSampleAudio, setUseSampleAudio] = useState<boolean>(false);
 
     useEffect(() => {
         const startStream = async () => {
             const roomName = 'default-room';
-            const identity = 'seller-webcam-audiofile';
+            const identity = 'seller-webcam-audiofile-' + Math.floor(Math.random() * 10000);
             const role = 'publisher';
 
-            const room = await connectToRoom(roomName, identity, role);
+            // ✅ Khởi tạo và connect Room
+            const room = new Room();
+            const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
+            const { token } = await res.json();
+            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
+                autoSubscribe: true,
+            });
             setRoom(room);
 
+            // 🎥 Track video từ webcam
             const videoTrack = await createLocalVideoTrack();
             await room.localParticipant.publishTrack(videoTrack);
             videoTrack.attach(videoRef.current!);
 
+            // 🔊 Track audio: mic hoặc audio mẫu
             let audioTrack: LocalAudioTrack | null = null;
             if (useSampleAudio) {
-                const { data, error } = await supabase
-                    .storage
-                    .from('uploads')
-                    .download('sample-audio.mp3');
-
+                const { data } = await supabase.storage.from('uploads').download('sample-audio.mp3');
                 if (data) {
                     const url = URL.createObjectURL(data);
                     audioElement.src = url;
                     audioElement.loop = true;
-                    audioElement.play();
+                    await audioElement.play();
 
-                    const stream = audioElement.captureStream();
+                    const stream = (audioElement as any).captureStream();
                     const audioMediaTrack = stream.getAudioTracks()[0];
                     audioTrack = new LocalAudioTrack(audioMediaTrack);
                     await room.localParticipant.publishTrack(audioTrack);
