@@ -1,18 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { connectToRoom } from '@/services/LiveKitService';
-import { Room } from 'livekit-client';
 import { useRouter } from 'next/router';
+
+const { Room } = require('livekit-client/dist/room');
 
 const ViewerRoomPage: React.FC = () => {
     const router = useRouter();
     const { room: roomName } = router.query;
     const videoRef = useRef<HTMLVideoElement>(null);
-    const [room, setRoom] = useState<Room | null>(null);
+    const [room, setRoom] = useState<any>(null);
 
     useEffect(() => {
         if (!roomName || typeof roomName !== 'string') return;
 
         const identity = 'viewer-' + Math.floor(Math.random() * 100000);
+
         const start = async () => {
             const joinedRoom = await connectToRoom(roomName, identity, 'subscriber');
             setRoom(joinedRoom);
