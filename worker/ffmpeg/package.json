@@ -1,0 +1,17 @@
+{
+    "name": "ffmpeg-worker",
+    "version": "1.0.0",
+    "main": "ffmpeg-worker.ts",
+    "type": "module",
+    "scripts": {
+        "start": "node --loader ts-node/esm ffmpeg-worker.ts"
+    },
+    "dependencies": {
+        "@supabase/supabase-js": "^2.39.3",
+        "@upstash/redis": "^1.20.1",
+        "ts-node": "^10.9.2"
+    },
+    "devDependencies": {
+        "typescript": "^5.4.0"
+    }
+}
