@@ -4,7 +4,7 @@ import {
     Room,
     LocalVideoTrack,
     LocalAudioTrack
-} from 'livekit-client';
+} from 'livekit-client/core';
 
 const SellerVideoSingleFilePage: React.FC = () => {
     const videoContainerRef = useRef<HTMLDivElement>(null);
