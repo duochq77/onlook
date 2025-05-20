@@ -1,10 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-
-// @ts-ignore
-const { Room } = require('livekit-client/dist/room');
-// @ts-ignore
-const { LocalVideoTrack, LocalAudioTrack } = require('livekit-client/dist/webrtc');
+import { Room } from 'livekit-client';
+import { LocalVideoTrack, LocalAudioTrack } from 'livekit-client/core';
 
 const SellerVideoSingleFilePage: React.FC = () => {
     const videoContainerRef = useRef<HTMLDivElement>(null);
@@ -21,7 +18,9 @@ const SellerVideoSingleFilePage: React.FC = () => {
             const { token } = await res.json();
 
             const room = new Room();
-            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, { autoSubscribe: true });
+            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
+                autoSubscribe: true
+            });
             setRoom(room);
 
             const videoEl = document.createElement('video');

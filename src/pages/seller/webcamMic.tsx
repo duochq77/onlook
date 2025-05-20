@@ -1,18 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-
-// @ts-ignore
-const { Room } = require('livekit-client/dist/room');
-// @ts-ignore
-const {
+import { Room } from 'livekit-client';
+import {
     LocalVideoTrack,
     LocalAudioTrack,
     createLocalVideoTrack,
     createLocalAudioTrack,
-} = require('livekit-client/dist/webrtc');
+} from 'livekit-client/core';
 
 const SellerWebcamMicPage: React.FC = () => {
-    const videoRef = useRef<HTMLVideoElement>(null);
+    const videoRef = useRef<HTMLDivElement>(null);
     const [room, setRoom] = useState<any>(null);
     const router = useRouter();
 
@@ -53,7 +50,7 @@ const SellerWebcamMicPage: React.FC = () => {
     return (
         <div className="flex flex-col items-center justify-center min-h-screen">
             <h2 className="text-2xl font-bold mb-4">🎥 Livestream webcam + mic</h2>
-            <video ref={videoRef} autoPlay muted className="w-full max-w-xl rounded-lg shadow" />
+            <div ref={videoRef} />
         </div>
     );
 };
