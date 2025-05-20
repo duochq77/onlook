@@ -3,7 +3,7 @@ import { connectToRoom } from '@/services/LiveKitService';
 import { useRouter } from 'next/router';
 
 const { Room } = require('livekit-client/dist/room');
-import type { RemoteTrack, TrackPublication, RemoteParticipant } from 'livekit-client';
+import type { Track } from 'livekit-client';
 
 const ViewerRoomPage: React.FC = () => {
     const router = useRouter();
@@ -22,11 +22,7 @@ const ViewerRoomPage: React.FC = () => {
 
             joinedRoom.on(
                 'trackSubscribed',
-                (
-                    track: RemoteTrack,
-                    publication: TrackPublication,
-                    participant: RemoteParticipant
-                ) => {
+                (track: Track, publication: any, participant: any) => {
                     if (track.kind === 'video' && videoRef.current) {
                         track.attach(videoRef.current);
                     }
