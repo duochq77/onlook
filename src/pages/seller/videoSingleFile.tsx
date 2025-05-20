@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import { Room } from 'livekit-client';
+import { Room } from 'livekit-client/core';
 import { LocalVideoTrack, LocalAudioTrack } from 'livekit-client/core';
 
 const SellerVideoSingleFilePage: React.FC = () => {
