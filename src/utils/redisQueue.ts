@@ -16,7 +16,7 @@ export async function pushFFmpegJob(job: object) {
  * Lấy job ra khỏi hàng đợi
  */
 export async function popFFmpegJob(): Promise<any | null> {
-    const jobStr = await redis.lpop('ffmpeg-jobs')
+    const jobStr = await redis.lpop<string>('ffmpeg-jobs') // ✅ ép kiểu rõ ràng
     if (!jobStr) return null
     return JSON.parse(jobStr)
 }
