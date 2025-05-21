@@ -1,32 +1,23 @@
-import type { NextApiRequest, NextApiResponse } from 'next'
-import { AccessToken } from 'livekit-server-sdk'
+import { NextApiRequest, NextApiResponse } from 'next';
+import { AccessToken } from 'livekit-server-sdk';
 
-const apiKey = process.env.LIVEKIT_API_KEY!
-const apiSecret = process.env.LIVEKIT_API_SECRET!
+const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY!;
+const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET!;
+const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL!;
 
-/**
- * API cấp token truy cập LiveKit
- * Gọi từ client: /api/token?room=abc&identity=xyz&role=subscriber|publisher
- */
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { room, identity, role } = req.query
+  const { room, identity, role } = req.query;
 
-  if (
-    typeof room !== 'string' ||
-    typeof identity !== 'string' ||
-    (role !== 'subscriber' && role !== 'publisher')
-  ) {
-    return res.status(400).json({ error: 'Missing or invalid room, identity, or role' })
+  if (!room || !identity || typeof room !== 'string' || typeof identity !== 'string') {
+    return res.status(400).json({ error: 'Missing room or identity' });
   }
 
-  const at = new AccessToken(apiKey, apiSecret, { identity })
-  at.addGrant({
-    room,
-    roomJoin: true,
-    canSubscribe: true,
-    canPublish: role === 'publisher',
-  })
+  const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+    identity,
+  });
 
-  const token = at.toJwt()
-  return res.status(200).json({ token })
+  at.addGrant({ roomJoin: true, room });
+
+  const token = at.toJwt();
+  return res.status(200).json({ token }); // ✅ Đảm bảo trả về đúng { token: "..." }
 }
