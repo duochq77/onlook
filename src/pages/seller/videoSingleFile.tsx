@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import { connect, Room, LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
+
+const { Room } = require('livekit-client/dist/room');
+const { LocalVideoTrack, LocalAudioTrack } = require('livekit-client/dist/webrtc');
 
 const SellerVideoSingleFilePage: React.FC = () => {
     const videoContainerRef = useRef<HTMLDivElement>(null);
-    const [room, setRoom] = useState<Room | null>(null);
+    const [room, setRoom] = useState<any>(null);
     const router = useRouter();
 
     const roomName = 'onlook-room';
@@ -16,8 +18,9 @@ const SellerVideoSingleFilePage: React.FC = () => {
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
             const { token } = await res.json();
 
-            const room = await connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
-                autoSubscribe: true,
+            const room = new Room();
+            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
+                autoSubscribe: true
             });
             setRoom(room);
 
