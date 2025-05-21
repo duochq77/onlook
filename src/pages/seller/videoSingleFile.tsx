@@ -1,13 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import { getLiveKitDeps } from '@/lib/livekit';
+import { connect, Room, LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
 
 const SellerVideoSingleFilePage: React.FC = () => {
     const videoContainerRef = useRef<HTMLDivElement>(null);
-    const [room, setRoom] = useState<any>(null);
+    const [room, setRoom] = useState<Room | null>(null);
     const router = useRouter();
-
-    const { Room, LocalVideoTrack, LocalAudioTrack } = getLiveKitDeps();
 
     const roomName = 'onlook-room';
     const identity = 'seller-' + Math.floor(Math.random() * 10000);
@@ -18,9 +16,8 @@ const SellerVideoSingleFilePage: React.FC = () => {
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
             const { token } = await res.json();
 
-            const room = new Room();
-            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
-                autoSubscribe: true
+            const room = await connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
+                autoSubscribe: true,
             });
             setRoom(room);
 
@@ -51,7 +48,9 @@ const SellerVideoSingleFilePage: React.FC = () => {
         };
 
         startLivestream();
-        return () => room?.disconnect();
+        return () => {
+            room?.disconnect();
+        };
     }, []);
 
     return (
