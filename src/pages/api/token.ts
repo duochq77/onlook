@@ -1,9 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 const { AccessToken } = require('livekit-server-sdk')
 
-const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY
-const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { room, identity } = req.query
 
@@ -12,15 +9,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, { identity })
+    const at = new AccessToken(process.env.LIVEKIT_API_KEY, process.env.LIVEKIT_API_SECRET, {
+      identity,
+    })
     at.addGrant({ roomJoin: true, room })
 
-    const token = at.toJwt()
-    console.log('✅ JWT Token tạo ra:', token)
+    const jwt = at.toJwt() // ⚠️ Cực kỳ quan trọng: gọi .toJwt()
+    console.log('✅ JWT tạo ra:', jwt)
 
-    return res.status(200).json({ token }) // ✅ Token là chuỗi JWT đúng chuẩn
+    return res.status(200).json({ token: jwt }) // ✅ Trả về đúng kiểu
   } catch (err) {
-    console.error('❌ Lỗi khi tạo token:', err)
+    console.error('❌ Token creation failed:', err)
     return res.status(500).json({ error: 'Token creation failed' })
   }
 }
