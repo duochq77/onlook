@@ -1,4 +1,4 @@
-export const dynamic = 'force-dynamic'; // Ngăn Next.js SSR gây lỗi Audio
+export const dynamic = 'force-dynamic';
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
@@ -50,22 +50,24 @@ export default function VideoAudioFilePage() {
         const start = async () => {
             if (!videoURL || !audioURL) return;
 
-            // ✅ Lấy đúng token chuỗi, không truyền object
+            // ✅ Lấy token đúng cách
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
             const data = await res.json();
             const token = data.token;
-            console.log('✅ Token:', token); // DEBUG: xác nhận là chuỗi
+            console.log('✅ Token nhận được:', token); // kiểm tra xem token là chuỗi
 
             const room = new livekit.Room();
             await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, token);
             setRoom(room);
 
+            // Setup video
             const videoEl = videoRef.current!;
             videoEl.src = videoURL;
             videoEl.loop = true;
             videoEl.muted = true;
             await videoEl.play();
 
+            // Setup audio
             const audioEl = audioRef.current!;
             audioEl.src = audioURL;
             audioEl.loop = true;
