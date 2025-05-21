@@ -681,7 +681,7 @@ escalade@^3.2.0:
 
 events@^3.3.0:
   version "3.3.0"
-  resolved "https://registry.npmjs.org/events/-/events-3.3.0.tgz"
+  resolved "https://registry.yarnpkg.com/events/-/events-3.3.0.tgz#31a95ad0a924e2d2c419a813aeb2c4e878ea7400"
   integrity sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==
 
 fast-glob@^3.3.2:
@@ -936,10 +936,10 @@ lines-and-columns@^1.1.6:
   resolved "https://registry.npmjs.org/lines-and-columns/-/lines-and-columns-1.2.4.tgz"
   integrity sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==
 
-livekit-client@2.13.0:
-  version "2.13.0"
-  resolved "https://registry.yarnpkg.com/livekit-client/-/livekit-client-2.13.0.tgz#87a38c0c992686c7c028ad372693abf8b6970908"
-  integrity sha512-Q2FAQbJt0zFBdOHIom1YRfsIYIdTC2dxJfus084w4ni4ZHwNYZ9GZQcp9zpuxFg1O36fTobLCn3B1JCSY834nw==
+livekit-client@^2.13.1:
+  version "2.13.1"
+  resolved "https://registry.yarnpkg.com/livekit-client/-/livekit-client-2.13.1.tgz#3e641a4f0ddb6dfe29a19ed6a7120ea04ea5f753"
+  integrity sha512-uTT4pKSd9TTeHEp+fx1A7a7ZkVTR+rUvy7ZvIIoZa6sZ0vynC6dea26LBHDYwcQstmnI776ibWe2FZDjvoSU0A==
   dependencies:
     "@livekit/mutex" "1.1.1"
     "@livekit/protocol" "1.38.0"
@@ -1367,7 +1367,7 @@ sdp-transform@^2.15.0:
 
 sdp@^3.2.0:
   version "3.2.0"
-  resolved "https://registry.npmjs.org/sdp/-/sdp-3.2.0.tgz"
+  resolved "https://registry.yarnpkg.com/sdp/-/sdp-3.2.0.tgz#8961420552b36663b4d13ddba6f478d1461896a5"
   integrity sha512-d7wDPgDV3DDiqulJjKiV2865wKsJ34YI+NDREbm+FySq6WuKOikwyNQcm+doLAZ1O6ltdO0SeKle2xMpN3Brgw==
 
 semver@^7.5.4:
@@ -1536,7 +1536,7 @@ tr46@~0.0.3:
 
 ts-debounce@^4.0.0:
   version "4.0.0"
-  resolved "https://registry.npmjs.org/ts-debounce/-/ts-debounce-4.0.0.tgz"
+  resolved "https://registry.yarnpkg.com/ts-debounce/-/ts-debounce-4.0.0.tgz#33440ef64fab53793c3d546a8ca6ae539ec15841"
   integrity sha512-+1iDGY6NmOGidq7i7xZGA4cm8DAa6fqdYcvO5Z6yBevH++Bdo9Qt/mN0TzHUgcCcKv1gmh9+W5dHqz8pMWbCbg==
 
 ts-interface-checker@^0.1.9:
@@ -1556,7 +1556,7 @@ type-fest@^4.3.2:
 
 typed-emitter@^2.1.0:
   version "2.1.0"
-  resolved "https://registry.npmjs.org/typed-emitter/-/typed-emitter-2.1.0.tgz"
+  resolved "https://registry.yarnpkg.com/typed-emitter/-/typed-emitter-2.1.0.tgz#ca78e3d8ef1476f228f548d62e04e3d4d3fd77fb"
   integrity sha512-g/KzbYKbH5C2vPkaXGu8DJlHrGKHLsM25Zg9WuC9pMGfuvT+X25tZQWo5fK1BjBm8+UrVE9LDCvaY0CQk+fXDA==
   optionalDependencies:
     rxjs "^7.5.2"
