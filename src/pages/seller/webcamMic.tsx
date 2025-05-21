@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import {
-    Room,
+
+const { Room } = require('livekit-client/dist/room');
+const {
     LocalVideoTrack,
     LocalAudioTrack,
     createLocalVideoTrack,
     createLocalAudioTrack,
-} from 'livekit-client';
+} = require('livekit-client/dist/webrtc');
 
 const SellerWebcamMicPage: React.FC = () => {
     const videoRef = useRef<HTMLDivElement>(null);
@@ -23,9 +24,7 @@ const SellerWebcamMicPage: React.FC = () => {
             const { token } = await res.json();
 
             const room = new Room();
-            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
-                autoSubscribe: true,
-            });
+            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token);
             setRoom(room);
 
             const videoTrack = await createLocalVideoTrack();

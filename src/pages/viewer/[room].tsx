@@ -19,14 +19,11 @@ const ViewerRoomPage: React.FC = () => {
             const joinedRoom = await connectToRoom(roomName, identity, 'subscriber');
             setRoom(joinedRoom);
 
-            joinedRoom.on(
-                'trackSubscribed',
-                (track: any, publication: any, participant: any) => {
-                    if (track.kind === 'video' && videoRef.current) {
-                        track.attach(videoRef.current);
-                    }
+            joinedRoom.on('trackSubscribed', (track: any) => {
+                if (track.kind === 'video' && videoRef.current) {
+                    track.attach(videoRef.current);
                 }
-            );
+            });
         };
 
         start();
