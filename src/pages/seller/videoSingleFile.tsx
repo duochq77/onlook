@@ -1,10 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
-import {
-    Room,
-    LocalVideoTrack,
-    LocalAudioTrack,
-} from 'livekit-client'
+import React, { useEffect, useRef, useState } from 'react'
+
+// ✅ Import đúng cách theo LiveKit v2.13.0
+import { Room } from 'livekit-client/internal/Room'
+import { LocalVideoTrack, LocalAudioTrack } from 'livekit-client/internal/media/track'
 
 const SellerVideoSingleFilePage: React.FC = () => {
     const videoContainerRef = useRef<HTMLDivElement>(null)
