@@ -1,15 +1,13 @@
-export const dynamic = 'force-dynamic'; // Ngăn prerender gây lỗi Audio
+export const dynamic = 'force-dynamic'; // Bắt buộc do dùng captureStream, Audio...
 
 import React, { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/router';
+const livekit = require('livekit-client');
 
 const sampleVideos = [
     {
         name: 'Video mẫu 1',
         url: 'https://hlfhsozgnjxzwzqgjpbk.supabase.co/storage/v1/object/public/sample-videos/sample1.mp4',
-    },
-    {
-        name: 'Video mẫu 2',
-        url: 'https://hlfhsozgnjxzwzqgjpbk.supabase.co/storage/v1/object/public/sample-videos/sample2.mp4',
     },
 ];
 
@@ -18,32 +16,28 @@ const sampleAudios = [
         name: 'Audio mẫu 1',
         url: 'https://hlfhsozgnjxzwzqgjpbk.supabase.co/storage/v1/object/public/sample-audios/sample1.mp3',
     },
-    {
-        name: 'Audio mẫu 2',
-        url: 'https://hlfhsozgnjxzwzqgjpbk.supabase.co/storage/v1/object/public/sample-audios/sample2.mp3',
-    },
 ];
 
 export default function VideoAudioFilePage() {
     const videoRef = useRef<HTMLVideoElement>(null);
     const audioRef = useRef<HTMLAudioElement>(null);
+    const videoContainerRef = useRef<HTMLDivElement>(null);
     const [useSample, setUseSample] = useState(false);
-    const [videoFile, setVideoFile] = useState<File | null>(null);
-    const [audioFile, setAudioFile] = useState<File | null>(null);
     const [videoURL, setVideoURL] = useState('');
     const [audioURL, setAudioURL] = useState('');
+    const [room, setRoom] = useState<any>(null);
+
+    const router = useRouter();
+    const roomName = 'onlook-room';
+    const identity = 'seller-video-audio-' + Math.floor(Math.random() * 10000);
+    const role = 'publisher';
 
     const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>, type: 'video' | 'audio') => {
         const file = e.target.files?.[0];
         if (file) {
             const url = URL.createObjectURL(file);
-            if (type === 'video') {
-                setVideoFile(file);
-                setVideoURL(url);
-            } else {
-                setAudioFile(file);
-                setAudioURL(url);
-            }
+            if (type === 'video') setVideoURL(url);
+            else setAudioURL(url);
         }
     };
 
@@ -53,17 +47,66 @@ export default function VideoAudioFilePage() {
     };
 
     useEffect(() => {
-        // Auto play audio when both video + audio URL are selected
-        if (audioRef.current && audioURL) {
-            audioRef.current.src = audioURL;
-            audioRef.current.loop = true;
-            audioRef.current.play();
-        }
-    }, [audioURL]);
+        const start = async () => {
+            if (!videoURL || !audioURL) return;
+
+            const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
+            const { token } = await res.json();
+
+            const room = new livekit.Room();
+            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, token);
+            setRoom(room);
+
+            // Video setup
+            const videoEl = videoRef.current!;
+            videoEl.src = videoURL;
+            videoEl.loop = true;
+            videoEl.muted = true;
+            await videoEl.play();
+
+            // Audio setup
+            const audioEl = audioRef.current!;
+            audioEl.src = audioURL;
+            audioEl.loop = true;
+            await audioEl.play();
+
+            // Ghép 2 stream lại
+            const videoStream =
+                (videoEl as any).captureStream?.() || (videoEl as any).mozCaptureStream?.();
+            const audioStream =
+                (audioEl as any).captureStream?.() || (audioEl as any).mozCaptureStream?.();
+
+            if (!videoStream || !audioStream) return;
+
+            const videoTrack = videoStream.getVideoTracks()[0];
+            const audioTrack = audioStream.getAudioTracks()[0];
+
+            if (videoTrack) {
+                const localVideoTrack = new livekit.LocalVideoTrack(videoTrack);
+                await room.localParticipant.publishTrack(localVideoTrack);
+                const attached = localVideoTrack.attach();
+                if (videoContainerRef.current) {
+                    videoContainerRef.current.innerHTML = '';
+                    videoContainerRef.current.appendChild(attached);
+                }
+            }
+
+            if (audioTrack) {
+                const localAudioTrack = new livekit.LocalAudioTrack(audioTrack);
+                await room.localParticipant.publishTrack(localAudioTrack);
+            }
+        };
+
+        start();
+
+        return () => {
+            room?.disconnect();
+        };
+    }, [videoURL, audioURL]);
 
     return (
         <div className="p-4 space-y-4">
-            <h1 className="text-xl font-bold">Phương thức 3: Phát video + audio từ 2 file riêng</h1>
+            <h1 className="text-xl font-bold">Phương thức 3: Livestream từ 2 file riêng (video + audio)</h1>
 
             <div className="flex gap-4">
                 <button
@@ -76,7 +119,7 @@ export default function VideoAudioFilePage() {
                     className={`px-4 py-2 rounded ${useSample ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
                     onClick={() => setUseSample(true)}
                 >
-                    Chọn từ mẫu có sẵn
+                    Dùng mẫu có sẵn
                 </button>
             </div>
 
@@ -113,7 +156,8 @@ export default function VideoAudioFilePage() {
             )}
 
             <div className="mt-4">
-                <video ref={videoRef} src={videoURL} autoPlay loop muted controls className="w-full max-w-xl" />
+                <div ref={videoContainerRef} />
+                <video ref={videoRef} hidden />
                 <audio ref={audioRef} hidden />
             </div>
         </div>
