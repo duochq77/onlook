@@ -1,23 +1,22 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
-// 🔒 Chặn trong production
-if (process.env.NODE_ENV === 'production') {
-    export default function BlockedPage() {
-        return (
-            <div className="p-6 text-center text-red-600 font-semibold">
-                🚫 Trang này chỉ hoạt động trong môi trường <b>development</b>.
-            </div>
-        )
-    }
-}
-
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-export default function ViewerPreview() {
+// 🔒 Tạo component chặn production
+function BlockedPage() {
+    return (
+        <div className="p-6 text-center text-red-600 font-semibold">
+            🚫 Trang này chỉ hoạt động trong môi trường <b>development</b>.
+        </div>
+    )
+}
+
+// 🔁 Trang chính hoặc trang chặn
+const ViewerPreview = () => {
     const [videos, setVideos] = useState<string[]>([])
     const [selected, setSelected] = useState<string | null>(null)
     const [loading, setLoading] = useState(false)
@@ -49,9 +48,13 @@ export default function ViewerPreview() {
         setLoading(false)
     }
 
+    if (process.env.NODE_ENV === 'production') {
+        return <BlockedPage />
+    }
+
     return (
         <div className="p-6">
-            <h1 className="text-2xl font-bold mb-4">🎬 Xem trước video Supabase (Chỉ dùng dev)</h1>
+            <h1 className="text-2xl font-bold mb-4">🎬 Xem trước video Supabase (Dev Only)</h1>
 
             {selected ? (
                 <div className="mb-6">
@@ -71,7 +74,7 @@ export default function ViewerPreview() {
             ) : loading ? (
                 <p>⏳ Đang tải danh sách video...</p>
             ) : videos.length === 0 ? (
-                <p className="text-gray-600">⚠️ Hiện không có video nào trong thư mục <b>outputs</b>.</p>
+                <p className="text-gray-600">⚠️ Không có video nào trong thư mục <b>outputs</b>.</p>
             ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {videos.map((url, idx) => (
@@ -85,3 +88,5 @@ export default function ViewerPreview() {
         </div>
     )
 }
+
+export default ViewerPreview
