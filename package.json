@@ -23,7 +23,7 @@
     "bullmq": "^5.52.2",
     "dotenv": "^16.5.0",
     "ioredis": "^5.6.1",
-    "livekit-client": "1.4.1",
+    "livekit-client": "2.13.0",
     "livekit-server-sdk": "2.11.0",
     "mime": "^4.0.7",
     "next": "13.5.6",
