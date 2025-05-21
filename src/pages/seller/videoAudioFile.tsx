@@ -1,56 +1,65 @@
-// File: src/pages/seller/videoAudioFile.tsx
+export const dynamic = 'force-dynamic'; // Ngăn prerender gây lỗi Audio
 
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react';
 
 const sampleVideos = [
     {
         name: 'Video mẫu 1',
-        url: 'https://hlfhsozgnjxzwzqgjpbk.supabase.co/storage/v1/object/public/sample-videos/sample1.mp4'
+        url: 'https://hlfhsozgnjxzwzqgjpbk.supabase.co/storage/v1/object/public/sample-videos/sample1.mp4',
     },
     {
         name: 'Video mẫu 2',
-        url: 'https://hlfhsozgnjxzwzqgjpbk.supabase.co/storage/v1/object/public/sample-videos/sample2.mp4'
-    }
-]
+        url: 'https://hlfhsozgnjxzwzqgjpbk.supabase.co/storage/v1/object/public/sample-videos/sample2.mp4',
+    },
+];
 
 const sampleAudios = [
     {
         name: 'Audio mẫu 1',
-        url: 'https://hlfhsozgnjxzwzqgjpbk.supabase.co/storage/v1/object/public/sample-audios/sample1.mp3'
+        url: 'https://hlfhsozgnjxzwzqgjpbk.supabase.co/storage/v1/object/public/sample-audios/sample1.mp3',
     },
     {
         name: 'Audio mẫu 2',
-        url: 'https://hlfhsozgnjxzwzqgjpbk.supabase.co/storage/v1/object/public/sample-audios/sample2.mp3'
-    }
-]
+        url: 'https://hlfhsozgnjxzwzqgjpbk.supabase.co/storage/v1/object/public/sample-audios/sample2.mp3',
+    },
+];
 
 export default function VideoAudioFilePage() {
-    const videoRef = useRef<HTMLVideoElement>(null)
-    const audioRef = useRef<HTMLAudioElement>(null)
-    const [useSample, setUseSample] = useState(false)
-    const [videoFile, setVideoFile] = useState<File | null>(null)
-    const [audioFile, setAudioFile] = useState<File | null>(null)
-    const [videoURL, setVideoURL] = useState('')
-    const [audioURL, setAudioURL] = useState('')
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const audioRef = useRef<HTMLAudioElement>(null);
+    const [useSample, setUseSample] = useState(false);
+    const [videoFile, setVideoFile] = useState<File | null>(null);
+    const [audioFile, setAudioFile] = useState<File | null>(null);
+    const [videoURL, setVideoURL] = useState('');
+    const [audioURL, setAudioURL] = useState('');
 
     const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>, type: 'video' | 'audio') => {
-        const file = e.target.files?.[0]
+        const file = e.target.files?.[0];
         if (file) {
-            const url = URL.createObjectURL(file)
+            const url = URL.createObjectURL(file);
             if (type === 'video') {
-                setVideoFile(file)
-                setVideoURL(url)
+                setVideoFile(file);
+                setVideoURL(url);
             } else {
-                setAudioFile(file)
-                setAudioURL(url)
+                setAudioFile(file);
+                setAudioURL(url);
             }
         }
-    }
+    };
 
     const handleSampleSelect = (type: 'video' | 'audio', url: string) => {
-        if (type === 'video') setVideoURL(url)
-        else setAudioURL(url)
-    }
+        if (type === 'video') setVideoURL(url);
+        else setAudioURL(url);
+    };
+
+    useEffect(() => {
+        // Auto play audio when both video + audio URL are selected
+        if (audioRef.current && audioURL) {
+            audioRef.current.src = audioURL;
+            audioRef.current.loop = true;
+            audioRef.current.play();
+        }
+    }, [audioURL]);
 
     return (
         <div className="p-4 space-y-4">
@@ -83,7 +92,9 @@ export default function VideoAudioFilePage() {
                         <select onChange={(e) => handleSampleSelect('video', e.target.value)} className="ml-2">
                             <option value="">-- Chọn --</option>
                             {sampleVideos.map((v, i) => (
-                                <option key={i} value={v.url}>{v.name}</option>
+                                <option key={i} value={v.url}>
+                                    {v.name}
+                                </option>
                             ))}
                         </select>
                     </div>
@@ -92,7 +103,9 @@ export default function VideoAudioFilePage() {
                         <select onChange={(e) => handleSampleSelect('audio', e.target.value)} className="ml-2">
                             <option value="">-- Chọn --</option>
                             {sampleAudios.map((a, i) => (
-                                <option key={i} value={a.url}>{a.name}</option>
+                                <option key={i} value={a.url}>
+                                    {a.name}
+                                </option>
                             ))}
                         </select>
                     </div>
@@ -101,8 +114,8 @@ export default function VideoAudioFilePage() {
 
             <div className="mt-4">
                 <video ref={videoRef} src={videoURL} autoPlay loop muted controls className="w-full max-w-xl" />
-                <audio ref={audioRef} src={audioURL} autoPlay loop hidden />
+                <audio ref={audioRef} hidden />
             </div>
         </div>
-    )
+    );
 }
