@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
-import { Room, RemoteTrack, Track } from 'livekit-client'
-import { connectToRoom } from '@/services/LiveKitService'
+import { Room } from '@livekit/components-core'
 
 const ViewerRoomPage: React.FC = () => {
     const router = useRouter()
@@ -15,18 +14,21 @@ const ViewerRoomPage: React.FC = () => {
         const identity = 'viewer-' + Math.floor(Math.random() * 100000)
 
         const start = async () => {
-            const joinedRoom = await connectToRoom(roomName, identity, 'subscriber')
+            const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=subscriber`)
+            const { token } = await res.json()
+
+            const joinedRoom = new Room()
+            await joinedRoom.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token)
             setRoom(joinedRoom)
 
-            joinedRoom.on('trackSubscribed', (track: RemoteTrack, publication, participant) => {
-                if (track.kind === Track.Kind.Video && videoRef.current) {
+            joinedRoom.on('trackSubscribed', (track: any) => {
+                if (track.kind === 'video' && videoRef.current) {
                     track.attach(videoRef.current)
                 }
             })
         }
 
         start()
-
         return () => {
             room?.disconnect()
         }
