@@ -12,7 +12,7 @@ const WebcamAudioFilePage: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [room, setRoom] = useState<any>(null);
     const [audioElement] = useState<HTMLAudioElement>(new Audio());
-    const [useSampleAudio, setUseSampleAudio] = useState(false);
+    const [useSampleAudio, setUseSampleAudio] = useState<boolean>(false);
 
     useEffect(() => {
         const startStream = async () => {
@@ -23,14 +23,16 @@ const WebcamAudioFilePage: React.FC = () => {
             const room = new Room();
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
             const { token } = await res.json();
-            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, { autoSubscribe: true });
+            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
+                autoSubscribe: true,
+            });
             setRoom(room);
 
             const videoTrack = await createLocalVideoTrack();
             await room.localParticipant.publishTrack(videoTrack);
             videoTrack.attach(videoRef.current!);
 
-            let audioTrack: any;
+            let audioTrack: any = null;
             if (useSampleAudio) {
                 const { data } = await supabase.storage.from('uploads').download('sample-audio.mp3');
                 if (data) {

@@ -24,7 +24,9 @@ const SellerWebcamMicPage: React.FC = () => {
             const { token } = await res.json();
 
             const room = new Room();
-            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, { autoSubscribe: true });
+            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
+                autoSubscribe: true,
+            });
             setRoom(room);
 
             const videoTrack = await createLocalVideoTrack();
@@ -41,7 +43,9 @@ const SellerWebcamMicPage: React.FC = () => {
         };
 
         startLivestream();
-        return () => room?.disconnect();
+        return () => {
+            room?.disconnect();
+        };
     }, []);
 
     return (

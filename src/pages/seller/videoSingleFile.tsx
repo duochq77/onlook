@@ -20,7 +20,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
 
             const room = new Room();
             await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
-                autoSubscribe: true
+                autoSubscribe: true,
             });
             setRoom(room);
 
