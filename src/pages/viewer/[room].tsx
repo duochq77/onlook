@@ -1,4 +1,4 @@
-export const dynamic = 'force-dynamic'; // Ngăn prerender gây lỗi khi dùng LiveKit trong trình duyệt
+export const dynamic = 'force-dynamic';
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
@@ -7,7 +7,9 @@ import { connectToRoom } from '@/services/LiveKitService';
 const ViewerRoomPage: React.FC = () => {
     const router = useRouter();
     const { room: roomName } = router.query;
+
     const videoRef = useRef<HTMLVideoElement>(null);
+    const audioRef = useRef<HTMLAudioElement>(null);
     const [room, setRoom] = useState<any>(null);
 
     useEffect(() => {
@@ -31,6 +33,10 @@ const ViewerRoomPage: React.FC = () => {
                 if (track.kind === 'video' && videoRef.current) {
                     track.attach(videoRef.current);
                 }
+
+                if (track.kind === 'audio' && audioRef.current) {
+                    track.attach(audioRef.current);
+                }
             });
         };
 
@@ -50,6 +56,7 @@ const ViewerRoomPage: React.FC = () => {
                 muted
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
+            <audio ref={audioRef} autoPlay />
         </div>
     );
 };

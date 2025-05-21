@@ -1,12 +1,23 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
+// 🔒 Chặn trong production
+if (process.env.NODE_ENV === 'production') {
+    export default function BlockedPage() {
+        return (
+            <div className="p-6 text-center text-red-600 font-semibold">
+                🚫 Trang này chỉ hoạt động trong môi trường <b>development</b>.
+            </div>
+        )
+    }
+}
+
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-export default function ViewerPage() {
+export default function ViewerPreview() {
     const [videos, setVideos] = useState<string[]>([])
     const [selected, setSelected] = useState<string | null>(null)
     const [loading, setLoading] = useState(false)
@@ -40,7 +51,7 @@ export default function ViewerPage() {
 
     return (
         <div className="p-6">
-            <h1 className="text-2xl font-bold mb-4">📺 Viewer Page</h1>
+            <h1 className="text-2xl font-bold mb-4">🎬 Xem trước video Supabase (Chỉ dùng dev)</h1>
 
             {selected ? (
                 <div className="mb-6">
