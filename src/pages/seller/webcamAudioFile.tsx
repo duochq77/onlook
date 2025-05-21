@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/services/SupabaseService';
-import {
-    Room,
+
+const { Room } = require('livekit-client/dist/room');
+const {
     LocalVideoTrack,
     LocalAudioTrack,
-    createLocalVideoTrack
-} from 'livekit-client';
+    createLocalVideoTrack,
+} = require('livekit-client/dist/webrtc');
 
 const WebcamAudioFilePage: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -22,9 +23,7 @@ const WebcamAudioFilePage: React.FC = () => {
             const room = new Room();
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
             const { token } = await res.json();
-            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
-                autoSubscribe: true,
-            });
+            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token);
             setRoom(room);
 
             const videoTrack = await createLocalVideoTrack();
