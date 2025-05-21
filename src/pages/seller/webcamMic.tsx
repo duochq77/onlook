@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'; // Ngăn lỗi SSR vì dùng camera/mic
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 const livekit = require('livekit-client');
