@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-
-const { Room } = require('livekit-client/dist/room');
-const { LocalVideoTrack, LocalAudioTrack } = require('livekit-client/dist/webrtc');
+const livekit = require('livekit-client');
 
 const SellerVideoSingleFilePage: React.FC = () => {
     const videoContainerRef = useRef<HTMLDivElement>(null);
@@ -18,7 +16,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
             const { token } = await res.json();
 
-            const room = new Room();
+            const room = new livekit.Room();
             await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
                 autoSubscribe: true,
             });
@@ -35,7 +33,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
             const audioTrack = mediaStream.getAudioTracks()[0];
 
             if (videoTrack) {
-                const localVideoTrack = new LocalVideoTrack(videoTrack);
+                const localVideoTrack = new livekit.LocalVideoTrack(videoTrack);
                 await room.localParticipant.publishTrack(localVideoTrack);
                 const attached = localVideoTrack.attach();
                 if (videoContainerRef.current) {
@@ -45,7 +43,7 @@ const SellerVideoSingleFilePage: React.FC = () => {
             }
 
             if (audioTrack) {
-                const localAudioTrack = new LocalAudioTrack(audioTrack);
+                const localAudioTrack = new livekit.LocalAudioTrack(audioTrack);
                 await room.localParticipant.publishTrack(localAudioTrack);
             }
         };

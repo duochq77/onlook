@@ -1,34 +1,29 @@
+export const dynamic = 'force-dynamic'; // Ngăn lỗi Audio khi prerender trên server
+
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/services/SupabaseService';
-
-const { Room } = require('livekit-client/dist/room');
-const {
-    LocalVideoTrack,
-    LocalAudioTrack,
-    createLocalVideoTrack,
-} = require('livekit-client/dist/webrtc');
+const livekit = require('livekit-client');
 
 const WebcamAudioFilePage: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [room, setRoom] = useState<any>(null);
-    const [audioElement] = useState<HTMLAudioElement>(new Audio());
     const [useSampleAudio, setUseSampleAudio] = useState<boolean>(false);
 
     useEffect(() => {
+        let audioElement: HTMLAudioElement | null = null;
+
         const startStream = async () => {
             const roomName = 'default-room';
             const identity = 'seller-webcam-audiofile-' + Math.floor(Math.random() * 10000);
             const role = 'publisher';
 
-            const room = new Room();
+            const room = new livekit.Room();
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
             const { token } = await res.json();
-            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
-                autoSubscribe: true,
-            });
+            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, token);
             setRoom(room);
 
-            const videoTrack = await createLocalVideoTrack();
+            const videoTrack = await livekit.createLocalVideoTrack();
             await room.localParticipant.publishTrack(videoTrack);
             videoTrack.attach(videoRef.current!);
 
@@ -37,27 +32,36 @@ const WebcamAudioFilePage: React.FC = () => {
                 const { data } = await supabase.storage.from('uploads').download('sample-audio.mp3');
                 if (data) {
                     const url = URL.createObjectURL(data);
-                    audioElement.src = url;
+                    audioElement = new Audio(url);
                     audioElement.loop = true;
                     await audioElement.play();
 
-                    const stream = (audioElement as any).captureStream();
-                    const audioMediaTrack = stream.getAudioTracks()[0];
-                    audioTrack = new LocalAudioTrack(audioMediaTrack);
-                    await room.localParticipant.publishTrack(audioTrack);
+                    const audioEl = audioElement as any;
+                    const stream =
+                        (typeof audioEl.captureStream === 'function' ? audioEl.captureStream() : null) ||
+                        (typeof audioEl.mozCaptureStream === 'function' ? audioEl.mozCaptureStream() : null);
+
+                    if (stream) {
+                        const audioMediaTrack = stream.getAudioTracks()[0];
+                        audioTrack = new livekit.LocalAudioTrack(audioMediaTrack);
+                        await room.localParticipant.publishTrack(audioTrack);
+                    }
                 }
             } else {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 const micTrack = stream.getAudioTracks()[0];
-                audioTrack = new LocalAudioTrack(micTrack);
+                audioTrack = new livekit.LocalAudioTrack(micTrack);
                 await room.localParticipant.publishTrack(audioTrack);
             }
         };
 
         startStream();
+
         return () => {
-            audioElement.pause();
-            audioElement.src = '';
+            if (audioElement) {
+                audioElement.pause();
+                audioElement.src = '';
+            }
             room?.disconnect();
         };
     }, [useSampleAudio]);

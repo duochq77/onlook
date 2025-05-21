@@ -2,8 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { connectToRoom } from '@/services/LiveKitService';
 
-const { Room } = require('livekit-client/dist/room');
-
 const ViewerRoomPage: React.FC = () => {
     const router = useRouter();
     const { room: roomName } = router.query;
@@ -16,7 +14,10 @@ const ViewerRoomPage: React.FC = () => {
         const identity = 'viewer-' + Math.floor(Math.random() * 100000);
 
         const start = async () => {
-            const joinedRoom = await connectToRoom(roomName, identity, 'subscriber');
+            const joinedRoom = await connectToRoom(
+                process.env.NEXT_PUBLIC_LIVEKIT_URL!,
+                await fetch(`/api/token?room=${roomName}&identity=${identity}&role=subscriber`).then(res => res.json()).then(data => data.token)
+            );
             setRoom(joinedRoom);
 
             joinedRoom.on('trackSubscribed', (track: any) => {
@@ -27,7 +28,10 @@ const ViewerRoomPage: React.FC = () => {
         };
 
         start();
-        return () => room?.disconnect();
+
+        return () => {
+            room?.disconnect();
+        };
     }, [roomName]);
 
     return (
