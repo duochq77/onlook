@@ -1,36 +1,33 @@
-import type { NextApiRequest, NextApiResponse } from 'next'
+// ✅ Chuẩn chạy trên server Vercel với "type": "module"
+import { NextApiRequest, NextApiResponse } from 'next'
 
-// ✅ Dynamic import cho "type": "module"
+// ⚠️ Đảm bảo import động vì đang dùng "type": "module"
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { room, identity, role = 'publisher' } = req.query
+  const { room, identity } = req.query
 
   if (!room || !identity || typeof room !== 'string' || typeof identity !== 'string') {
     return res.status(400).json({ error: 'Missing room or identity' })
   }
 
   try {
+    // ✅ Import động để tránh lỗi bundler khi deploy
     const { AccessToken } = await import('livekit-server-sdk')
 
-    const at = new AccessToken(
-      process.env.LIVEKIT_API_KEY!,
-      process.env.LIVEKIT_API_SECRET!,
-      {
-        identity,
-        name: identity,
-      }
-    )
+    // ✅ Dùng biến môi trường đã được Vercel khai đúng
+    const apiKey = process.env.LIVEKIT_API_KEY!
+    const apiSecret = process.env.LIVEKIT_API_SECRET!
 
-    at.addGrant({
-      room: room,
-      roomJoin: true,
-      canPublish: role === 'publisher',
-      canSubscribe: true,
+    // ✅ Tạo token mới
+    const at = new AccessToken(apiKey, apiSecret, {
+      identity,
     })
+    at.addGrant({ roomJoin: true, room })
 
-    const jwt = at.toJwt() // ✅ Quan trọng: phải gọi .toJwt()
-    console.log('✅ JWT tạo ra:', jwt)
+    // ⚠️ KHÔNG quên gọi await .toJwt()
+    const jwt = await at.toJwt()
 
-    return res.status(200).json({ token: jwt }) // ✅ Trả về chuỗi token
+    console.log('✅ Token tạo ra:', jwt)
+    return res.status(200).json({ token: jwt })
   } catch (err) {
     console.error('❌ Token creation failed:', err)
     return res.status(500).json({ error: 'Token creation failed' })
