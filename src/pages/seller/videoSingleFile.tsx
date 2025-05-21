@@ -1,13 +1,16 @@
-import { useRouter } from 'next/router'
 import React, { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/router'
 
-// ✅ Import đúng cách theo LiveKit v2.13.0
-import { Room } from 'livekit-client/internal/Room'
-import { LocalVideoTrack, LocalAudioTrack } from 'livekit-client/internal/media/track'
+// ✅ Import đúng theo LiveKit v2.13.0 (không dùng từ "internal" hay "core")
+const { Room } = require('livekit-client/dist/room')
+const {
+    LocalVideoTrack,
+    LocalAudioTrack
+} = require('livekit-client/dist/webrtc')
 
 const SellerVideoSingleFilePage: React.FC = () => {
     const videoContainerRef = useRef<HTMLDivElement>(null)
-    const [room, setRoom] = useState<Room | null>(null)
+    const [room, setRoom] = useState<any>(null)
     const router = useRouter()
 
     const roomName = 'onlook-room'
@@ -38,7 +41,6 @@ const SellerVideoSingleFilePage: React.FC = () => {
             if (videoTrack) {
                 const localVideoTrack = new LocalVideoTrack(videoTrack)
                 await room.localParticipant.publishTrack(localVideoTrack)
-
                 const attached = localVideoTrack.attach()
                 if (videoContainerRef.current) {
                     videoContainerRef.current.innerHTML = ''
@@ -53,7 +55,6 @@ const SellerVideoSingleFilePage: React.FC = () => {
         }
 
         startLivestream()
-
         return () => {
             room?.disconnect()
         }
