@@ -24,6 +24,26 @@
   resolved "https://registry.npmjs.org/@ffmpeg/types/-/types-0.12.4.tgz"
   integrity sha512-k9vJQNBGTxE5AhYDtOYR5rO5fKsspbg51gbcwtbkw2lCdoIILzklulcjJfIDwrtn7XhDeF2M+THwJ2FGrLeV6A==
 
+"@floating-ui/core@^1.6.0":
+  version "1.7.0"
+  resolved "https://registry.yarnpkg.com/@floating-ui/core/-/core-1.7.0.tgz#1aff27a993ea1b254a586318c29c3b16ea0f4d0a"
+  integrity sha512-FRdBLykrPPA6P76GGGqlex/e7fbe0F1ykgxHYNXQsH/iTEtjMj/f9bpY5oQqbjt5VgZvgz/uKXbGuROijh3VLA==
+  dependencies:
+    "@floating-ui/utils" "^0.2.9"
+
+"@floating-ui/dom@1.6.13":
+  version "1.6.13"
+  resolved "https://registry.yarnpkg.com/@floating-ui/dom/-/dom-1.6.13.tgz#a8a938532aea27a95121ec16e667a7cbe8c59e34"
+  integrity sha512-umqzocjDgNRGTuO7Q8CU32dkHkECqI8ZdMZ5Swb6QAM0t5rnlrN3lGo1hdpscRd3WS8T6DKYK4ephgIH9iRh3w==
+  dependencies:
+    "@floating-ui/core" "^1.6.0"
+    "@floating-ui/utils" "^0.2.9"
+
+"@floating-ui/utils@^0.2.9":
+  version "0.2.9"
+  resolved "https://registry.yarnpkg.com/@floating-ui/utils/-/utils-0.2.9.tgz#50dea3616bc8191fb8e112283b49eaff03e78429"
+  integrity sha512-MDWhGtE+eHw5JW7lq4qhc5yRLS11ERl1c7Z6Xd0a58DozHES6EnNNwUWbMiG4J9Cgj053Bhk8zvlhFYKVhULwg==
+
 "@ioredis/commands@^1.1.1":
   version "1.2.0"
   resolved "https://registry.npmjs.org/@ioredis/commands/-/commands-1.2.0.tgz"
@@ -72,6 +92,15 @@
   dependencies:
     "@jridgewell/resolve-uri" "^3.1.0"
     "@jridgewell/sourcemap-codec" "^1.4.14"
+
+"@livekit/components-core@^0.12.5":
+  version "0.12.5"
+  resolved "https://registry.yarnpkg.com/@livekit/components-core/-/components-core-0.12.5.tgz#e0099adb425e1174f8da9a688994fbfd9c22ab10"
+  integrity sha512-HaUt/Wi7WMz2QRFYcqeXbu3h9GH6bMrcBM8hjOeys/476tINVtiuVTcUkXkkx3JD1pIXpqV8HjwRATRY7iRG0g==
+  dependencies:
+    "@floating-ui/dom" "1.6.13"
+    loglevel "1.9.1"
+    rxjs "7.8.2"
 
 "@livekit/protocol@^1.36.1":
   version "1.38.0"
@@ -995,6 +1024,11 @@ lodash.isarguments@^3.1.0:
   resolved "https://registry.npmjs.org/lodash.isarguments/-/lodash.isarguments-3.1.0.tgz"
   integrity sha512-chi4NHZlZqZD18a0imDHnZPrDeBbTtVN7GXMwuGdRH9qotxAjYs3aVLKc7zNOG9eddR5Ksd8rvFEBc9SsggPpg==
 
+loglevel@1.9.1:
+  version "1.9.1"
+  resolved "https://registry.yarnpkg.com/loglevel/-/loglevel-1.9.1.tgz#d63976ac9bcd03c7c873116d41c2a85bafff1be7"
+  integrity sha512-hP3I3kCrDIMuRwAwHltphhDM1r8i55H33GgqjXbrisuJhF4kRhW1dNuxsRklp4bXl8DSdLaNLuiL4A/LWRfxvg==
+
 loglevel@^1.8.0:
   version "1.9.2"
   resolved "https://registry.npmjs.org/loglevel/-/loglevel-1.9.2.tgz"
@@ -1388,7 +1422,7 @@ run-parallel@^1.1.9:
   dependencies:
     queue-microtask "^1.2.2"
 
-rxjs@^7.5.2:
+rxjs@7.8.2, rxjs@^7.5.2:
   version "7.8.2"
   resolved "https://registry.yarnpkg.com/rxjs/-/rxjs-7.8.2.tgz#955bc473ed8af11a002a2be52071bf475638607b"
   integrity sha512-dhKf903U/PQZY6boNNtAGdWbG85WAbjT/1xYoZIC7FAY0yWapOBQVsVrDl58W86//e1VpMNBtRV4MaXfdMySFA==

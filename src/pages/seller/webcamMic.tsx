@@ -1,12 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
-import {
-    Room,
-    LocalVideoTrack,
-    LocalAudioTrack,
-    createLocalVideoTrack,
-    createLocalAudioTrack,
-} from 'livekit-client'
+import { Room, LocalVideoTrack, LocalAudioTrack, createLocalVideoTrack, createLocalAudioTrack } from '@livekit/components-core'
 
 const SellerWebcamMicPage: React.FC = () => {
     const videoRef = useRef<HTMLDivElement>(null)
@@ -23,9 +17,7 @@ const SellerWebcamMicPage: React.FC = () => {
             const { token } = await res.json()
 
             const room = new Room()
-            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
-                autoSubscribe: true,
-            })
+            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token)
             setRoom(room)
 
             const videoTrack = await createLocalVideoTrack()
@@ -35,16 +27,11 @@ const SellerWebcamMicPage: React.FC = () => {
             await room.localParticipant.publishTrack(audioTrack)
 
             const attached = videoTrack.attach()
-            if (videoRef.current) {
-                videoRef.current.innerHTML = ''
-                videoRef.current.appendChild(attached)
-            }
+            videoRef.current?.appendChild(attached)
         }
 
         startLivestream()
-        return () => {
-            room?.disconnect()
-        }
+        return () => room?.disconnect()
     }, [])
 
     return (
