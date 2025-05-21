@@ -1,38 +1,34 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/router'
-import { Room } from '@livekit/components-core'
+import React, { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/router';
+import { connectToRoom } from '@/services/LiveKitService';
+
+const { Room } = require('livekit-client/dist/room');
 
 const ViewerRoomPage: React.FC = () => {
-    const router = useRouter()
-    const { room: roomName } = router.query
-    const videoRef = useRef<HTMLVideoElement>(null)
-    const [room, setRoom] = useState<Room | null>(null)
+    const router = useRouter();
+    const { room: roomName } = router.query;
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const [room, setRoom] = useState<any>(null);
 
     useEffect(() => {
-        if (!roomName || typeof roomName !== 'string') return
+        if (!roomName || typeof roomName !== 'string') return;
 
-        const identity = 'viewer-' + Math.floor(Math.random() * 100000)
+        const identity = 'viewer-' + Math.floor(Math.random() * 100000);
 
         const start = async () => {
-            const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=subscriber`)
-            const { token } = await res.json()
-
-            const joinedRoom = new Room()
-            await joinedRoom.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token)
-            setRoom(joinedRoom)
+            const joinedRoom = await connectToRoom(roomName, identity, 'subscriber');
+            setRoom(joinedRoom);
 
             joinedRoom.on('trackSubscribed', (track: any) => {
                 if (track.kind === 'video' && videoRef.current) {
-                    track.attach(videoRef.current)
+                    track.attach(videoRef.current);
                 }
-            })
-        }
+            });
+        };
 
-        start()
-        return () => {
-            room?.disconnect()
-        }
-    }, [roomName])
+        start();
+        return () => room?.disconnect();
+    }, [roomName]);
 
     return (
         <div style={{ width: '100%', height: '100vh', background: 'black' }}>
@@ -44,7 +40,7 @@ const ViewerRoomPage: React.FC = () => {
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
         </div>
-    )
-}
+    );
+};
 
-export default ViewerRoomPage
+export default ViewerRoomPage;
