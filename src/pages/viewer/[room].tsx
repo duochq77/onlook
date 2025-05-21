@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'; // Ngăn prerender gây lỗi khi dùng LiveKit trong trình duyệt
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { connectToRoom } from '@/services/LiveKitService';
@@ -14,9 +16,14 @@ const ViewerRoomPage: React.FC = () => {
         const identity = 'viewer-' + Math.floor(Math.random() * 100000);
 
         const start = async () => {
+            const tokenRes = await fetch(
+                `/api/token?room=${roomName}&identity=${identity}&role=subscriber`
+            );
+            const { token } = await tokenRes.json();
+
             const joinedRoom = await connectToRoom(
                 process.env.NEXT_PUBLIC_LIVEKIT_URL!,
-                await fetch(`/api/token?room=${roomName}&identity=${identity}&role=subscriber`).then(res => res.json()).then(data => data.token)
+                token
             );
             setRoom(joinedRoom);
 
