@@ -1,7 +1,6 @@
 export const dynamic = 'force-dynamic';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/router';
 const livekit = require('livekit-client');
 
 const sampleVideos = [
@@ -27,7 +26,6 @@ export default function VideoAudioFilePage() {
     const [audioURL, setAudioURL] = useState('');
     const [room, setRoom] = useState<any>(null);
 
-    const router = useRouter();
     const roomName = 'onlook-room';
     const identity = 'seller-video-audio-' + Math.floor(Math.random() * 10000);
     const role = 'publisher';
@@ -50,24 +48,22 @@ export default function VideoAudioFilePage() {
         const start = async () => {
             if (!videoURL || !audioURL) return;
 
-            // ✅ Lấy token đúng cách
+            // ✅ Sửa đúng chỗ lấy token
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
             const data = await res.json();
-            const token = data.token;
-            console.log('✅ Token nhận được:', token); // kiểm tra xem token là chuỗi
+            const token = data.token; // ✅ lấy ra chuỗi
+            console.log('✅ Token là:', token);
 
             const room = new livekit.Room();
             await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, token);
             setRoom(room);
 
-            // Setup video
             const videoEl = videoRef.current!;
             videoEl.src = videoURL;
             videoEl.loop = true;
             videoEl.muted = true;
             await videoEl.play();
 
-            // Setup audio
             const audioEl = audioRef.current!;
             audioEl.src = audioURL;
             audioEl.loop = true;
@@ -98,7 +94,6 @@ export default function VideoAudioFilePage() {
         };
 
         start();
-
         return () => {
             room?.disconnect();
         };
@@ -135,9 +130,7 @@ export default function VideoAudioFilePage() {
                         <select onChange={(e) => handleSampleSelect('video', e.target.value)} className="ml-2">
                             <option value="">-- Chọn --</option>
                             {sampleVideos.map((v, i) => (
-                                <option key={i} value={v.url}>
-                                    {v.name}
-                                </option>
+                                <option key={i} value={v.url}>{v.name}</option>
                             ))}
                         </select>
                     </div>
@@ -146,9 +139,7 @@ export default function VideoAudioFilePage() {
                         <select onChange={(e) => handleSampleSelect('audio', e.target.value)} className="ml-2">
                             <option value="">-- Chọn --</option>
                             {sampleAudios.map((a, i) => (
-                                <option key={i} value={a.url}>
-                                    {a.name}
-                                </option>
+                                <option key={i} value={a.url}>{a.name}</option>
                             ))}
                         </select>
                     </div>
