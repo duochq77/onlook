@@ -3,24 +3,11 @@ export const dynamic = 'force-dynamic';
 import React, { useEffect, useRef, useState } from 'react';
 const livekit = require('livekit-client');
 
-const sampleVideos = [
-    {
-        name: 'Video mẫu 1',
-        url: 'https://hlfhsozgnjxzwzqgjpbk.supabase.co/storage/v1/object/public/sample-videos/sample1.mp4',
-    },
-];
-
-const sampleAudios = [
-    {
-        name: 'Audio mẫu 1',
-        url: 'https://hlfhsozgnjxzwzqgjpbk.supabase.co/storage/v1/object/public/sample-audios/sample1.mp3',
-    },
-];
-
 export default function VideoAudioFilePage() {
     const videoRef = useRef<HTMLVideoElement>(null);
     const audioRef = useRef<HTMLAudioElement>(null);
     const videoContainerRef = useRef<HTMLDivElement>(null);
+
     const [useSample, setUseSample] = useState(false);
     const [videoURL, setVideoURL] = useState('');
     const [audioURL, setAudioURL] = useState('');
@@ -29,6 +16,20 @@ export default function VideoAudioFilePage() {
     const roomName = 'onlook-room';
     const identity = 'seller-video-audio-' + Math.floor(Math.random() * 10000);
     const role = 'publisher';
+
+    const sampleVideos = [
+        {
+            name: 'Video mẫu 1',
+            url: 'https://hlfhsozgnjxzwzqgjpbk.supabase.co/storage/v1/object/public/sample-videos/sample1.mp4',
+        },
+    ];
+
+    const sampleAudios = [
+        {
+            name: 'Audio mẫu 1',
+            url: 'https://hlfhsozgnjxzwzqgjpbk.supabase.co/storage/v1/object/public/sample-audios/sample1.mp3',
+        },
+    ];
 
     const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>, type: 'video' | 'audio') => {
         const file = e.target.files?.[0];
@@ -48,10 +49,9 @@ export default function VideoAudioFilePage() {
         const start = async () => {
             if (!videoURL || !audioURL) return;
 
-            // ✅ Sửa đúng chỗ lấy token
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
             const data = await res.json();
-            const token = data.token; // ✅ lấy ra chuỗi
+            const token = data.token;
             console.log('✅ Token là:', token);
 
             const room = new livekit.Room();
@@ -94,6 +94,7 @@ export default function VideoAudioFilePage() {
         };
 
         start();
+
         return () => {
             room?.disconnect();
         };
@@ -101,7 +102,7 @@ export default function VideoAudioFilePage() {
 
     return (
         <div className="p-4 space-y-4">
-            <h1 className="text-xl font-bold">Phương thức 3: Livestream từ 2 file riêng (video + audio)</h1>
+            <h1 className="text-xl font-bold">Phương thức 3: Phát livestream từ video và audio riêng biệt</h1>
 
             <div className="flex gap-4">
                 <button
@@ -126,7 +127,7 @@ export default function VideoAudioFilePage() {
             ) : (
                 <div className="space-y-2">
                     <div>
-                        <label className="font-medium">Chọn video mẫu:</label>
+                        <label>Video mẫu:</label>
                         <select onChange={(e) => handleSampleSelect('video', e.target.value)} className="ml-2">
                             <option value="">-- Chọn --</option>
                             {sampleVideos.map((v, i) => (
@@ -135,7 +136,7 @@ export default function VideoAudioFilePage() {
                         </select>
                     </div>
                     <div>
-                        <label className="font-medium">Chọn audio mẫu:</label>
+                        <label>Audio mẫu:</label>
                         <select onChange={(e) => handleSampleSelect('audio', e.target.value)} className="ml-2">
                             <option value="">-- Chọn --</option>
                             {sampleAudios.map((a, i) => (
