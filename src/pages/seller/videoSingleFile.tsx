@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'; // Ngăn lỗi khi dùng Audio/Video trên SSR
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 const livekit = require('livekit-client');
@@ -28,9 +30,14 @@ const SellerVideoSingleFilePage: React.FC = () => {
             videoEl.muted = true;
             await videoEl.play();
 
-            const mediaStream = (videoEl as any).captureStream();
-            const videoTrack = mediaStream.getVideoTracks()[0];
-            const audioTrack = mediaStream.getAudioTracks()[0];
+            const stream =
+                (videoEl as any).captureStream?.() ||
+                (videoEl as any).mozCaptureStream?.();
+
+            if (!stream) return;
+
+            const videoTrack = stream.getVideoTracks()[0];
+            const audioTrack = stream.getAudioTracks()[0];
 
             if (videoTrack) {
                 const localVideoTrack = new livekit.LocalVideoTrack(videoTrack);
