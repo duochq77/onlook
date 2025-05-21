@@ -8,16 +8,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { AccessToken } = await import('livekit-server-sdk'); // ✅ KHẮC PHỤC HOÀN TOÀN
+    // ✅ Dùng dynamic import để hoạt động đúng với type: "module"
+    const { AccessToken } = await import('livekit-server-sdk');
 
-    const at = new AccessToken(process.env.LIVEKIT_API_KEY!, process.env.LIVEKIT_API_SECRET!, {
-      identity,
-    });
-
+    const at = new AccessToken(
+      process.env.LIVEKIT_API_KEY!,
+      process.env.LIVEKIT_API_SECRET!,
+      { identity }
+    );
     at.addGrant({ roomJoin: true, room });
 
-    const jwt = at.toJwt();  // ✅ Bây giờ trả đúng chuỗi
-    console.log('✅ Token kiểu:', typeof jwt, jwt);
+    const jwt = at.toJwt(); // ⚠️ Gọi đúng method
+    console.log('✅ Token tạo ra:', jwt);
 
     return res.status(200).json({ token: jwt });
   } catch (err) {
