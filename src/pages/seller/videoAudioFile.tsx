@@ -1,4 +1,4 @@
-export const dynamic = 'force-dynamic'; // Bắt buộc do dùng captureStream, Audio...
+export const dynamic = 'force-dynamic'; // Ngăn prerender lỗi với Audio/Browser API
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
@@ -50,6 +50,7 @@ export default function VideoAudioFilePage() {
         const start = async () => {
             if (!videoURL || !audioURL) return;
 
+            // ✅ SỬA CHÍNH Ở ĐÂY: Lấy token đúng cách
             const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
             const { token } = await res.json();
 
@@ -57,20 +58,17 @@ export default function VideoAudioFilePage() {
             await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, token);
             setRoom(room);
 
-            // Video setup
             const videoEl = videoRef.current!;
             videoEl.src = videoURL;
             videoEl.loop = true;
             videoEl.muted = true;
             await videoEl.play();
 
-            // Audio setup
             const audioEl = audioRef.current!;
             audioEl.src = audioURL;
             audioEl.loop = true;
             await audioEl.play();
 
-            // Ghép 2 stream lại
             const videoStream =
                 (videoEl as any).captureStream?.() || (videoEl as any).mozCaptureStream?.();
             const audioStream =
