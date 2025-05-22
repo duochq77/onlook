@@ -1,12 +1,12 @@
 import 'dotenv/config'
 import { Redis } from '@upstash/redis'
-import path from 'path'
 import fs from 'fs'
+import path from 'path'
 import { exec } from 'child_process'
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!
 })
 
 async function runMergeWorker() {
@@ -15,44 +15,38 @@ async function runMergeWorker() {
     while (true) {
         const job = await redis.lpop<string>('ffmpeg-jobs:merge')
         if (!job) {
-            await new Promise((r) => setTimeout(r, 3000)) // nghỉ 3s nếu chưa có job
+            await new Promise((r) => setTimeout(r, 3000))
             continue
         }
 
         try {
-            const { video, audio, outputName } = JSON.parse(job)
+            const { videoFile, audioFile, outputName } = JSON.parse(job)
 
-            const videoPath = path.join('/tmp', video)
-            const audioPath = path.join('/tmp', audio)
+            const videoPath = path.join('/tmp', videoFile)
+            const audioPath = path.join('/tmp', audioFile)
             const mergedPath = path.join('/tmp', outputName)
 
             // Kiểm tra file tồn tại
-            if (!fs.existsSync(videoPath)) {
-                throw new Error(`❌ File video không tồn tại: ${videoPath}`)
-            }
-            if (!fs.existsSync(audioPath)) {
-                throw new Error(`❌ File audio không tồn tại: ${audioPath}`)
-            }
+            if (!fs.existsSync(videoPath)) throw new Error(`❌ Không tìm thấy video: ${videoPath}`)
+            if (!fs.existsSync(audioPath)) throw new Error(`❌ Không tìm thấy audio: ${audioPath}`)
 
-            const command = `ffmpeg -y -i "${videoPath}" -i "${audioPath}" -c:v copy -c:a aac -strict experimental "${mergedPath}"`
+            const command = `ffmpeg -y -i "${videoPath}" -i "${audioPath}" -c:v copy -c:a aac "${mergedPath}"`
             console.log('🔧 Ghép video + audio:', command)
-
             await execPromise(command)
 
             console.log(`✅ Đã tạo merged file: ${outputName}`)
 
-            // Đẩy sang hàng chờ upload
+            // Đẩy sang hàng upload
             await redis.rpush('ffmpeg-jobs:upload', JSON.stringify({ outputName }))
 
-            // Đẩy thêm job dọn file gốc
+            // Đẩy sang hàng cleanup (xoá file tạm và gốc)
             await redis.rpush('ffmpeg-jobs:cleanup', JSON.stringify({
                 deleteType: 'origin',
-                originFiles: [video, audio],
-                outputName,
+                originFiles: [videoFile, audioFile],
+                outputName
             }))
-
         } catch (err) {
-            console.error('❌ Lỗi merge video + audio:', err)
+            console.error('❌ Lỗi khi merge:', err)
         }
     }
 }

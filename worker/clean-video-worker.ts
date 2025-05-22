@@ -6,7 +6,7 @@ import { exec } from 'child_process'
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!
 })
 
 async function runCleanVideoWorker() {
@@ -21,26 +21,19 @@ async function runCleanVideoWorker() {
 
         try {
             const { inputVideo, outputName } = JSON.parse(job)
-            const inputPath = inputVideo.startsWith('/tmp') ? inputVideo : path.join('/tmp', inputVideo)
-            const cleanOutput = path.join('/tmp', `clean-${outputName}`)
+            const inputPath = path.join('/tmp', inputVideo)
+            const cleanOutput = path.join('/tmp', outputName)
 
             const command = `ffmpeg -i "${inputPath}" -c copy -an "${cleanOutput}"`
-            console.log('🔧 Đang tách âm thanh:', command)
-
+            console.log('🔧 Tách âm thanh:', command)
             await execPromise(command)
-            console.log(`✅ Đã tách xong: clean-${outputName}`)
 
-            await redis.rpush('ffmpeg-jobs:upload', JSON.stringify({ outputName: `clean-${outputName}` }))
+            console.log(`✅ Đã tạo video sạch: ${outputName}`)
 
-            // 🧹 Gửi job xoá file gốc và tạm
-            await redis.rpush('ffmpeg-jobs:cleanup', JSON.stringify({
-                deleteType: 'origin',
-                outputName: `clean-${outputName}`,
-                originFiles: [inputVideo]
-            }))
-
+            // Đẩy sang hàng đợi merge tiếp theo
+            // (merge job sẽ do API /api/merge-upload tạo sau)
         } catch (err) {
-            console.error('❌ Lỗi xử lý clean-video:', err)
+            console.error('❌ Lỗi clean video:', err)
         }
     }
 }
