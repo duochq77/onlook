@@ -1,42 +1,53 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { supabase } from '@/services/SupabaseService'
-import { v4 as uuidv4 } from 'uuid'
+import formidable from 'formidable'
+import fs from 'fs'
+import { createClient } from '@supabase/supabase-js'
 
 export const config = {
     api: {
-        bodyParser: {
-            sizeLimit: '100mb' // Cho phép upload file lớn
-        }
-    }
+        bodyParser: false,
+    },
 }
+
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-    const { file, filename, folder } = req.body
+    const form = new formidable.IncomingForm({ uploadDir: '/tmp', keepExtensions: true })
 
-    if (!file || !filename || !folder) {
-        return res.status(400).json({ error: 'Missing file, filename, or folder' })
-    }
+    form.parse(req, async (err, fields, files) => {
+        if (err) {
+            console.error('❌ Lỗi khi parse form:', err)
+            return res.status(500).json({ error: 'Lỗi parse form data' })
+        }
 
-    try {
-        const fileBuffer = Buffer.from(file, 'base64')
-        const filePath = `${folder}/${uuidv4()}-${filename}`
+        const file = files.file?.[0] || files.file
+        const path = fields.path?.[0] || fields.path
+
+        if (!file || !path) {
+            return res.status(400).json({ error: 'Thiếu file hoặc path' })
+        }
+
+        const fileBuffer = fs.readFileSync(file.filepath)
 
         const { error } = await supabase.storage
             .from(process.env.SUPABASE_STORAGE_BUCKET!)
-            .upload(filePath, fileBuffer, {
-                contentType: 'application/octet-stream',
-                upsert: false
+            .upload(path, fileBuffer, {
+                contentType: file.mimetype || 'application/octet-stream',
+                upsert: true,
             })
 
-        if (error) throw error
+        if (error) {
+            console.error('❌ Upload lỗi Supabase:', error)
+            return res.status(500).json({ error: 'Upload failed', detail: error })
+        }
 
-        const fileUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${process.env.SUPABASE_STORAGE_BUCKET}/${filePath}`
+        const fileUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${process.env.SUPABASE_STORAGE_BUCKET}/${path}`
 
-        return res.status(200).json({ url: fileUrl, path: filePath })
-    } catch (err: any) {
-        console.error('❌ Lỗi upload:', err)
-        return res.status(500).json({ error: 'Upload failed' })
-    }
+        return res.status(200).json({ url: fileUrl, path })
+    })
 }
