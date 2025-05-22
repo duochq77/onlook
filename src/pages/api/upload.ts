@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 
 export const config = {
     api: {
-        bodyParser: false, // ❌ tắt body parser để xử lý multipart/form-data
+        bodyParser: false,
     },
 }
 
@@ -19,15 +19,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(405).json({ error: 'Method Not Allowed' })
     }
 
-    const form = new formidable.IncomingForm()
-    form.uploadDir = '/tmp'
-    form.keepExtensions = true
+    const form = new formidable.IncomingForm({
+        uploadDir: '/tmp',
+        keepExtensions: true,
+    })
 
     form.parse(req, async (err, fields, files) => {
         try {
             if (err) {
-                console.error('❌ Formidable parse error:', err)
-                return res.status(500).json({ error: 'Parse error' })
+                console.error('❌ Formidable error:', err)
+                return res.status(500).json({ error: 'Lỗi xử lý form' })
             }
 
             const file = files.file
@@ -49,12 +50,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
             if (error) {
                 console.error('❌ Upload thất bại:', error)
-                return res.status(500).json({ error: 'Upload thất bại' })
+                return res.status(500).json({ error: 'Lỗi upload lên Supabase' })
             }
 
             return res.status(200).json({ message: '✅ Upload thành công', path: filePath })
         } catch (e) {
-            console.error('❌ Upload error:', e)
+            console.error('❌ Lỗi upload:', e)
             return res.status(500).json({ error: 'Lỗi không xác định' })
         }
     })
