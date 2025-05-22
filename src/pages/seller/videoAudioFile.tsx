@@ -54,11 +54,15 @@ export default function VideoAudioFilePage() {
         videoEl.muted = true;
         await videoEl.play();
 
-        const videoStream = videoEl.captureStream?.() || (videoEl as any).mozCaptureStream?.();
-        if (!videoStream) return;
+        const stream =
+            (videoEl as any).captureStream?.() || (videoEl as any).mozCaptureStream?.();
+        if (!stream) {
+            console.warn('⚠️ Trình duyệt không hỗ trợ captureStream');
+            return;
+        }
 
-        const videoTrack = videoStream.getVideoTracks()[0];
-        const audioTrack = videoStream.getAudioTracks()[0];
+        const videoTrack = stream.getVideoTracks()[0];
+        const audioTrack = stream.getAudioTracks()[0];
 
         if (videoTrack) {
             const localVideoTrack = new livekit.LocalVideoTrack(videoTrack);
