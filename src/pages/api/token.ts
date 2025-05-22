@@ -1,7 +1,9 @@
 // ✅ Chuẩn chạy trên server Vercel với "type": "module"
 import { NextApiRequest, NextApiResponse } from 'next'
 
-// ⚠️ Đảm bảo import động vì đang dùng "type": "module"
+// ✅ API tạo token JWT cho LiveKit (dùng cho cả seller và viewer)
+// URL dạng: /api/token?room=ROOM_NAME&identity=UNIQUE_ID&role=publisher|subscriber
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { room, identity } = req.query
 
@@ -10,20 +12,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // ✅ Import động để tránh lỗi bundler khi deploy
+    // ✅ Import động để phù hợp khi dùng "type": "module" trong Vercel
     const { AccessToken } = await import('livekit-server-sdk')
 
-    // ✅ Dùng biến môi trường đã được Vercel khai đúng
     const apiKey = process.env.LIVEKIT_API_KEY!
     const apiSecret = process.env.LIVEKIT_API_SECRET!
 
-    // ✅ Tạo token mới
+    // ✅ Tạo token JWT với quyền join vào room
     const at = new AccessToken(apiKey, apiSecret, {
       identity,
     })
     at.addGrant({ roomJoin: true, room })
 
-    // ⚠️ KHÔNG quên gọi await .toJwt()
     const jwt = await at.toJwt()
 
     console.log('✅ Token tạo ra:', jwt)

@@ -1,26 +1,29 @@
 FROM node:18
 
-# Cài ffmpeg
+# 🧰 Cài FFmpeg
 RUN apt-get update && apt-get install -y ffmpeg
 
-# Tạo thư mục app
+# 📂 Tạo thư mục chứa app
 WORKDIR /app
 
-# Copy package và cài thư viện (kèm dotenv)
+# 📦 Copy package & cài lib
 COPY package*.json ./
 RUN npm install --only=production
 
-# Copy mã nguồn
+# 📄 Copy mã nguồn
 COPY . .
 
-# Copy .env.local vào image
+# 📄 Copy cấu hình môi trường
 COPY .env.local .env
 
-# Biến môi trường
+# 🔧 Biến môi trường
 ENV NODE_ENV=production
 
-# Build file TS sang JS nếu cần
+# 🛠 Biên dịch TS nếu chưa có build sẵn
 RUN npx tsc -p tsconfig.worker.json
 
-# Chạy worker có nạp dotenv
-CMD ["node", "-r", "dotenv/config", "dist/worker/ffmpeg-worker.js"]
+# 🧠 Worker cần chạy được chọn qua biến: WORKER_FILE=dist/worker/clean-video-worker.js
+ENV WORKER_FILE=dist/worker/clean-video-worker.js
+
+# 🚀 Chạy worker tự động
+CMD ["node", "-r", "dotenv/config", "$WORKER_FILE"]

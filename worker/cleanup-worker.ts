@@ -14,7 +14,7 @@ async function runCleanupWorker() {
     while (true) {
         const job = await redis.lpop<string>('ffmpeg-jobs:cleanup')
         if (!job) {
-            await new Promise((r) => setTimeout(r, 5000)) // kiểm tra mỗi 5 giây
+            await new Promise((r) => setTimeout(r, 5000))
             continue
         }
 
@@ -23,11 +23,11 @@ async function runCleanupWorker() {
                 outputName,
                 endedAt,
                 deleteType, // 'origin' | 'final'
-                originFiles // mảng file gốc cần xoá (nếu có)
+                originFiles, // mảng file gốc cần xoá (nếu có)
             } = JSON.parse(job)
 
             if (deleteType === 'origin') {
-                // Xoá file gốc + file tạm ngay lập tức
+                // 🔹 TH1: Xoá file gốc/tạm ngay sau khi ghép xong
                 if (Array.isArray(originFiles)) {
                     for (const f of originFiles) {
                         const filePath = path.join('/tmp', f)
@@ -35,21 +35,21 @@ async function runCleanupWorker() {
                             fs.unlinkSync(filePath)
                             console.log(`✅ Đã xoá file gốc/tạm: ${filePath}`)
                         } else {
-                            console.log(`⚠️ File gốc/tạm không tồn tại: ${filePath}`)
+                            console.log(`⚠️ File không tồn tại: ${filePath}`)
                         }
                     }
                 }
-                // Xoá luôn file output nếu có
+
                 if (outputName) {
                     const outputPath = path.join('/tmp', outputName)
                     if (fs.existsSync(outputPath)) {
                         fs.unlinkSync(outputPath)
-                        console.log(`✅ Đã xoá file output: ${outputPath}`)
+                        console.log(`✅ Đã xoá file output tạm: ${outputPath}`)
                     }
                 }
-            }
-            else if (deleteType === 'final') {
-                // Xoá file media đã hoàn chỉnh sau 5 phút kể từ endedAt
+
+            } else if (deleteType === 'final') {
+                // 🔹 TH2: Xoá file livestream sau 5 phút kể từ khi seller kết thúc
                 if (!endedAt) {
                     console.warn('⚠️ Job xoá final thiếu endedAt, bỏ qua')
                     continue
@@ -62,25 +62,25 @@ async function runCleanupWorker() {
                 if (delayMs < delayThreshold) {
                     const waitMs = delayThreshold - delayMs
                     console.log(`🕒 Chưa đủ 5 phút, chờ thêm ${Math.ceil(waitMs / 1000)} giây...`)
-                    // Đẩy lại job để xử lý sau
                     await redis.rpush('ffmpeg-jobs:cleanup', job)
-                    await new Promise((r) => setTimeout(r, 3000)) // nghỉ nhẹ
+                    await new Promise((r) => setTimeout(r, 3000))
                     continue
                 }
 
                 const filePath = path.join('/tmp', outputName)
                 if (fs.existsSync(filePath)) {
                     fs.unlinkSync(filePath)
-                    console.log(`✅ Đã xoá file media final: ${filePath}`)
+                    console.log(`✅ Đã xoá file livestream final: ${filePath}`)
                 } else {
-                    console.log(`⚠️ File media final không tồn tại: ${filePath}`)
+                    console.log(`⚠️ File final không tồn tại: ${filePath}`)
                 }
+
+            } else {
+                console.warn(`⚠️ Không rõ loại deleteType: ${deleteType}`)
             }
-            else {
-                console.warn(`⚠️ Loại deleteType không xác định: ${deleteType}`)
-            }
+
         } catch (err) {
-            console.error('❌ Lỗi khi xử lý cleanup job:', err)
+            console.error('❌ Lỗi xử lý cleanup job:', err)
         }
     }
 }
