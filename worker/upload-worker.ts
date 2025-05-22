@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js'
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!
 })
 
 const supabase = createClient(
@@ -20,7 +20,7 @@ async function runUploadWorker() {
     while (true) {
         const job = await redis.lpop<string>('ffmpeg-jobs:upload')
         if (!job) {
-            await new Promise((r) => setTimeout(r, 1000))
+            await new Promise((r) => setTimeout(r, 2000))
             continue
         }
 
@@ -39,17 +39,17 @@ async function runUploadWorker() {
                 .from(process.env.SUPABASE_STORAGE_BUCKET!)
                 .upload(`outputs/${outputName}`, fileBuffer, {
                     contentType: 'video/mp4',
-                    upsert: true,
+                    upsert: true
                 })
 
             if (error) {
-                console.error('❌ Lỗi upload Supabase:', error)
+                console.error('❌ Lỗi upload lên Supabase:', error)
                 continue
             }
 
-            console.log(`✅ Đã upload file: outputs/${outputName}`)
+            console.log(`✅ Upload thành công: outputs/${outputName}`)
 
-            // Xoá file local sau khi upload thành công
+            // Xoá file local sau khi upload
             fs.unlinkSync(filePath)
             console.log(`🧹 Đã xoá file local: ${filePath}`)
         } catch (err) {

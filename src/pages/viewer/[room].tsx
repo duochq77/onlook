@@ -1,51 +1,52 @@
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic'
 
-import React, { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/router';
-import { connectToRoom } from '@/services/LiveKitService';
+import React, { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/router'
+const livekit = require('livekit-client')
 
 const ViewerRoomPage: React.FC = () => {
-    const router = useRouter();
-    const { room: roomName } = router.query;
+    const router = useRouter()
+    const { room: roomName } = router.query
 
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const audioRef = useRef<HTMLAudioElement>(null);
-    const [room, setRoom] = useState<any>(null);
+    const videoRef = useRef<HTMLVideoElement>(null)
+    const [room, setRoom] = useState<any>(null)
 
     useEffect(() => {
-        if (!roomName || typeof roomName !== 'string') return;
+        if (!roomName || typeof roomName !== 'string') return
 
-        const identity = 'viewer-' + Math.floor(Math.random() * 100000);
+        const identity = 'viewer-' + Math.floor(Math.random() * 100000)
 
         const start = async () => {
             const tokenRes = await fetch(
                 `/api/token?room=${roomName}&identity=${identity}&role=subscriber`
-            );
-            const { token } = await tokenRes.json();
+            )
+            const { token } = await tokenRes.json()
 
-            const joinedRoom = await connectToRoom(
-                process.env.NEXT_PUBLIC_LIVEKIT_URL!,
-                token
-            );
-            setRoom(joinedRoom);
+            const room = new livekit.Room()
+            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, token)
+            setRoom(room)
 
-            joinedRoom.on('trackSubscribed', (track: any) => {
+            room.on('trackSubscribed', (track: any) => {
                 if (track.kind === 'video' && videoRef.current) {
-                    track.attach(videoRef.current);
+                    track.attach(videoRef.current)
                 }
-
-                if (track.kind === 'audio' && audioRef.current) {
-                    track.attach(audioRef.current);
+                if (track.kind === 'audio') {
+                    const audioEl = track.attach() as HTMLAudioElement
+                    audioEl.autoplay = true
+                    audioEl.play().catch(() => {
+                        console.warn('👂 User gesture required to play audio.')
+                    })
+                    document.body.appendChild(audioEl)
                 }
-            });
-        };
+            })
+        }
 
-        start();
+        start()
 
         return () => {
-            room?.disconnect();
-        };
-    }, [roomName]);
+            room?.disconnect()
+        }
+    }, [roomName])
 
     return (
         <div style={{ width: '100%', height: '100vh', background: 'black' }}>
@@ -53,12 +54,10 @@ const ViewerRoomPage: React.FC = () => {
                 ref={videoRef}
                 autoPlay
                 playsInline
-                muted
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
-            <audio ref={audioRef} autoPlay />
         </div>
-    );
-};
+    )
+}
 
-export default ViewerRoomPage;
+export default ViewerRoomPage
