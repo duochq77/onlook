@@ -12,9 +12,10 @@ export default function VideoAudioFilePage() {
     const [videoURL, setVideoURL] = useState('');
     const [audioURL, setAudioURL] = useState('');
     const [room, setRoom] = useState<any>(null);
+    const [isStreaming, setIsStreaming] = useState(false);
 
+    const identity = 'seller-video-audio-' + Math.floor(Math.random() * 100000);
     const roomName = 'onlook-room';
-    const identity = 'seller-video-audio-' + Math.floor(Math.random() * 10000);
     const role = 'publisher';
 
     const sampleVideos = [
@@ -45,64 +46,73 @@ export default function VideoAudioFilePage() {
         else setAudioURL(url);
     };
 
-    useEffect(() => {
-        const start = async () => {
-            if (!videoURL || !audioURL) return;
+    const startStream = async () => {
+        if (!videoURL || !audioURL) {
+            alert('Hãy chọn đầy đủ video và audio trước khi stream');
+            return;
+        }
 
-            const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
-            const data = await res.json();
-            const token = data.token;
-            console.log('✅ Token là:', token);
+        const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`);
+        const data = await res.json();
+        const token = data.token;
 
-            const room = new livekit.Room();
-            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, token);
-            setRoom(room);
+        const room = new livekit.Room();
+        await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, token);
+        setRoom(room);
 
-            const videoEl = videoRef.current!;
-            videoEl.src = videoURL;
-            videoEl.loop = true;
-            videoEl.muted = true;
-            await videoEl.play();
+        const videoEl = videoRef.current!;
+        videoEl.src = videoURL;
+        videoEl.loop = true;
+        videoEl.muted = true;
+        await videoEl.play();
 
-            const audioEl = audioRef.current!;
-            audioEl.src = audioURL;
-            audioEl.loop = true;
-            await audioEl.play();
+        const audioEl = audioRef.current!;
+        audioEl.src = audioURL;
+        audioEl.loop = true;
+        await audioEl.play();
 
-            const videoStream = (videoEl as any).captureStream?.() || (videoEl as any).mozCaptureStream?.();
-            const audioStream = (audioEl as any).captureStream?.() || (audioEl as any).mozCaptureStream?.();
+        const videoStream = videoEl.captureStream?.() || (videoEl as any).mozCaptureStream?.();
+        const audioStream = audioEl.captureStream?.() || (audioEl as any).mozCaptureStream?.();
 
-            if (!videoStream || !audioStream) return;
+        if (!videoStream || !audioStream) return;
 
-            const videoTrack = videoStream.getVideoTracks()[0];
-            const audioTrack = audioStream.getAudioTracks()[0];
+        const videoTrack = videoStream.getVideoTracks()[0];
+        const audioTrack = audioStream.getAudioTracks()[0];
 
-            if (videoTrack) {
-                const localVideoTrack = new livekit.LocalVideoTrack(videoTrack);
-                await room.localParticipant.publishTrack(localVideoTrack);
-                const attached = localVideoTrack.attach();
-                if (videoContainerRef.current) {
-                    videoContainerRef.current.innerHTML = '';
-                    videoContainerRef.current.appendChild(attached);
-                }
+        if (videoTrack) {
+            const localVideoTrack = new livekit.LocalVideoTrack(videoTrack);
+            await room.localParticipant.publishTrack(localVideoTrack);
+            const attached = localVideoTrack.attach();
+            if (videoContainerRef.current) {
+                videoContainerRef.current.innerHTML = '';
+                videoContainerRef.current.appendChild(attached);
             }
+        }
 
-            if (audioTrack) {
-                const localAudioTrack = new livekit.LocalAudioTrack(audioTrack);
-                await room.localParticipant.publishTrack(localAudioTrack);
-            }
-        };
+        if (audioTrack) {
+            const localAudioTrack = new livekit.LocalAudioTrack(audioTrack);
+            await room.localParticipant.publishTrack(localAudioTrack);
+        }
 
-        start();
+        setIsStreaming(true);
+    };
 
-        return () => {
-            room?.disconnect();
-        };
-    }, [videoURL, audioURL]);
+    const stopStream = async () => {
+        if (room) {
+            room.disconnect();
+            setRoom(null);
+        }
+
+        setIsStreaming(false);
+
+        // ✅ Gửi tín hiệu kết thúc livestream đúng userId
+        await fetch(`/api/stop-stream?userId=${identity}`);
+        alert('Đã kết thúc stream. Hệ thống sẽ xoá file sau 5 phút.');
+    };
 
     return (
         <div className="p-4 space-y-4">
-            <h1 className="text-xl font-bold">Phương thức 3: Phát livestream từ video và audio riêng biệt</h1>
+            <h1 className="text-xl font-bold">Phương thức 3: Livestream từ video sạch và audio riêng</h1>
 
             <div className="flex gap-4">
                 <button
@@ -146,6 +156,13 @@ export default function VideoAudioFilePage() {
                     </div>
                 </div>
             )}
+
+            <button
+                onClick={isStreaming ? stopStream : startStream}
+                className={`mt-4 px-4 py-2 rounded text-white ${isStreaming ? 'bg-red-600' : 'bg-green-600'}`}
+            >
+                {isStreaming ? '⛔ Kết thúc Stream' : '▶️ Bắt đầu Stream'}
+            </button>
 
             <div className="mt-4">
                 <div ref={videoContainerRef} />
