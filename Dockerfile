@@ -1,29 +1,26 @@
 FROM node:18
 
-# 🧰 Cài FFmpeg
+# 🧰 Cài FFmpeg để dùng trong clean/merge
 RUN apt-get update && apt-get install -y ffmpeg
 
-# 📂 Tạo thư mục chứa app
+# 📂 Tạo thư mục làm việc
 WORKDIR /app
 
-# 📦 Copy package & cài lib
+# 📦 Copy package & cài thư viện
 COPY package*.json ./
 RUN npm install --only=production
 
-# 📄 Copy mã nguồn
+# 📄 Copy toàn bộ mã nguồn + file môi trường
 COPY . .
-
-# 📄 Copy cấu hình môi trường
 COPY .env.local .env
 
 # 🔧 Biến môi trường
 ENV NODE_ENV=production
 
-# 🛠 Biên dịch TS nếu chưa có build sẵn
+# 🛠 Build TypeScript (nếu chưa có sẵn dist/)
 RUN npx tsc -p tsconfig.worker.json
 
-# 🧠 Worker cần chạy được chọn qua biến: WORKER_FILE=dist/worker/clean-video-worker.js
+# 🧠 Worker sẽ chạy từ biến môi trường WORKER_FILE
+# ❗ Dùng shell form để biến $WORKER_FILE được expand
 ENV WORKER_FILE=dist/worker/clean-video-worker.js
-
-# 🚀 Chạy worker tự động
-CMD ["node", "-r", "dotenv/config", "$WORKER_FILE"]
+CMD sh -c "node -r dotenv/config $WORKER_FILE"

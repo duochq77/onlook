@@ -7,16 +7,13 @@ const redis = new Redis({
 })
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method Not Allowed' })
-    }
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' })
 
     const { inputVideo, outputName } = req.body
-
     if (!inputVideo || !outputName) {
-        return res.status(400).json({ error: 'Thiếu thông tin inputVideo hoặc outputName' })
+        return res.status(400).json({ error: 'Thiếu inputVideo hoặc outputName' })
     }
 
     await redis.rpush('ffmpeg-jobs:clean', JSON.stringify({ inputVideo, outputName }))
-    return res.status(200).json({ message: '✅ Đã gửi job tách video sạch' })
+    return res.status(200).json({ message: '✅ Đã gửi job clean video' })
 }
