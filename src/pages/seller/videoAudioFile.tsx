@@ -15,7 +15,7 @@ export default function VideoAudioFilePage() {
     const [uploading, setUploading] = useState(false)
 
     const identity = 'seller-' + Math.floor(Math.random() * 100000)
-    const roomName = identity
+    const roomName = identity // mỗi seller 1 phòng riêng
     const role = 'publisher'
 
     const handleUpload = async () => {
@@ -36,6 +36,7 @@ export default function VideoAudioFilePage() {
         audioData.append('path', `audio-${identity}.mp3`)
         await fetch('/api/upload', { method: 'POST', body: audioData })
 
+        // Gửi job tách video sạch
         await fetch('/api/clean-video', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -45,6 +46,7 @@ export default function VideoAudioFilePage() {
             })
         })
 
+        // Gửi job merge
         await fetch('/api/merge-upload', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -55,13 +57,20 @@ export default function VideoAudioFilePage() {
             })
         })
 
-        const mergedURL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/uploads/outputs/merged-${identity}.mp4`
-        setMergedURL(mergedURL)
+        const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/uploads/outputs/merged-${identity}.mp4`
+        setMergedURL(url)
         setUploading(false)
     }
 
     const startStream = async () => {
         if (!mergedURL) return
+
+        // ✅ Kiểm tra merged.mp4 đã sẵn sàng
+        const exists = await fetch(mergedURL, { method: 'HEAD' })
+        if (!exists.ok) {
+            alert('❌ File chưa sẵn sàng để stream. Vui lòng chờ hệ thống xử lý xong.')
+            return
+        }
 
         const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`)
         const { token } = await res.json()
@@ -76,7 +85,7 @@ export default function VideoAudioFilePage() {
         videoEl.muted = true
         await videoEl.play()
 
-        const stream = (videoEl as any).captureStream?.() || (videoEl as any).mozCaptureStream?.()
+        const stream = videoEl.captureStream?.() || (videoEl as any).mozCaptureStream?.()
         const videoTrack = stream.getVideoTracks()[0]
         const audioTrack = stream.getAudioTracks()[0]
 
