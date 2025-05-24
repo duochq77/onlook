@@ -1,18 +1,15 @@
-// src/pages/viewer/[room].tsx
-
 'use client'
 
 import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/router'
-import { Room } from 'livekit-client/dist/room'
 import { Participant, RemoteTrackPublication, Track } from 'livekit-client'
 
-export const dynamic = 'force-dynamic' // tránh bị prerender
+export const dynamic = 'force-dynamic'
 
 export default function ViewerRoomPage() {
     const videoRef = useRef<HTMLVideoElement>(null)
     const audioRef = useRef<HTMLAudioElement>(null)
-    const roomRef = useRef<Room | null>(null)
+    const roomRef = useRef<any>(null)
     const router = useRouter()
 
     const { room: roomName } = router.query
@@ -31,14 +28,14 @@ export default function ViewerRoomPage() {
             const { token } = await res.json()
             if (!token) return console.error('❌ Token không hợp lệ')
 
-            const { Room } = require('livekit-client/dist/room')
-            const { connect } = require('livekit-client/dist/connect')
+            // ✅ Dùng require an toàn để tránh lỗi Vercel build
+            const { Room } = require('livekit-client')
+            const { connect } = require('livekit-client')
 
-            const room: Room = new Room()
+            const room = new Room()
             roomRef.current = room
 
-            room.on('trackSubscribed', (track, pub, participant) => {
-                console.log('🔗 Track subscribed:', track.kind)
+            room.on('trackSubscribed', (track: any) => {
                 if (track.kind === Track.Kind.Video && videoRef.current) {
                     track.attach(videoRef.current)
                 }
@@ -52,7 +49,7 @@ export default function ViewerRoomPage() {
                 autoSubscribe: true
             })
 
-            console.log('✅ Viewer connected to room:', roomName)
+            console.log('✅ Connected to room:', roomName)
         }
 
         connectLiveKit()
@@ -67,11 +64,8 @@ export default function ViewerRoomPage() {
     return (
         <div style={{ padding: 40, fontFamily: 'sans-serif' }}>
             <h2>👁️ Viewer đang xem phòng: {roomName}</h2>
-
             <video ref={videoRef} autoPlay playsInline width="100%" />
             <audio ref={audioRef} autoPlay />
-
-            <p style={{ marginTop: 20 }}>🎥 Đang phát livestream...</p>
         </div>
     )
 }
