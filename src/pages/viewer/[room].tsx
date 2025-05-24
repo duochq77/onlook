@@ -2,18 +2,14 @@
 
 import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/router'
-import { Participant, RemoteTrackPublication, Track } from 'livekit-client'
 
 export const dynamic = 'force-dynamic'
 
 export default function ViewerRoomPage() {
     const videoRef = useRef<HTMLVideoElement>(null)
     const audioRef = useRef<HTMLAudioElement>(null)
-    const roomRef = useRef<any>(null)
     const router = useRouter()
-
     const { room: roomName } = router.query
-    const identity = 'viewer-' + Math.floor(Math.random() * 10000)
 
     useEffect(() => {
         if (!roomName || typeof roomName !== 'string') return
@@ -22,29 +18,25 @@ export default function ViewerRoomPage() {
             const res = await fetch('/api/token', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ room: roomName, identity })
+                body: JSON.stringify({ room: roomName, identity: 'viewer-' + Math.floor(Math.random() * 10000) })
             })
 
             const { token } = await res.json()
             if (!token) return console.error('❌ Token không hợp lệ')
 
-            // ✅ Dùng require an toàn để tránh lỗi Vercel build
-            const { Room } = require('livekit-client')
-            const { connect } = require('livekit-client')
-
-            const room = new Room()
-            roomRef.current = room
+            const livekit = require('livekit-client')
+            const room = new livekit.Room()
 
             room.on('trackSubscribed', (track: any) => {
-                if (track.kind === Track.Kind.Video && videoRef.current) {
+                if (track.kind === 'video' && videoRef.current) {
                     track.attach(videoRef.current)
                 }
-                if (track.kind === Track.Kind.Audio && audioRef.current) {
+                if (track.kind === 'audio' && audioRef.current) {
                     track.attach(audioRef.current)
                 }
             })
 
-            await connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
+            await livekit.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
                 room,
                 autoSubscribe: true
             })
@@ -55,9 +47,8 @@ export default function ViewerRoomPage() {
         connectLiveKit()
 
         return () => {
-            if (roomRef.current) {
-                roomRef.current.disconnect()
-            }
+            const livekit = require('livekit-client')
+            livekit.Room?.disconnect?.()
         }
     }, [roomName])
 
