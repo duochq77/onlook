@@ -1,34 +1,33 @@
-import { NextApiRequest, NextApiResponse } from 'next'
-import { createClient } from '@supabase/supabase-js'
+import { Redis } from '@upstash/redis'
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+export const config = {
+    runtime: 'edge'
+}
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-    const { userId } = req.query
+const redis = new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!
+})
 
-    if (!userId || typeof userId !== 'string') {
-        return res.status(400).json({ error: 'Thiếu userId' })
+export default async function handler(req: Request) {
+    if (req.method !== 'POST') {
+        return new Response('Method Not Allowed', { status: 405 })
     }
 
-    const timestamp = new Date().toISOString()
+    try {
+        const { fileName } = await req.json()
+        if (!fileName) return new Response('fileName is required', { status: 400 })
 
-    const { error } = await supabase
-        .from('stream_status')
-        .upsert([
-            {
-                user_id: userId,
-                ended_at: timestamp
-            }
-        ])
+        const key = `cleanup-after:${fileName}`
+        const payload = {
+            fileName,
+            timestamp: Date.now()
+        }
 
-    if (error) {
-        console.error('❌ Lỗi ghi thời điểm kết thúc stream:', error)
-        return res.status(500).json({ error: 'Ghi trạng thái thất bại' })
+        await redis.set(key, JSON.stringify(payload))
+
+        return new Response('✅ Stop signal received')
+    } catch (err) {
+        return new Response('❌ Server error', { status: 500 })
     }
-
-    console.log(`📌 Đã ghi lại kết thúc livestream của ${userId} tại ${timestamp}`)
-    return res.status(200).json({ message: 'Đã ghi nhận kết thúc livestream' })
 }
