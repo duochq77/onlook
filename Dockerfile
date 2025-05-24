@@ -1,26 +1,17 @@
-FROM node:18
+# Dockerfile dùng cho worker không cần mở cổng
+FROM node:20
 
-# 🧰 Cài FFmpeg để dùng trong clean/merge
-RUN apt-get update && apt-get install -y ffmpeg
-
-# 📂 Tạo thư mục làm việc
 WORKDIR /app
 
-# 📦 Copy package & cài thư viện
 COPY package*.json ./
-RUN npm install --only=production
+RUN npm install
 
-# 📄 Copy toàn bộ mã nguồn + file môi trường
 COPY . .
-COPY .env.local .env
 
-# 🔧 Biến môi trường
-ENV NODE_ENV=production
+RUN npm run build
 
-# 🛠 Build TypeScript (nếu chưa có sẵn dist/)
-RUN npx tsc -p tsconfig.worker.json
+ENV PORT=8080
+EXPOSE 8080
 
-# 🧠 Worker sẽ chạy từ biến môi trường WORKER_FILE
-# ❗ Dùng shell form để biến $WORKER_FILE được expand
-ENV WORKER_FILE=dist/worker/clean-video-worker.js
-CMD sh -c "node -r dotenv/config $WORKER_FILE"
+# ✅ Chạy dummy-server (gồm worker + HTTP server giả)
+CMD ["node", "dist/src/dummy-server.js"]

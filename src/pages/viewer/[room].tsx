@@ -1,63 +1,77 @@
-export const dynamic = 'force-dynamic'
+// src/pages/viewer/[room].tsx
 
-import React, { useEffect, useRef, useState } from 'react'
+'use client'
+
+import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/router'
-const livekit = require('livekit-client')
+import { Room } from 'livekit-client/dist/room'
+import { Participant, RemoteTrackPublication, Track } from 'livekit-client'
 
-const ViewerRoomPage: React.FC = () => {
-    const router = useRouter()
-    const { room: roomName } = router.query
+export const dynamic = 'force-dynamic' // tránh bị prerender
 
+export default function ViewerRoomPage() {
     const videoRef = useRef<HTMLVideoElement>(null)
-    const [room, setRoom] = useState<any>(null)
+    const audioRef = useRef<HTMLAudioElement>(null)
+    const roomRef = useRef<Room | null>(null)
+    const router = useRouter()
+
+    const { room: roomName } = router.query
+    const identity = 'viewer-' + Math.floor(Math.random() * 10000)
 
     useEffect(() => {
         if (!roomName || typeof roomName !== 'string') return
 
-        const identity = 'viewer-' + Math.floor(Math.random() * 100000)
+        const connectLiveKit = async () => {
+            const res = await fetch('/api/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ room: roomName, identity })
+            })
 
-        const start = async () => {
-            const tokenRes = await fetch(
-                `/api/token?room=${roomName}&identity=${identity}&role=subscriber`
-            )
-            const { token } = await tokenRes.json()
+            const { token } = await res.json()
+            if (!token) return console.error('❌ Token không hợp lệ')
 
-            const room = new livekit.Room()
-            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, token)
-            setRoom(room)
+            const { Room } = require('livekit-client/dist/room')
+            const { connect } = require('livekit-client/dist/connect')
 
-            room.on('trackSubscribed', (track: any) => {
-                if (track.kind === 'video' && videoRef.current) {
+            const room: Room = new Room()
+            roomRef.current = room
+
+            room.on('trackSubscribed', (track, pub, participant) => {
+                console.log('🔗 Track subscribed:', track.kind)
+                if (track.kind === Track.Kind.Video && videoRef.current) {
                     track.attach(videoRef.current)
                 }
-                if (track.kind === 'audio') {
-                    const audioEl = track.attach() as HTMLAudioElement
-                    audioEl.autoplay = true
-                    audioEl.play().catch(() => {
-                        console.warn('👂 User gesture required to play audio.')
-                    })
-                    document.body.appendChild(audioEl)
+                if (track.kind === Track.Kind.Audio && audioRef.current) {
+                    track.attach(audioRef.current)
                 }
             })
+
+            await connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token, {
+                room,
+                autoSubscribe: true
+            })
+
+            console.log('✅ Viewer connected to room:', roomName)
         }
 
-        start()
+        connectLiveKit()
 
         return () => {
-            room?.disconnect()
+            if (roomRef.current) {
+                roomRef.current.disconnect()
+            }
         }
     }, [roomName])
 
     return (
-        <div style={{ width: '100%', height: '100vh', background: 'black' }}>
-            <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-            />
+        <div style={{ padding: 40, fontFamily: 'sans-serif' }}>
+            <h2>👁️ Viewer đang xem phòng: {roomName}</h2>
+
+            <video ref={videoRef} autoPlay playsInline width="100%" />
+            <audio ref={audioRef} autoPlay />
+
+            <p style={{ marginTop: 20 }}>🎥 Đang phát livestream...</p>
         </div>
     )
 }
-
-export default ViewerRoomPage
