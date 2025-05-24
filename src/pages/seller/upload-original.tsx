@@ -1,49 +1,86 @@
-import React, { useState } from 'react'
-import axios from 'axios'
+// src/pages/seller/upload-original.tsx
 
-export default function UploadOriginalVideo() {
+import { useState } from 'react'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
+export default function UploadOriginalPage() {
     const [videoFile, setVideoFile] = useState<File | null>(null)
-    const [uploading, setUploading] = useState(false)
-    const [uploadedUrl, setUploadedUrl] = useState<string | null>(null)
+    const [audioFile, setAudioFile] = useState<File | null>(null)
+    const [status, setStatus] = useState('')
 
     const handleUpload = async () => {
-        if (!videoFile) return
-        setUploading(true)
+        if (!videoFile || !audioFile) {
+            setStatus('❌ Vui lòng chọn đủ cả video và audio')
+            return
+        }
 
-        const reader = new FileReader()
-        reader.readAsDataURL(videoFile)
-        reader.onloadend = async () => {
-            try {
-                const base64 = (reader.result as string).split(',')[1]
-                const res = await axios.post('/api/upload-original-video', {
-                    file: base64,
-                    filename: videoFile.name,
+        setStatus('📤 Đang upload...')
+
+        const upload = async (file: File, path: string) => {
+            const { error } = await supabase.storage
+                .from('uploads')
+                .upload(path, file, {
+                    upsert: true,
+                    contentType: file.type
                 })
-                setUploadedUrl(res.data.url)
-            } catch (err) {
-                alert('Upload failed')
-            } finally {
-                setUploading(false)
-            }
+
+            if (error) throw error
+        }
+
+        try {
+            const videoPath = `uploads/${videoFile.name}`
+            const audioPath = `uploads/${audioFile.name}`
+            const outputName = 'demo-final.mp4'
+
+            await upload(videoFile, videoPath)
+            await upload(audioFile, audioPath)
+
+            setStatus('✅ Upload thành công. Đang gửi job xử lý...')
+
+            await fetch('/api/create-job', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    inputVideo: videoPath,
+                    inputAudio: audioPath,
+                    outputName
+                })
+            })
+
+            setStatus('🚀 Job đã gửi thành công vào Redis!')
+        } catch (err: any) {
+            console.error(err)
+            setStatus(`❌ Lỗi: ${err.message}`)
         }
     }
 
     return (
-        <div className="p-6 max-w-md mx-auto">
-            <h1 className="text-xl font-bold mb-4">Upload Video Gốc</h1>
-            <input type="file" accept="video/mp4" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
+        <div style={{ padding: 40, fontFamily: 'sans-serif' }}>
+            <h2>📤 Upload Video + Audio (Phương thức 3)</h2>
+
+            <div style={{ marginTop: 20 }}>
+                <label>🎬 Video (.mp4): </label>
+                <input type="file" accept="video/mp4" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
+            </div>
+
+            <div style={{ marginTop: 20 }}>
+                <label>🔊 Audio (.mp3): </label>
+                <input type="file" accept="audio/mpeg" onChange={(e) => setAudioFile(e.target.files?.[0] || null)} />
+            </div>
+
             <button
                 onClick={handleUpload}
-                disabled={!videoFile || uploading}
-                className="mt-4 bg-purple-600 text-white px-4 py-2 rounded disabled:opacity-50"
+                style={{ marginTop: 30, padding: '10px 20px', background: '#0070f3', color: 'white', border: 'none' }}
             >
-                {uploading ? 'Uploading...' : 'Upload'}
+                🚀 Bắt đầu xử lý
             </button>
-            {uploadedUrl && (
-                <p className="mt-4 break-all">
-                    Uploaded video URL: <a href={uploadedUrl} target="_blank" rel="noreferrer" className="text-purple-700 underline">{uploadedUrl}</a>
-                </p>
-            )}
+
+            <p style={{ marginTop: 20 }}>{status}</p>
         </div>
     )
 }

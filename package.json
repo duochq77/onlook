@@ -12,7 +12,8 @@
     "start:video-worker": "node dist/video-worker.js",
     "start:upload-worker": "node dist/upload-worker.js",
     "start:cleanup-worker": "node dist/cleanup-worker.js",
-    "start:clean-video-worker": "node dist/clean-video-worker.js"
+    "start:clean-video-worker": "node dist/clean-video-worker.js",
+    "start:clean-dummy": "node -r dotenv/config dist/src/dummy-server.js"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",

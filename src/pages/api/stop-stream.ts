@@ -20,8 +20,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .upsert([
             {
                 user_id: userId,
-                ended_at: timestamp,
-            },
+                ended_at: timestamp
+            }
         ])
 
     if (error) {

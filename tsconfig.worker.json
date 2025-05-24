@@ -8,6 +8,7 @@
         "outDir": "dist"
     },
     "include": [
-        "worker/**/*.ts"
+        "worker/**/*.ts",
+        "src/dummy-server.ts"
     ]
 }
