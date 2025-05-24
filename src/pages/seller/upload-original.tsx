@@ -20,28 +20,30 @@ export default function UploadOriginalPage() {
         const videoExt = videoFile.name.split('.').pop()
         const audioExt = audioFile.name.split('.').pop()
 
-        const videoPath = `uploads/${Date.now()}-video.${videoExt}`
-        const audioPath = `uploads/${Date.now()}-audio.${audioExt}`
+        const timestamp = Date.now()
+        const videoPath = `uploads/${timestamp}-video.${videoExt}`
+        const audioPath = `uploads/${timestamp}-audio.${audioExt}`
         const outputName = 'demo-final.mp4'
 
-        // Upload video
+        // Upload video & audio lên Supabase
         await supabase.storage.from('uploads').upload(videoPath, videoFile)
         await supabase.storage.from('uploads').upload(audioPath, audioFile)
 
-        // Gửi job vào Redis (thông qua API)
+        // Gửi job xử lý video
         await fetch('/api/create-job', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 inputVideo: videoPath,
                 inputAudio: audioPath,
-                outputName
+                outputName,
+                roomName: 'test-room' // ⬅️ cần khớp với Viewer
             })
         })
 
         setIsStreaming(true)
 
-        // Lấy public URL để hiển thị nút tải sau khi xử lý
+        // Hiển thị URL video đã xử lý sau khi merge xong
         const { data } = supabase.storage.from('uploads').getPublicUrl(`outputs/${outputName}`)
         setMergedUrl(data.publicUrl)
     }
@@ -59,31 +61,22 @@ export default function UploadOriginalPage() {
         <div style={{ padding: 40, fontFamily: 'sans-serif' }}>
             <h1>📤 Seller: Upload video + audio để phát livestream</h1>
 
-            <div style={{ marginBottom: 12 }}>
-                <input type="file" accept="video/mp4" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
-            </div>
+            <input type="file" accept="video/mp4" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
+            <br /><br />
+            <input type="file" accept="audio/mp3" onChange={(e) => setAudioFile(e.target.files?.[0] || null)} />
+            <br /><br />
 
-            <div style={{ marginBottom: 12 }}>
-                <input type="file" accept="audio/mp3" onChange={(e) => setAudioFile(e.target.files?.[0] || null)} />
-            </div>
-
-            {!isStreaming && (
-                <button onClick={handleUpload} style={{ padding: 10, marginRight: 10 }}>
-                    ▶️ Bắt đầu livestream
-                </button>
-            )}
-
-            {isStreaming && (
-                <button onClick={handleStop} style={{ padding: 10, background: '#f44', color: 'white' }}>
+            {!isStreaming ? (
+                <button onClick={handleUpload}>▶️ Bắt đầu livestream</button>
+            ) : (
+                <button onClick={handleStop} style={{ background: 'red', color: 'white' }}>
                     ⛔ Kết thúc livestream
                 </button>
             )}
 
             {mergedUrl && (
                 <div style={{ marginTop: 20 }}>
-                    <a href={mergedUrl} download>
-                        ⬇️ Tải video hoàn chỉnh
-                    </a>
+                    <a href={mergedUrl} download>⬇️ Tải video hoàn chỉnh</a>
                 </div>
             )}
         </div>
