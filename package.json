@@ -8,14 +8,10 @@
     "build": "next build",
     "start": "next start",
     "build:worker": "tsc -p tsconfig.worker.json",
-    "build:upload-service": "tsc -p tsconfig.worker.json",
-    "start:worker": "node dist/ffmpeg-worker.js",
-    "start:video-worker": "node dist/video-worker.js",
-    "start:upload-worker": "node dist/upload-worker.js",
-    "start:cleanup-worker": "node dist/cleanup-worker.js",
     "start:clean-video-worker": "node dist/worker/clean-video-worker.js",
-    "start:clean-dummy": "node -r dotenv/config dist/src/dummy-server.js",
-    "start:upload-dummy": "node dist/src/dummy-upload-server.js"
+    "start:merge-worker": "node dist/worker/merge-worker.js",
+    "start:upload-worker": "node dist/worker/upload-worker.js",
+    "start:cleanup-worker": "node dist/worker/cleanup-worker.js"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",

@@ -1,5 +1,3 @@
-// src/pages/api/create-job.ts
-
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { Redis } from '@upstash/redis'
 
@@ -17,8 +15,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Thiếu thông tin job' })
     }
 
+    // ✅ Optional: Log định dạng đúng bucket mới
+    console.log('📝 Nhận job:', {
+        inputVideo,  // ví dụ: stream-files/video-inputs/demo.mp4
+        inputAudio,  // ví dụ: stream-files/audio-inputs/demo.mp3
+        outputName   // ví dụ: demo-merged.mp4
+    })
+
     const job = { inputVideo, inputAudio, outputName }
     await redis.rpush('ffmpeg-jobs:clean', JSON.stringify(job))
 
-    return res.status(200).json({ message: 'Đã gửi job vào ffmpeg-jobs:clean' })
+    return res.status(200).json({ message: '✅ Đã gửi job vào hàng ffmpeg-jobs:clean' })
 }

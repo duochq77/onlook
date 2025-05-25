@@ -1,5 +1,3 @@
-// worker/merge-video-worker.ts
-
 import 'dotenv/config'
 import { Redis } from '@upstash/redis'
 import path from 'path'
@@ -39,7 +37,11 @@ async function runMergeWorker() {
             const audioPath = path.join('/tmp', 'audio.mp3')
             const outputPath = path.join('/tmp', outputName)
 
-            const result = supabase.storage.from('uploads').getPublicUrl(inputAudio.replace(/^uploads\//, ''))
+            // ✅ Dùng bucket mới: stream-files
+            const result = supabase.storage
+                .from('stream-files')
+                .getPublicUrl(inputAudio.replace(/^stream-files\//, ''))
+
             const publicAudioUrl = result.data.publicUrl
             if (!publicAudioUrl) throw new Error('❌ Không lấy được publicUrl audio')
 

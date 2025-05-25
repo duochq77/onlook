@@ -15,32 +15,37 @@ export default function ViewerRoomPage() {
         if (!roomName || typeof roomName !== 'string') return
 
         const connectLiveKit = async () => {
-            const res = await fetch('/api/token', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    room: roomName,
-                    identity: 'viewer-' + Math.floor(Math.random() * 10000)
+            try {
+                const res = await fetch('/api/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        room: roomName,
+                        identity: 'viewer-' + Math.floor(Math.random() * 10000)
+                    })
                 })
-            })
 
-            const { token } = await res.json()
-            if (!token) return console.error('❌ Token không hợp lệ')
+                const { token } = await res.json()
+                if (!token) return console.error('❌ Token không hợp lệ')
 
-            const { Room } = require('livekit-client')
-            const room = new Room()
+                const { Room } = require('livekit-client')
+                const room = new Room()
 
-            room.on('trackSubscribed', (track: any) => {
-                if (track.kind === 'video' && videoRef.current) {
-                    track.attach(videoRef.current)
-                }
-                if (track.kind === 'audio' && audioRef.current) {
-                    track.attach(audioRef.current)
-                }
-            })
+                room.on('trackSubscribed', (track: any, publication: any, participant: any) => {
+                    console.log(`📥 trackSubscribed: ${track.kind} from ${participant.identity}`)
+                    if (track.kind === 'video' && videoRef.current) {
+                        track.attach(videoRef.current)
+                    }
+                    if (track.kind === 'audio' && audioRef.current) {
+                        track.attach(audioRef.current)
+                    }
+                })
 
-            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token)
-            console.log('✅ Connected to room:', roomName)
+                await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token)
+                console.log('✅ Connected to room:', roomName)
+            } catch (err) {
+                console.error('❌ Lỗi khi kết nối LiveKit:', err)
+            }
         }
 
         connectLiveKit()
