@@ -5,8 +5,8 @@ import fs from 'fs'
 import { exec } from 'child_process'
 import { createClient } from '@supabase/supabase-js'
 import https from 'https'
+import http from 'http' // ✅ thêm dòng này
 
-// Kiểm tra biến môi trường khi khởi động
 console.log('✂️ Clean Video Worker starting...')
 console.log('🔧 ENV.SUPABASE_URL:', process.env.SUPABASE_URL)
 console.log('🔧 ENV.UPSTASH_REDIS_REST_URL:', process.env.UPSTASH_REDIS_REST_URL)
@@ -69,6 +69,18 @@ async function runCleanVideoWorker() {
     }
 }
 
+// ✅ Thêm HTTP server giữ tiến trình sống cho Cloud Run
+const PORT = process.env.PORT || 8080
+http.createServer((req, res) => {
+    res.writeHead(200)
+    res.end('✅ Clean-video-worker is alive')
+}).listen(PORT, () => {
+    console.log(`🚀 HTTP server lắng nghe tại cổng ${PORT}`)
+})
+
+// ⏳ Bắt đầu worker loop
+runCleanVideoWorker()
+
 function downloadFile(url: string, dest: string): Promise<void> {
     return new Promise((resolve, reject) => {
         fs.mkdirSync(path.dirname(dest), { recursive: true })
@@ -112,5 +124,3 @@ function execPromise(cmd: string): Promise<void> {
         })
     })
 }
-
-runCleanVideoWorker()

@@ -1,4 +1,4 @@
-// 05. src/components/FileUploader.tsx
+// src/components/FileUploader.tsx
 
 import React, { useState } from 'react'
 import { supabase } from '@/services/SupabaseService'
@@ -24,14 +24,17 @@ const FileUploader: React.FC<FileUploaderProps> = ({ label, accept, folder, onUp
         setUploading(true)
         setStatus('⏳ Đang upload...')
 
+        // ⚠️ ĐÃ SỬA: không prefix 'uploads/' vì bucket đã là 'uploads'
         const { data, error } = await supabase.storage
             .from('uploads')
-            .upload(`${folder}/${file.name}`, file, { upsert: true })
+            .upload(`${folder}/${Date.now()}-${file.name}`, file, { upsert: true })
 
         if (error) {
             setStatus(`❌ Upload lỗi: ${error.message}`)
         } else {
-            const fileUrl = data?.path ? `https://hlfhsozgnjxzwzqgjpbk.supabase.co/storage/v1/object/public/uploads/${data.path}` : ''
+            const fileUrl = data?.path
+                ? `https://hlfhsozgnjxzwzqgjpbk.supabase.co/storage/v1/object/public/uploads/${data.path}`
+                : ''
             setStatus('✅ Upload thành công!')
             onUploadComplete(fileUrl)
         }

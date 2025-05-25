@@ -1,0 +1,16 @@
+node_modules
+.next
+dist
+uploads/
+outputs/
+*.mp4
+*.mp3
+*.log
+*.zip
+*.tsbuildinfo
+.env
+.env.local
+package-lock.json
+yarn.lock
+tree.txt
+Dockerfile.*

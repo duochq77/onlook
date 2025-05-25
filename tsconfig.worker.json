@@ -1,14 +1,27 @@
 {
     "compilerOptions": {
-        "target": "es2020",
-        "module": "es2020",
+        "target": "es2022",
+        "module": "esnext",
         "moduleResolution": "node",
+        "outDir": "dist",
+        "rootDir": ".",
         "esModuleInterop": true,
+        "resolveJsonModule": true,
+        "forceConsistentCasingInFileNames": true,
         "strict": true,
-        "outDir": "dist"
+        "skipLibCheck": true
     },
     "include": [
-        "worker/**/*.ts",
-        "src/dummy-server.ts"
+        "worker",
+        "src/dummy-upload-server.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        ".next",
+        "src/components",
+        "src/pages",
+        "src/styles",
+        "src/services",
+        "src/utils"
     ]
 }
