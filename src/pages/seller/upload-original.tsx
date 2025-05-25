@@ -1,8 +1,11 @@
+// src/pages/seller/upload-original.tsx
+
 'use client'
 
 import { useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
+// ✅ Supabase client với anon key và URL từ biến môi trường
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -25,6 +28,7 @@ export default function UploadOriginalPage() {
         const videoExt = videoFile.name.split('.').pop()
         const audioExt = audioFile.name.split('.').pop()
 
+        // ✅ Upload vào bucket stream-files
         const videoPath = `video-inputs/${timestamp}-video.${videoExt}`
         const audioPath = `audio-inputs/${timestamp}-audio.${audioExt}`
         const outputName = `demo-final.mp4`
@@ -51,7 +55,7 @@ export default function UploadOriginalPage() {
             return
         }
 
-        // Gửi job merge
+        // Gửi job ghép
         await fetch('/api/create-job', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -100,19 +104,11 @@ export default function UploadOriginalPage() {
             <h1>📤 Seller: Upload video + audio để phát livestream</h1>
 
             <div style={{ marginBottom: 12 }}>
-                <input
-                    type="file"
-                    accept="video/mp4"
-                    onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
-                />
+                <input type="file" accept="video/mp4" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
             </div>
 
             <div style={{ marginBottom: 12 }}>
-                <input
-                    type="file"
-                    accept="audio/mp3"
-                    onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
-                />
+                <input type="file" accept="audio/mp3" onChange={(e) => setAudioFile(e.target.files?.[0] || null)} />
             </div>
 
             <button
