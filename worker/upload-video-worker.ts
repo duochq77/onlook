@@ -3,6 +3,7 @@ import { Redis } from '@upstash/redis'
 import { createClient } from '@supabase/supabase-js'
 import fs from 'fs'
 import path from 'path'
+import http from 'http'
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -33,7 +34,7 @@ async function runUploadWorker() {
 
             const fileBuffer = fs.readFileSync(filePath)
             const { data, error } = await supabase.storage
-                .from('stream-files') // ✅ bucket mới
+                .from('stream-files') // ✅ bucket chuẩn
                 .upload(`outputs/${outputName}`, fileBuffer, {
                     contentType: 'video/mp4',
                     upsert: true
@@ -41,10 +42,27 @@ async function runUploadWorker() {
 
             if (error) throw error
             console.log('✅ Upload thành công:', data?.path)
+
+            // ✅ Giải phóng RAM: xoá file output khỏi /tmp
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath)
+                console.log(`🧹 Đã xoá file output khỏi RAM: ${filePath}`)
+            }
         } catch (err) {
             console.error('❌ Lỗi upload:', err)
         }
     }
 }
+
+// ✅ Giữ tiến trình sống cho Cloud Run
+const port = parseInt(process.env.PORT || '8080', 10)
+http
+    .createServer((_, res) => {
+        res.writeHead(200)
+        res.end('✅ upload-video-worker is alive')
+    })
+    .listen(port, () => {
+        console.log(`🚀 Dummy server is listening on port ${port}`)
+    })
 
 runUploadWorker()

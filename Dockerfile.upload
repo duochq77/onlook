@@ -7,10 +7,8 @@ RUN npm install
 
 COPY . .
 
-# ✅ Build đúng cấu hình cho worker
-RUN npm run build:upload-service
+RUN npm run build:worker
 
 ENV PORT=8080
-EXPOSE 8080
 
-CMD ["node", "dist/src/dummy-upload.js"]
+CMD ["node", "dist/worker/upload-video-worker.js"]

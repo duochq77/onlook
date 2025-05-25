@@ -1,0 +1,17 @@
+# Dockerfile.merge
+
+FROM node:20
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+
+# ✅ Biên dịch toàn bộ mã nguồn TypeScript sang JavaScript
+RUN npm run build:worker
+
+ENV NODE_ENV=production
+
+# ✅ Gọi đúng file merge đã được build
+CMD ["node", "dist/worker/merge-video-worker.js"]

@@ -27,11 +27,12 @@ async function runCleanupWorker() {
                 const { fileName, timestamp } = JSON.parse(value)
                 const now = Date.now()
 
-                if (now - timestamp >= 5 * 60 * 1000) {
-                    console.log(`🗑️ Đã đủ 5 phút — xoá file: ${fileName}`)
+                // ✅ Thời gian giữ file là 10 phút
+                if (now - timestamp >= 10 * 60 * 1000) {
+                    console.log(`🗑️ Đã đủ 10 phút — xoá file: ${fileName}`)
 
                     const path = `outputs/${fileName}`
-                    const { error } = await supabase.storage.from('uploads').remove([path])
+                    const { error } = await supabase.storage.from('stream-files').remove([path])
 
                     if (error) {
                         console.error('❌ Lỗi xoá file:', error)
@@ -42,7 +43,7 @@ async function runCleanupWorker() {
                 }
             }
         } catch (err) {
-            console.error('❌ Lỗi trong cleanup worker:', err)
+            console.error('❌ Lỗi trong cleanup livestream worker:', err)
         }
 
         await new Promise((res) => setTimeout(res, 10_000)) // nghỉ 10 giây
@@ -51,7 +52,7 @@ async function runCleanupWorker() {
 
 runCleanupWorker()
 
-// ✅ Dummy HTTP server để Cloud Run không bị lỗi
+// ✅ Dummy HTTP server giữ tiến trình sống
 const port = process.env.PORT || 8080
 http
     .createServer((_, res) => {
