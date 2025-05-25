@@ -12,4 +12,4 @@ RUN npm run build
 ENV PORT=8080
 EXPOSE 8080
 
-CMD ["node", "dist/worker/cleanup-livestream-worker.js"]
+CMD ["node", "dist/src/dummy-upload.js"]

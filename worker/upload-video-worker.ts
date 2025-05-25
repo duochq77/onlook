@@ -34,8 +34,7 @@ async function runUploadWorker() {
             console.log(`📤 Đang upload: ${outputName}`)
 
             const fileBuffer = fs.readFileSync(filePath)
-            const { data, error } = await supabase
-                .storage
+            const { data, error } = await supabase.storage
                 .from('uploads')
                 .upload(`outputs/${outputName}`, fileBuffer, {
                     contentType: 'video/mp4',

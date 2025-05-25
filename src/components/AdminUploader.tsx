@@ -1,4 +1,4 @@
-// 04. src/components/AdminUploader.tsx
+// src/components/AdminUploader.tsx
 
 import React, { useState } from 'react'
 import { supabase } from '@/services/SupabaseService'
@@ -15,13 +15,13 @@ const AdminUploader: React.FC = () => {
         }
 
         setStatus('⏳ Đang upload...')
-
         const uploads: string[] = []
 
         if (videoFile) {
+            const videoPath = `sample/video/${Date.now()}-${videoFile.name}`
             const { data, error } = await supabase.storage
                 .from('uploads')
-                .upload(`sample/video/${videoFile.name}`, videoFile, { upsert: true })
+                .upload(videoPath, videoFile, { upsert: true })
 
             if (error) {
                 setStatus(`❌ Upload video lỗi: ${error.message}`)
@@ -32,9 +32,10 @@ const AdminUploader: React.FC = () => {
         }
 
         if (audioFile) {
+            const audioPath = `sample/audio/${Date.now()}-${audioFile.name}`
             const { data, error } = await supabase.storage
                 .from('uploads')
-                .upload(`sample/audio/${audioFile.name}`, audioFile, { upsert: true })
+                .upload(audioPath, audioFile, { upsert: true })
 
             if (error) {
                 setStatus(`❌ Upload audio lỗi: ${error.message}`)

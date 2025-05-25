@@ -8,12 +8,14 @@
     "build": "next build",
     "start": "next start",
     "build:worker": "tsc -p tsconfig.worker.json",
+    "build:upload-service": "tsc -p tsconfig.worker.json",
     "start:worker": "node dist/ffmpeg-worker.js",
     "start:video-worker": "node dist/video-worker.js",
     "start:upload-worker": "node dist/upload-worker.js",
     "start:cleanup-worker": "node dist/cleanup-worker.js",
-    "start:clean-video-worker": "node dist/clean-video-worker.js",
-    "start:clean-dummy": "node -r dotenv/config dist/src/dummy-server.js"
+    "start:clean-video-worker": "node dist/worker/clean-video-worker.js",
+    "start:clean-dummy": "node -r dotenv/config dist/src/dummy-server.js",
+    "start:upload-dummy": "node dist/src/dummy-upload-server.js"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
@@ -28,10 +30,10 @@
     "livekit-client": "^2.13.1",
     "livekit-server-sdk": "^2.11.0",
     "mime": "^4.0.7",
-    "next": "13.5.6",
+    "next": "^13.5.6",
     "node-fetch": "^3.3.2",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
@@ -44,6 +46,7 @@
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   }
 }
