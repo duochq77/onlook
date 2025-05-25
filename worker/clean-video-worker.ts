@@ -5,7 +5,7 @@ import fs from 'fs'
 import { exec } from 'child_process'
 import { createClient } from '@supabase/supabase-js'
 import https from 'https'
-import http from 'http' // ✅ thêm dòng này
+import http from 'http'
 
 console.log('✂️ Clean Video Worker starting...')
 console.log('🔧 ENV.SUPABASE_URL:', process.env.SUPABASE_URL)
@@ -35,12 +35,13 @@ async function runCleanVideoWorker() {
             const jobData = typeof job === 'string' ? JSON.parse(job) : job
             console.log('📥 Job raw from Redis:', jobData)
 
-            const { inputVideo, outputName } = jobData
+            const { inputVideo, outputName, inputAudio } = jobData
 
-            const filePath = inputVideo.replace(/^uploads\//, '')
-            const result = supabase.storage.from('uploads').getPublicUrl(filePath)
+            // ✅ Chuẩn hóa cho bucket mới
+            const filePath = inputVideo.replace(/^stream-files\//, '')
+            const result = supabase.storage.from('stream-files').getPublicUrl(filePath)
             const publicUrl = result.data.publicUrl
-            if (!publicUrl) throw new Error('Không lấy được publicUrl')
+            if (!publicUrl) throw new Error('❌ Không lấy được publicUrl video')
 
             const inputPath = path.join('/tmp', inputVideo)
             const cleanOutput = path.join('/tmp', outputName)
@@ -60,8 +61,8 @@ async function runCleanVideoWorker() {
 
             await redis.rpush('ffmpeg-jobs:merge', JSON.stringify({
                 cleanVideo: outputName,
-                inputAudio: jobData.inputAudio,
-                outputName: 'demo-merged.mp4'
+                inputAudio,
+                outputName
             }))
         } catch (err) {
             console.error('❌ Lỗi clean video:', err)
@@ -69,7 +70,7 @@ async function runCleanVideoWorker() {
     }
 }
 
-// ✅ Thêm HTTP server giữ tiến trình sống cho Cloud Run
+// ✅ Giữ Cloud Run sống
 const PORT = process.env.PORT || 8080
 http.createServer((req, res) => {
     res.writeHead(200)
@@ -78,7 +79,7 @@ http.createServer((req, res) => {
     console.log(`🚀 HTTP server lắng nghe tại cổng ${PORT}`)
 })
 
-// ⏳ Bắt đầu worker loop
+// ⏳ Bắt đầu vòng lặp
 runCleanVideoWorker()
 
 function downloadFile(url: string, dest: string): Promise<void> {

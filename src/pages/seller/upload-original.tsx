@@ -1,12 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+import { supabase } from '../../services/SupabaseService' // ✅ Dùng client chung đã khai báo
 
 export default function UploadOriginalPage() {
     const [videoFile, setVideoFile] = useState<File | null>(null)
@@ -27,59 +22,56 @@ export default function UploadOriginalPage() {
 
         const videoPath = `video-inputs/${timestamp}-video.${videoExt}`
         const audioPath = `audio-inputs/${timestamp}-audio.${audioExt}`
-        const outputName = `demo-final.mp4`
+        const outputName = `${timestamp}-merged.mp4`
+        const outputPath = `outputs/${outputName}`
 
-        // ✅ Upload video
-        const { error: videoErr } = await supabase.storage
+        // Upload video
+        const videoRes = await supabase.storage
             .from('stream-files')
-            .upload(videoPath, videoFile, {
-                contentType: 'video/mp4',
-                upsert: true,
-            })
+            .upload(videoPath, videoFile, { upsert: true })
 
-        if (videoErr) {
-            alert('❌ Upload video thất bại: ' + videoErr.message)
+        if (videoRes.error) {
+            alert('❌ Upload video thất bại: ' + videoRes.error.message)
             setIsProcessing(false)
             return
         }
 
-        // ✅ Upload audio
-        const { error: audioErr } = await supabase.storage
+        // Upload audio
+        const audioRes = await supabase.storage
             .from('stream-files')
-            .upload(audioPath, audioFile, {
-                contentType: 'audio/mpeg',
-                upsert: true,
-            })
+            .upload(audioPath, audioFile, { upsert: true })
 
-        if (audioErr) {
-            alert('❌ Upload audio thất bại: ' + audioErr.message)
+        if (audioRes.error) {
+            alert('❌ Upload audio thất bại: ' + audioRes.error.message)
             setIsProcessing(false)
             return
         }
 
-        // ✅ Gửi job xử lý merge
+        // Gửi job xử lý
         await fetch('/api/create-job', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 inputVideo: videoPath,
                 inputAudio: audioPath,
-                outputName,
-            }),
+                outputName
+            })
         })
 
-        // ✅ Kiểm tra file ghép
+        // Kiểm tra kết quả đầu ra
         const checkFinalFile = async () => {
             for (let i = 0; i < 30; i++) {
                 const { data } = supabase.storage
                     .from('stream-files')
-                    .getPublicUrl(`outputs/${outputName}`)
+                    .getPublicUrl(outputPath)
+
                 const res = await fetch(data.publicUrl, { method: 'HEAD' })
                 if (res.ok) {
                     setMergedUrl(data.publicUrl)
                     setIsProcessing(false)
                     return
                 }
+
                 await new Promise((r) => setTimeout(r, 3000))
             }
 
@@ -91,10 +83,11 @@ export default function UploadOriginalPage() {
     }
 
     const handleStop = async () => {
+        const fileName = `outputs/${mergedUrl?.split('/').pop()}`
         await fetch('/api/stop-stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fileName: 'demo-final.mp4' }),
+            body: JSON.stringify({ fileName })
         })
         alert('✅ Đã gửi tín hiệu kết thúc stream.')
     }
@@ -136,12 +129,7 @@ export default function UploadOriginalPage() {
 
                     <button
                         onClick={handleStop}
-                        style={{
-                            marginTop: 12,
-                            padding: 10,
-                            background: '#f44',
-                            color: 'white',
-                        }}
+                        style={{ marginTop: 12, padding: 10, background: '#f44', color: 'white' }}
                     >
                         ⛔ Kết thúc livestream
                     </button>

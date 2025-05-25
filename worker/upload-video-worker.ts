@@ -1,5 +1,3 @@
-// worker/upload-video-worker.ts
-
 import 'dotenv/config'
 import { Redis } from '@upstash/redis'
 import { createClient } from '@supabase/supabase-js'
@@ -35,7 +33,7 @@ async function runUploadWorker() {
 
             const fileBuffer = fs.readFileSync(filePath)
             const { data, error } = await supabase.storage
-                .from('uploads')
+                .from('stream-files') // ✅ bucket mới
                 .upload(`outputs/${outputName}`, fileBuffer, {
                     contentType: 'video/mp4',
                     upsert: true
