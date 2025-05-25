@@ -1,5 +1,3 @@
-// src/pages/seller/upload-original.tsx
-
 'use client'
 
 import { useState } from 'react'
@@ -31,59 +29,57 @@ export default function UploadOriginalPage() {
         const audioPath = `audio-inputs/${timestamp}-audio.${audioExt}`
         const outputName = `demo-final.mp4`
 
-        // Upload video
-        const videoRes = await supabase.storage
-            .from('uploads')
+        // ✅ Upload video
+        const { error: videoErr } = await supabase.storage
+            .from('stream-files')
             .upload(videoPath, videoFile, {
-                upsert: true,
                 contentType: 'video/mp4',
-            })
-
-        if (videoRes.error) {
-            alert('❌ Upload video thất bại: ' + videoRes.error.message)
-            setIsProcessing(false)
-            return
-        }
-
-        // Upload audio
-        const audioRes = await supabase.storage
-            .from('uploads')
-            .upload(audioPath, audioFile, {
                 upsert: true,
-                contentType: 'audio/mpeg',
             })
 
-        if (audioRes.error) {
-            alert('❌ Upload audio thất bại: ' + audioRes.error.message)
+        if (videoErr) {
+            alert('❌ Upload video thất bại: ' + videoErr.message)
             setIsProcessing(false)
             return
         }
 
-        // Gửi job xử lý merge
+        // ✅ Upload audio
+        const { error: audioErr } = await supabase.storage
+            .from('stream-files')
+            .upload(audioPath, audioFile, {
+                contentType: 'audio/mpeg',
+                upsert: true,
+            })
+
+        if (audioErr) {
+            alert('❌ Upload audio thất bại: ' + audioErr.message)
+            setIsProcessing(false)
+            return
+        }
+
+        // ✅ Gửi job xử lý merge
         await fetch('/api/create-job', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 inputVideo: videoPath,
                 inputAudio: audioPath,
-                outputName
-            })
+                outputName,
+            }),
         })
 
-        // Kiểm tra file kết quả sau khi merge
+        // ✅ Kiểm tra file ghép
         const checkFinalFile = async () => {
             for (let i = 0; i < 30; i++) {
                 const { data } = supabase.storage
-                    .from('uploads')
+                    .from('stream-files')
                     .getPublicUrl(`outputs/${outputName}`)
-
                 const res = await fetch(data.publicUrl, { method: 'HEAD' })
                 if (res.ok) {
                     setMergedUrl(data.publicUrl)
                     setIsProcessing(false)
                     return
                 }
-
                 await new Promise((r) => setTimeout(r, 3000))
             }
 
@@ -98,7 +94,7 @@ export default function UploadOriginalPage() {
         await fetch('/api/stop-stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fileName: 'demo-final.mp4' })
+            body: JSON.stringify({ fileName: 'demo-final.mp4' }),
         })
         alert('✅ Đã gửi tín hiệu kết thúc stream.')
     }
@@ -108,19 +104,11 @@ export default function UploadOriginalPage() {
             <h1>📤 Seller: Upload video + audio để phát livestream</h1>
 
             <div style={{ marginBottom: 12 }}>
-                <input
-                    type="file"
-                    accept="video/mp4"
-                    onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
-                />
+                <input type="file" accept="video/mp4" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
             </div>
 
             <div style={{ marginBottom: 12 }}>
-                <input
-                    type="file"
-                    accept="audio/mp3"
-                    onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
-                />
+                <input type="file" accept="audio/mp3" onChange={(e) => setAudioFile(e.target.files?.[0] || null)} />
             </div>
 
             <button
@@ -152,7 +140,7 @@ export default function UploadOriginalPage() {
                             marginTop: 12,
                             padding: 10,
                             background: '#f44',
-                            color: 'white'
+                            color: 'white',
                         }}
                     >
                         ⛔ Kết thúc livestream
