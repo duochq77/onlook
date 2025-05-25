@@ -9,7 +9,6 @@ import http from 'http'
 
 console.log('✂️ Clean Video Worker starting...')
 console.log('🔧 ENV.SUPABASE_URL:', process.env.SUPABASE_URL)
-console.log('🔧 ENV.UPSTASH_REDIS_REST_URL:', process.env.UPSTASH_REDIS_REST_URL)
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -32,18 +31,15 @@ async function runCleanVideoWorker() {
         }
 
         try {
-            const jobData = typeof job === 'string' ? JSON.parse(job) : job
-            console.log('📥 Job raw from Redis:', jobData)
+            const { inputVideo, inputAudio, outputName } = JSON.parse(job)
+            console.log('📥 Nhận job:', { inputVideo, inputAudio, outputName })
 
-            const { inputVideo, outputName, inputAudio } = jobData
-
-            // ✅ Chuẩn hóa cho bucket mới
-            const filePath = inputVideo.replace(/^stream-files\//, '')
-            const result = supabase.storage.from('stream-files').getPublicUrl(filePath)
+            // Lấy URL file video gốc
+            const result = supabase.storage.from('stream-files').getPublicUrl(inputVideo)
             const publicUrl = result.data.publicUrl
             if (!publicUrl) throw new Error('❌ Không lấy được publicUrl video')
 
-            const inputPath = path.join('/tmp', inputVideo)
+            const inputPath = path.join('/tmp', inputVideo.split('/').pop()!)
             const cleanOutput = path.join('/tmp', outputName)
 
             console.time('⏳ Tải video')
@@ -70,17 +66,14 @@ async function runCleanVideoWorker() {
     }
 }
 
-// ✅ Giữ Cloud Run sống
+// ✅ Dummy HTTP server giữ container sống trên Cloud Run
 const PORT = process.env.PORT || 8080
-http.createServer((req, res) => {
+http.createServer((_, res) => {
     res.writeHead(200)
     res.end('✅ Clean-video-worker is alive')
 }).listen(PORT, () => {
-    console.log(`🚀 HTTP server lắng nghe tại cổng ${PORT}`)
+    console.log(`🚀 Listening on port ${PORT}`)
 })
-
-// ⏳ Bắt đầu vòng lặp
-runCleanVideoWorker()
 
 function downloadFile(url: string, dest: string): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -98,7 +91,7 @@ function downloadFile(url: string, dest: string): Promise<void> {
                 file.close(() => {
                     const size = fs.statSync(dest).size
                     if (size < 1000) {
-                        reject(new Error(`⚠️ File tải về quá nhỏ (${size} bytes)`))
+                        reject(new Error(`⚠️ File quá nhỏ (${size} bytes)`))
                     } else {
                         resolve()
                     }

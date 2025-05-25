@@ -2,15 +2,15 @@
   "name": "onlook",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "build:worker": "tsc -p tsconfig.worker.json",
     "start:clean-video-worker": "node dist/worker/clean-video-worker.js",
-    "start:merge-worker": "node dist/worker/merge-worker.js",
-    "start:upload-worker": "node dist/worker/upload-worker.js",
+    "start:merge-worker": "node dist/worker/merge-video-worker.js",
+    "start:upload-worker": "node dist/worker/upload-video-worker.js",
     "start:cleanup-worker": "node dist/worker/cleanup-worker.js"
   },
   "dependencies": {

@@ -1,15 +1,16 @@
+# Dockerfile.clean
 FROM node:20
 
 WORKDIR /app
-
 COPY package*.json ./
 RUN npm install
 
 COPY . .
 
-RUN npm run build:upload-service
+# ✅ Build toàn bộ worker từ TypeScript
+RUN npm run build:worker
 
 ENV PORT=8080
-EXPOSE 8080
 
+# ✅ Gọi đúng file JS tương ứng
 CMD ["node", "dist/worker/clean-video-worker.js"]
