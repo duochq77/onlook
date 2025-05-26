@@ -73,11 +73,22 @@ function downloadFile(url: string, dest: string): Promise<void> {
     return new Promise((resolve, reject) => {
         fs.mkdirSync(path.dirname(dest), { recursive: true })
         const file = fs.createWriteStream(dest)
+
         const req = https.get(url, (res) => {
             if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}`))
+
             res.pipe(file)
-            file.on('finish', () => file.close(resolve))
+
+            file.on('finish', () => {
+                file.close((err) => {
+                    if (err) return reject(err)
+                    resolve()
+                })
+            })
+
+            file.on('error', reject)
         })
+
         req.on('error', reject)
         req.setTimeout(15000, () => {
             req.destroy()
