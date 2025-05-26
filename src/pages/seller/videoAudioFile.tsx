@@ -16,25 +16,33 @@ export default function VideoAudioFilePage() {
 
     const handleUpload = async () => {
         setIsProcessing(true)
+
         const timestamp = Date.now()
-        const videoPath = `video-inputs/${timestamp}-video.${videoFile!.name.split('.').pop()}`
-        const audioPath = `audio-inputs/${timestamp}-audio.${audioFile!.name.split('.').pop()}`
+        const videoPath = `input/${timestamp}-video.mp4`
+        const audioPath = `input/${timestamp}-audio.mp3`
         const outputName = `${timestamp}-merged.mp4`
         const outputPath = `outputs/${outputName}`
 
         const videoRes = await supabase.storage.from('stream-files').upload(videoPath, videoFile!, { upsert: true })
-        if (videoRes.error) return alert('❌ Upload video thất bại: ' + videoRes.error.message)
+        if (videoRes.error) {
+            alert('❌ Upload video thất bại: ' + videoRes.error.message)
+            return setIsProcessing(false)
+        }
 
         const audioRes = await supabase.storage.from('stream-files').upload(audioPath, audioFile!, { upsert: true })
-        if (audioRes.error) return alert('❌ Upload audio thất bại: ' + audioRes.error.message)
+        if (audioRes.error) {
+            alert('❌ Upload audio thất bại: ' + audioRes.error.message)
+            return setIsProcessing(false)
+        }
 
+        // ✅ Gửi job xử lý (chỉ gửi video, audio được worker suy ra)
         await fetch('/api/create-job', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ inputVideo: videoPath, inputAudio: audioPath, outputName })
+            body: JSON.stringify({ inputVideo: videoPath, outputName })
         })
 
-        // Chờ xử lý
+        // ⏳ Chờ xử lý tối đa ~90 giây
         for (let i = 0; i < 30; i++) {
             const { data } = supabase.storage.from('stream-files').getPublicUrl(outputPath)
             const res = await fetch(data.publicUrl, { method: 'HEAD' })

@@ -16,19 +16,18 @@ export default async function handler(req: Request) {
 
     try {
         const { fileName } = await req.json()
-        if (!fileName) {
-            return new Response('fileName is required', { status: 400 })
+        if (!fileName || typeof fileName !== 'string') {
+            return new Response('❌ Thiếu hoặc sai định dạng fileName', { status: 400 })
         }
 
-        const key = `cleanup-after:${fileName}`
+        const redisKey = `cleanup-after:${fileName}`
         const payload = {
             fileName,
             timestamp: Date.now()
         }
 
-        await redis.set(key, JSON.stringify(payload))
-
-        console.log('🛑 Đã nhận tín hiệu dừng stream cho:', fileName)
+        await redis.set(redisKey, JSON.stringify(payload))
+        console.log('🛑 Đã ghi key cleanup sau stream:', redisKey)
 
         return new Response('✅ Stop signal received')
     } catch (err) {

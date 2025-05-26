@@ -9,19 +9,18 @@ const redis = new Redis({
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') return res.status(405).end()
 
-    const { inputVideo, inputAudio, outputName } = req.body
+    const { inputVideo, outputName } = req.body
 
-    if (!inputVideo || !inputAudio || !outputName) {
-        return res.status(400).json({ error: 'Thiếu thông tin job' })
+    if (!inputVideo || !outputName) {
+        return res.status(400).json({ error: 'Thiếu inputVideo hoặc outputName' })
     }
 
-    // ✅ Bỏ prefix stream-files/ nếu có (chỉ lưu đường dẫn nội bộ của bucket)
-    const videoPath = inputVideo.replace(/^stream-files\//, '')
-    const audioPath = inputAudio.replace(/^stream-files\//, '')
-
-    const job = { inputVideo: videoPath, inputAudio: audioPath, outputName }
+    const job = {
+        inputVideo: inputVideo.replace(/^stream-files\//, ''), // chuẩn hoá path
+        outputName
+    }
 
     await redis.rpush('ffmpeg-jobs:clean', JSON.stringify(job))
 
-    return res.status(200).json({ message: '✅ Đã gửi job vào ffmpeg-jobs:clean' })
+    return res.status(200).json({ message: '✅ Đã gửi job vào clean queue', job })
 }

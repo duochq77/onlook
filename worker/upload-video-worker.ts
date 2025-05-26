@@ -5,6 +5,8 @@ import fs from 'fs'
 import path from 'path'
 import http from 'http'
 
+console.log('☁️ Upload Worker đã khởi động...')
+
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
     token: process.env.UPSTASH_REDIS_REST_TOKEN!
@@ -16,9 +18,6 @@ const supabase = createClient(
 )
 
 async function runUploadWorker() {
-    console.log('☁️ Upload Worker đã khởi động...')
-    console.log('🌐 ENV.SUPABASE_URL:', process.env.SUPABASE_URL)
-
     while (true) {
         const job = await redis.lpop<string>('ffmpeg-jobs:upload')
         if (!job) {
@@ -32,6 +31,11 @@ async function runUploadWorker() {
 
             console.log(`📤 Đang upload: ${outputName}`)
 
+            if (!fs.existsSync(filePath)) {
+                console.error(`❌ File không tồn tại: ${filePath}`)
+                continue
+            }
+
             const fileBuffer = fs.readFileSync(filePath)
             const { data, error } = await supabase.storage
                 .from('stream-files')
@@ -43,26 +47,22 @@ async function runUploadWorker() {
             if (error) throw error
             console.log('✅ Upload thành công:', data?.path)
 
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath)
-                console.log(`🧹 Đã xoá file output khỏi RAM: ${filePath}`)
-            }
+            fs.unlinkSync(filePath)
+            console.log(`🧹 Đã xoá file output khỏi RAM: ${filePath}`)
         } catch (err) {
             console.error('❌ Lỗi upload:', err)
         }
     }
 }
 
-// ✅ Bắt buộc giữ sống để Cloud Run không báo lỗi
+// ✅ HTTP giữ Cloud Run sống
 const port = parseInt(process.env.PORT || '8080', 10)
-http
-    .createServer((_, res) => {
-        res.writeHead(200)
-        res.end('✅ upload-video-worker is alive')
-    })
-    .listen(port, () => {
-        console.log(`🚀 Dummy server is listening on port ${port}`)
-    })
+http.createServer((_, res) => {
+    res.writeHead(200)
+    res.end('✅ upload-video-worker is alive')
+}).listen(port, () => {
+    console.log(`🚀 Dummy server is listening on port ${port}`)
+})
 
-// ✅ KHỞI ĐỘNG worker thật
+// 🚀 Start worker
 runUploadWorker()

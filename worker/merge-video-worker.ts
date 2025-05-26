@@ -1,5 +1,3 @@
-// worker/merge-video-worker.ts
-
 import 'dotenv/config'
 import { Redis } from '@upstash/redis'
 import path from 'path'
@@ -31,37 +29,38 @@ async function runMergeWorker() {
         }
 
         try {
-            const jobData = JSON.parse(job)
-            const { cleanVideo, inputAudio, outputName, inputVideo } = jobData
+            const { cleanVideo, inputAudio, outputName, inputVideo } = JSON.parse(job)
 
-            const videoPath = path.join('/tmp', cleanVideo)
+            const cleanVideoPath = path.join('/tmp', cleanVideo)
             const audioPath = path.join('/tmp', 'audio.mp3')
-            const outputPath = path.join('/tmp', outputName)
+            const mergedPath = path.join('/tmp', outputName)
 
-            const result = supabase.storage.from('stream-files').getPublicUrl(inputAudio)
-            const publicAudioUrl = result.data.publicUrl
-            if (!publicAudioUrl) throw new Error('❌ Không lấy được publicUrl audio')
+            // 🔗 Tải audio từ Supabase (bucket: stream-files)
+            const { data } = supabase.storage.from('stream-files').getPublicUrl(inputAudio)
+            const audioUrl = data.publicUrl
+            if (!audioUrl) throw new Error(`❌ Không lấy được publicUrl audio: ${inputAudio}`)
 
-            console.log('⏬ Tải audio từ:', publicAudioUrl)
-            await downloadFile(publicAudioUrl, audioPath)
+            console.log('⏬ Tải audio từ:', audioUrl)
+            await downloadFile(audioUrl, audioPath)
 
-            const command = `ffmpeg -y -i "${videoPath}" -i "${audioPath}" -c copy -shortest "${outputPath}"`
-            console.log('🎬 Chạy FFmpeg:', command)
-            await execPromise(command)
+            // 🎬 Ghép video sạch + audio gốc thành file hoàn chỉnh
+            const cmd = `ffmpeg -y -i "${cleanVideoPath}" -i "${audioPath}" -c:v copy -c:a aac -shortest "${mergedPath}"`
+            console.log('🎬 Chạy FFmpeg:', cmd)
+            await execPromise(cmd)
 
-            console.log(`✅ Ghép video + audio thành công: ${outputName}`)
+            console.log(`✅ Đã tạo xong file merged: ${outputName}`)
 
-            // Đưa vào hàng upload
+            // Gửi job upload
             await redis.rpush('ffmpeg-jobs:upload', JSON.stringify({ outputName }))
 
-            // Đưa vào hàng cleanup tạm
+            // Gửi job cleanup: xoá gốc và sạch (KHÔNG xoá merged)
             await redis.rpush('ffmpeg-jobs:cleanup', JSON.stringify({
                 deleteType: 'origin',
                 originFiles: [inputVideo, inputAudio, cleanVideo]
             }))
 
         } catch (err) {
-            console.error('❌ Lỗi khi xử lý job merge:', err)
+            console.error('❌ Lỗi khi merge:', err)
         }
     }
 }
@@ -101,21 +100,18 @@ function downloadFile(url: string, dest: string): Promise<void> {
 
 function execPromise(cmd: string): Promise<void> {
     return new Promise((resolve, reject) => {
-        exec(cmd, (err) => {
-            if (err) reject(err)
-            else resolve()
-        })
+        exec(cmd, (err) => (err ? reject(err) : resolve()))
     })
 }
 
-// ✅ Giữ tiến trình sống bằng HTTP server
+// ✅ HTTP server giữ Cloud Run sống
 const PORT = parseInt(process.env.PORT || '8080', 10)
-http.createServer((req, res) => {
+http.createServer((_, res) => {
     res.writeHead(200)
     res.end('✅ merge-video-worker is alive')
 }).listen(PORT, () => {
-    console.log(`🚀 HTTP server đang lắng nghe tại cổng ${PORT}`)
+    console.log(`🚀 HTTP server lắng nghe tại cổng ${PORT}`)
 })
 
-// ⏳ Khởi động vòng lặp chính
+// ⏳ Bắt đầu worker
 runMergeWorker()
