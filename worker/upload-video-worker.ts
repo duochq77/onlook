@@ -34,7 +34,7 @@ async function runUploadWorker() {
 
             const fileBuffer = fs.readFileSync(filePath)
             const { data, error } = await supabase.storage
-                .from('stream-files') // ✅ bucket chuẩn
+                .from('stream-files')
                 .upload(`outputs/${outputName}`, fileBuffer, {
                     contentType: 'video/mp4',
                     upsert: true
@@ -43,7 +43,6 @@ async function runUploadWorker() {
             if (error) throw error
             console.log('✅ Upload thành công:', data?.path)
 
-            // ✅ Giải phóng RAM: xoá file output khỏi /tmp
             if (fs.existsSync(filePath)) {
                 fs.unlinkSync(filePath)
                 console.log(`🧹 Đã xoá file output khỏi RAM: ${filePath}`)
@@ -54,7 +53,7 @@ async function runUploadWorker() {
     }
 }
 
-// ✅ Giữ tiến trình sống cho Cloud Run
+// ✅ Bắt buộc giữ sống để Cloud Run không báo lỗi
 const port = parseInt(process.env.PORT || '8080', 10)
 http
     .createServer((_, res) => {
@@ -65,4 +64,5 @@ http
         console.log(`🚀 Dummy server is listening on port ${port}`)
     })
 
+// ✅ KHỞI ĐỘNG worker thật
 runUploadWorker()
