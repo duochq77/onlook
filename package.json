@@ -11,7 +11,8 @@
     "start:clean-video-worker": "node dist/worker/clean-video-worker.js",
     "start:merge-worker": "node dist/worker/merge-video-worker.js",
     "start:upload-worker": "node dist/worker/upload-video-worker.js",
-    "start:cleanup-worker": "node dist/worker/cleanup-worker.js"
+    "start:cleanup-worker": "node dist/worker/cleanup-worker.js",
+    "start:cleanup-livestream-worker": "node dist/worker/cleanup-livestream-worker.js"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
@@ -19,7 +20,6 @@
     "@supabase/supabase-js": "^2.49.4",
     "@upstash/redis": "^1.34.9",
     "axios": "^1.9.0",
-    "bullmq": "^5.52.2",
     "dotenv": "^16.5.0",
     "formidable": "^3.5.4",
     "ioredis": "^5.6.1",
@@ -36,7 +36,6 @@
     "@types/axios": "^0.14.0",
     "@types/formidable": "^3.4.5",
     "@types/node": "^20.17.47",
-    "@types/node-fetch": "^2.6.12",
     "@types/react": "^18.3.21",
     "@types/react-dom": "^18.3.7",
     "autoprefixer": "^10.4.21",
