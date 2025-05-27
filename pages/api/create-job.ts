@@ -9,18 +9,22 @@ const redis = new Redis({
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') return res.status(405).end()
 
-    const { inputVideo, outputName } = req.body
+    const { inputVideo, inputAudio, outputName } = req.body
 
-    if (!inputVideo || !outputName) {
-        return res.status(400).json({ error: 'Thiếu inputVideo hoặc outputName' })
+    if (!inputVideo || !inputAudio || !outputName) {
+        return res.status(400).json({ error: 'Thiếu inputVideo, inputAudio hoặc outputName' })
     }
 
+    const cleanVideoName = inputVideo.split('/').pop()?.replace('.mp4', '-clean.mp4')
+
     const job = {
-        inputVideo: inputVideo.replace(/^stream-files\//, ''), // chuẩn hoá path
+        inputVideo,
+        inputAudio,
+        cleanVideo: cleanVideoName,
         outputName
     }
 
-    await redis.rpush('ffmpeg-jobs:clean', JSON.stringify(job))
+    await redis.rpush('ffmpeg-jobs:merge', JSON.stringify(job))
 
-    return res.status(200).json({ message: '✅ Đã gửi job vào clean queue', job })
+    return res.status(200).json({ message: '✅ Đã gửi job vào merge queue', job })
 }

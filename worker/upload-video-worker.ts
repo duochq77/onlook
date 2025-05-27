@@ -47,8 +47,9 @@ async function runUploadWorker() {
             if (error) throw error
             console.log('✅ Upload thành công:', data?.path)
 
-            fs.unlinkSync(filePath)
-            console.log(`🧹 Đã xoá file output khỏi RAM: ${filePath}`)
+            // ❌ Tạm thời không xoá file sau upload để tiện kiểm tra
+            // fs.unlinkSync(filePath)
+            console.log(`🚫 Giữ lại file output trong RAM: ${filePath}`)
         } catch (err) {
             console.error('❌ Lỗi upload:', err)
         }

@@ -1,8 +1,7 @@
-// Force rebuild - 2025-05-27
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/services/SupabaseService' // ✅ Sửa đường dẫn chuẩn
+import { supabase } from '@/services/SupabaseService'
 
 export default function VideoAudioFilePage() {
     const [videoFile, setVideoFile] = useState<File | null>(null)
@@ -19,8 +18,8 @@ export default function VideoAudioFilePage() {
         setIsProcessing(true)
 
         const timestamp = Date.now()
-        const videoPath = `input/${timestamp}-video.mp4`
-        const audioPath = `input/${timestamp}-audio.mp3`
+        const videoPath = `input-videos/${timestamp}-video.mp4`
+        const audioPath = `input-audios/${timestamp}-audio.mp3`
         const outputName = `${timestamp}-merged.mp4`
         const outputPath = `outputs/${outputName}`
 
@@ -39,7 +38,7 @@ export default function VideoAudioFilePage() {
         await fetch('/api/create-job', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ inputVideo: videoPath, outputName })
+            body: JSON.stringify({ inputVideo: videoPath, inputAudio: audioPath, outputName })
         })
 
         for (let i = 0; i < 30; i++) {
@@ -65,12 +64,8 @@ export default function VideoAudioFilePage() {
             setIsStreaming(true)
         } else {
             const fileName = `outputs/${mergedUrl.split('/').pop()}`
-            await fetch('/api/stop-stream', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fileName })
-            })
-            alert('⛔ Đã kết thúc livestream')
+            // ❌ Tạm thời không gọi API stop-stream
+            alert('⛔ Đã kết thúc livestream (chưa xoá file)')
             setIsStreaming(false)
         }
     }
@@ -109,7 +104,7 @@ export default function VideoAudioFilePage() {
                         ⬇️ Tải video hoàn chỉnh
                     </a>
                     <p style={{ color: 'orange', fontSize: 13 }}>
-                        ⚠️ File này sẽ được xoá khỏi hệ thống sau 10 phút kể từ khi kết thúc livestream.
+                        ⚠️ File này sẽ được giữ lại để kiểm tra lỗi.
                     </p>
                 </div>
             )}
