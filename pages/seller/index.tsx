@@ -1,5 +1,5 @@
-import React from 'react';
-import { useRouter } from 'next/router';
+import React from 'react'
+import { useRouter } from 'next/router'
 
 const modes = [
     {
@@ -22,10 +22,10 @@ const modes = [
         path: '/seller/videoSingleFile',
         description: 'Phát video đã có cả hình và tiếng, từ một file duy nhất.'
     }
-];
+]
 
 const SelectStreamMode: React.FC = () => {
-    const router = useRouter();
+    const router = useRouter()
 
     return (
         <div className="min-h-screen flex flex-col items-center justify-center p-4">
@@ -43,7 +43,7 @@ const SelectStreamMode: React.FC = () => {
                 ))}
             </div>
         </div>
-    );
-};
+    )
+}
 
-export default SelectStreamMode;
+export default SelectStreamMode

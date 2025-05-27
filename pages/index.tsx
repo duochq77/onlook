@@ -21,15 +21,6 @@ const HomePage: React.FC = () => {
                 <Link href="/seller/VideoAudioFile" className="bg-purple-500 text-white px-4 py-2 rounded-xl shadow">
                     Test VideoAudioFile
                 </Link>
-                <Link href="/seller/TestRoute" className="bg-yellow-500 text-white px-4 py-2 rounded-xl shadow">
-                    Test Route trong src/
-                </Link>
-                <Link href="/test/TestRoute" className="bg-red-500 text-white px-4 py-2 rounded-xl shadow">
-                    Test Route ngoài src/
-                </Link>
-                <Link href="/hello" className="bg-lime-500 text-white px-4 py-2 rounded-xl shadow">
-                    Test /hello trực tiếp
-                </Link>
             </div>
         </main>
     )
