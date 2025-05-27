@@ -14,9 +14,9 @@ const nextConfig = {
         domains: ['lh3.googleusercontent.com', 'cdn.livekit.io'],
     },
     experimental: {
-        typedRoutes: true,
-        serverActions: true,
-    },
+        serverActions: true // ✅ Giữ lại nếu bạn dùng server actions
+        // ❌ typedRoutes đã bị loại bỏ để Pages Router hoạt động bình thường
+    }
 }
 
 export default nextConfig
