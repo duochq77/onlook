@@ -1,3 +1,4 @@
+// Force rebuild - 2025-05-27
 'use client'
 
 import { useState, useEffect } from 'react'
