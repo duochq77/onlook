@@ -15,6 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Thiếu inputVideo, inputAudio hoặc outputName' })
     }
 
+    // Tạo tên file clean từ input video
     const cleanVideoName = inputVideo.split('/').pop()?.replace('.mp4', '-clean.mp4')
 
     const job = {
@@ -24,7 +25,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         outputName
     }
 
-    await redis.rpush('ffmpeg-jobs:merge', JSON.stringify(job))
+    // ✅ Gửi vào queue đầu tiên: clean
+    await redis.rpush('ffmpeg-jobs:clean', JSON.stringify(job))
 
-    return res.status(200).json({ message: '✅ Đã gửi job vào merge queue', job })
+    return res.status(200).json({ message: '✅ Đã gửi job vào clean queue', job })
 }
