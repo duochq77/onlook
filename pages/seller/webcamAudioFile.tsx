@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic' // Ngăn lỗi Audio khi prerender trên server
 
 import React, { useEffect, useRef, useState } from 'react'
-import { supabase } from '../../services/SupabaseService' // ✅ Sửa alias thành đường tương đối
+import { supabase } from '@/services/SupabaseService'
 const livekit = require('livekit-client')
 
 const WebcamAudioFilePage: React.FC = () => {
