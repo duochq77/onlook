@@ -23,24 +23,28 @@ export default function VideoAudioFilePage() {
         const outputName = `${timestamp}-merged.mp4`
         const outputPath = `outputs/${outputName}`
 
+        // Upload video
         const videoRes = await supabase.storage.from('stream-files').upload(videoPath, videoFile!, { upsert: true })
         if (videoRes.error) {
             alert('❌ Upload video thất bại: ' + videoRes.error.message)
             return setIsProcessing(false)
         }
 
+        // Upload audio
         const audioRes = await supabase.storage.from('stream-files').upload(audioPath, audioFile!, { upsert: true })
         if (audioRes.error) {
             alert('❌ Upload audio thất bại: ' + audioRes.error.message)
             return setIsProcessing(false)
         }
 
+        // ✅ Gửi job vào hàng đợi xử lý clean
         await fetch('/api/create-job', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ inputVideo: videoPath, inputAudio: audioPath, outputName })
+            body: JSON.stringify({ inputVideo: videoPath, outputName }) // 👈 Chỉ gửi video + outputName
         })
 
+        // ⏳ Kiểm tra sau vài lần xem file output đã có chưa
         for (let i = 0; i < 30; i++) {
             const { data } = supabase.storage.from('stream-files').getPublicUrl(outputPath)
             const res = await fetch(data.publicUrl, { method: 'HEAD' })
@@ -64,7 +68,6 @@ export default function VideoAudioFilePage() {
             setIsStreaming(true)
         } else {
             const fileName = `outputs/${mergedUrl.split('/').pop()}`
-            // ❌ Tạm thời không gọi API stop-stream
             alert('⛔ Đã kết thúc livestream (chưa xoá file)')
             setIsStreaming(false)
         }
