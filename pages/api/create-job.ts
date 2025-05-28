@@ -1,4 +1,3 @@
-import type { NextApiRequest, NextApiResponse } from 'next'
 import { Redis } from '@upstash/redis'
 
 const redis = new Redis({
@@ -6,27 +5,25 @@ const redis = new Redis({
     token: process.env.UPSTASH_REDIS_REST_TOKEN!
 })
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-    if (req.method !== 'POST') return res.status(405).end()
+export const config = {
+    runtime: 'edge'
+}
 
-    const { inputVideo, inputAudio, outputName } = req.body
-
-    if (!inputVideo || !inputAudio || !outputName) {
-        return res.status(400).json({ error: 'Thiếu inputVideo, inputAudio hoặc outputName' })
+export default async function handler(req: Request) {
+    if (req.method !== 'POST') {
+        return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 })
     }
 
-    // Tạo tên file clean từ input video
-    const cleanVideoName = inputVideo.split('/').pop()?.replace('.mp4', '-clean.mp4')
+    const body = await req.json()
+    const { inputVideo, outputName } = body
 
-    const job = {
-        inputVideo,
-        inputAudio,
-        cleanVideo: cleanVideoName,
-        outputName
+    if (!inputVideo || !outputName) {
+        return new Response(JSON.stringify({ error: 'Thiếu thông tin đầu vào' }), { status: 400 })
     }
 
-    // ✅ Gửi vào queue đầu tiên: clean
+    const job = { inputVideo, outputName }
+
     await redis.rpush('ffmpeg-jobs:clean', JSON.stringify(job))
 
-    return res.status(200).json({ message: '✅ Đã gửi job vào clean queue', job })
+    return new Response(JSON.stringify({ message: '✅ Đã đẩy job vào hàng đợi clean' }))
 }
