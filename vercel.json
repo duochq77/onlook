@@ -8,6 +8,15 @@
             "headers": {
                 "Access-Control-Allow-Origin": "*"
             }
+        },
+        {
+            "src": "/api/.*",
+            "methods": [
+                "GET",
+                "POST",
+                "OPTIONS"
+            ],
+            "continue": true
         }
     ]
 }
