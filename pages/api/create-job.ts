@@ -17,13 +17,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Missing inputVideo, inputAudio, or outputName' })
     }
 
-    await redis.rpush('ffmpeg-jobs:clean', JSON.stringify({ inputVideo, inputAudio, outputName }))
+    console.log('📥 Nhận job:', { inputVideo, inputAudio, outputName })
 
     try {
-        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-jobs`, { method: 'POST' })
+        const result = await redis.rpush('ffmpeg-jobs:clean', JSON.stringify({ inputVideo, inputAudio, outputName }))
+        console.log('✅ Ghi Redis thành công. Kết quả:', result)
     } catch (err) {
-        console.error('⚠️ Trigger job failed:', err)
+        console.error('❌ Ghi Redis thất bại:', err)
     }
 
-    return res.status(200).json({ message: '✅ Job created and triggered' })
+    try {
+        const triggerRes = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-jobs`, { method: 'POST' })
+        console.log('🚀 Trigger worker:', triggerRes.status)
+    } catch (err) {
+        console.error('⚠️ Trigger job thất bại:', err)
+    }
+
+    return res.status(200).json({ message: '✅ Job created and triggered (with logs)' })
 }
