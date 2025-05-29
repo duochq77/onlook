@@ -19,18 +19,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Missing inputVideo or outputName' })
     }
 
-    try {
-        // Đẩy job vào hàng đợi clean
-        await redis.rpush('ffmpeg-jobs:clean', JSON.stringify({ inputVideo, outputName }))
+    await redis.rpush('ffmpeg-jobs:clean', JSON.stringify({ inputVideo, outputName }))
 
-        // Gọi trigger để chạy clean-video-worker
+    try {
         await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-jobs`, {
             method: 'POST'
         })
-
-        return res.status(200).json({ message: '✅ Job created and triggered' })
     } catch (err) {
-        console.error('❌ Error pushing job or triggering:', err)
-        return res.status(500).json({ error: 'Internal Server Error' })
+        console.error('⚠️ Trigger job failed:', err)
     }
+
+    res.status(200).json({ message: '✅ Job created and triggered' })
 }
