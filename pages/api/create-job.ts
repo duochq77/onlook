@@ -6,7 +6,7 @@ const redis = new Redis({
 })
 
 export const config = {
-    runtime: 'edge'
+    runtime: 'edge',
 }
 
 export default async function handler(req: Request) {
@@ -25,5 +25,13 @@ export default async function handler(req: Request) {
 
     await redis.rpush('ffmpeg-jobs:clean', JSON.stringify(job))
 
-    return new Response(JSON.stringify({ message: '✅ Đã đẩy job vào hàng đợi clean' }))
+    try {
+        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-jobs`, {
+            method: 'POST'
+        })
+    } catch (err) {
+        console.error('⚠️ Không gọi được trigger-jobs:', err)
+    }
+
+    return new Response(JSON.stringify({ message: '✅ Đã đẩy job clean và trigger job tự động' }))
 }
