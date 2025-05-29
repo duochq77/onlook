@@ -20,19 +20,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         })
     }
 
-    // 🚀 Đẩy job vào hàng đợi clean video
+    console.log('📩 Nhận job mới:', { inputVideo, inputAudio, outputName })
+
+    // Đẩy job vào Redis queue
     await redis.rpush(
         'ffmpeg-jobs:clean',
         JSON.stringify({ inputVideo, inputAudio, outputName })
     )
 
+    // Gọi API trigger để khởi động worker phía Cloud Run
     try {
-        // ⏩ Gọi API trigger jobs (Cloud Run)
-        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-jobs`, {
-            method: 'POST'
-        })
+        const triggerUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-jobs`
+        const triggerRes = await fetch(triggerUrl, { method: 'POST' })
+
+        if (!triggerRes.ok) {
+            console.error('❌ Trigger job failed:', await triggerRes.text())
+        }
     } catch (err) {
-        console.error('⚠️ Trigger job failed:', err)
+        console.error('⚠️ Trigger job fetch error:', err)
     }
 
     return res.status(200).json({
