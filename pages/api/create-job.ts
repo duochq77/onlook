@@ -1,4 +1,3 @@
-// pages/api/create-job.ts
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { Redis } from '@upstash/redis'
 
@@ -13,15 +12,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(405).json({ error: 'Method Not Allowed' })
     }
 
-    const { inputVideo, outputName } = req.body
+    const { inputVideo, inputAudio, outputName } = req.body
 
-    if (!inputVideo || !outputName) {
-        return res.status(400).json({ error: 'Missing inputVideo or outputName' })
+    if (!inputVideo || !inputAudio || !outputName) {
+        return res.status(400).json({
+            error: 'Missing inputVideo, inputAudio, or outputName'
+        })
     }
 
-    await redis.rpush('ffmpeg-jobs:clean', JSON.stringify({ inputVideo, outputName }))
+    // 🚀 Đẩy job vào hàng đợi clean video
+    await redis.rpush(
+        'ffmpeg-jobs:clean',
+        JSON.stringify({ inputVideo, inputAudio, outputName })
+    )
 
     try {
+        // ⏩ Gọi API trigger jobs (Cloud Run)
         await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-jobs`, {
             method: 'POST'
         })
@@ -29,5 +35,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.error('⚠️ Trigger job failed:', err)
     }
 
-    res.status(200).json({ message: '✅ Job created and triggered' })
+    return res.status(200).json({
+        message: '✅ Job created and triggered',
+        job: { inputVideo, inputAudio, outputName }
+    })
 }
