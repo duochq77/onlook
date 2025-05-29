@@ -13,35 +13,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const { inputVideo, inputAudio, outputName } = req.body
-
     if (!inputVideo || !inputAudio || !outputName) {
-        return res.status(400).json({
-            error: 'Missing inputVideo, inputAudio, or outputName'
-        })
+        return res.status(400).json({ error: 'Missing inputVideo, inputAudio, or outputName' })
     }
 
-    console.log('📩 Nhận job mới:', { inputVideo, inputAudio, outputName })
+    await redis.rpush('ffmpeg-jobs:clean', JSON.stringify({ inputVideo, inputAudio, outputName }))
 
-    // Đẩy job vào Redis queue
-    await redis.rpush(
-        'ffmpeg-jobs:clean',
-        JSON.stringify({ inputVideo, inputAudio, outputName })
-    )
-
-    // Gọi API trigger để khởi động worker phía Cloud Run
     try {
-        const triggerUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-jobs`
-        const triggerRes = await fetch(triggerUrl, { method: 'POST' })
-
-        if (!triggerRes.ok) {
-            console.error('❌ Trigger job failed:', await triggerRes.text())
-        }
+        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-jobs`, { method: 'POST' })
     } catch (err) {
-        console.error('⚠️ Trigger job fetch error:', err)
+        console.error('⚠️ Trigger job failed:', err)
     }
 
-    return res.status(200).json({
-        message: '✅ Job created and triggered',
-        job: { inputVideo, inputAudio, outputName }
-    })
+    return res.status(200).json({ message: '✅ Job created and triggered' })
 }
