@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
+import { Room, RemoteTrack } from 'livekit-client'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,13 +37,9 @@ export default function ViewerRoomPage() {
                 const { token } = await res.json()
                 if (!token) return console.error('❌ Token không hợp lệ')
 
-                // ✅ Import đúng cho LiveKit 2.13.1+
-                const { Room } = require('livekit-client/dist/room')
-                const { RemoteTrack } = require('livekit-client/dist/media')
-
                 const room = new Room()
 
-                room.on('trackSubscribed', (track: any, publication: any, participant: any) => {
+                room.on('trackSubscribed', (track: RemoteTrack, publication, participant) => {
                     console.log(`📥 Đã nhận track ${track.kind} từ ${participant.identity}`)
                     if (track.kind === 'video' && videoRef.current) {
                         track.attach(videoRef.current)
