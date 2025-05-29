@@ -1,3 +1,6 @@
+// pages/api/create-job.ts
+
+import type { NextApiRequest, NextApiResponse } from 'next'
 import { Redis } from '@upstash/redis'
 
 const redis = new Redis({
@@ -5,33 +8,14 @@ const redis = new Redis({
     token: process.env.UPSTASH_REDIS_REST_TOKEN!
 })
 
-export const config = {
-    runtime: 'edge',
-}
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' })
 
-export default async function handler(req: Request) {
-    if (req.method !== 'POST') {
-        return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 })
-    }
+    const { inputVideo, outputName } = req.body
 
-    const body = await req.json()
-    const { inputVideo, outputName } = body
+    if (!inputVideo || !outputName)
+        return res.status(400).json({ error: 'Missing inputVideo or outputName' })
 
-    if (!inputVideo || !outputName) {
-        return new Response(JSON.stringify({ error: 'Thiếu thông tin đầu vào' }), { status: 400 })
-    }
-
-    const job = { inputVideo, outputName }
-
-    await redis.rpush('ffmpeg-jobs:clean', JSON.stringify(job))
-
-    try {
-        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-jobs`, {
-            method: 'POST'
-        })
-    } catch (err) {
-        console.error('⚠️ Không gọi được trigger-jobs:', err)
-    }
-
-    return new Response(JSON.stringify({ message: '✅ Đã đẩy job clean và trigger job tự động' }))
+    await redis.rpush('clean-video-jobs', JSON.stringify({ inputVideo, outputName }))
+    res.status(200).json({ status: '✅ Job created' })
 }
