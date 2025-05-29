@@ -21,10 +21,8 @@ const supabase = createClient(
 
 async function runCleanVideoWorker() {
     while (true) {
-        console.log('🧪 Đang đọc Redis queue...')
         const raw = await redis.lpop('ffmpeg-jobs:clean')
         if (!raw) {
-            console.log('🚫 Không tìm thấy job trong Redis.')
             await new Promise((r) => setTimeout(r, 3000))
             continue
         }
@@ -46,44 +44,39 @@ async function runCleanVideoWorker() {
             const url = data.publicUrl
             if (!url) throw new Error('❌ Không có publicUrl từ Supabase')
             await downloadFile(url, inputPath)
-
-            if (!fs.existsSync(inputPath)) {
-                throw new Error('❌ File tải về không tồn tại')
-            }
-
-            console.log('✅ Tải video thành công:', inputPath)
         } catch (err) {
             console.error('❌ Lỗi tải video:', err)
             continue
         }
 
         try {
-            console.log('🎬 FFmpeg đang xử lý...')
             const cmd = `ffmpeg -i "${inputPath}" -an -c:v copy "${cleanPath}"`
             await execPromise(cmd)
-            console.log('✅ Đã tạo video sạch:', cleanPath)
+            console.log('✅ Đã tạo xong clean.mp4 tại:', cleanPath)
         } catch (err) {
             console.error('❌ Lỗi FFmpeg:', err)
             continue
         }
 
         try {
-            const cleanFileName = inputVideo
-                .replace('input-videos/', 'clean/')
-                .replace('-video.mp4', '-clean.mp4')
+            // ✅ SUY RA inputAudio từ inputVideo (cùng timestamp)
+            const inputAudio = inputVideo
+                .replace('input-videos/', 'input-audios/')
+                .replace('-video.mp4', '-audio.mp3')
 
-            const cleanBuffer = fs.readFileSync(cleanPath)
-            await supabase.storage
-                .from('stream-files')
-                .upload(cleanFileName, cleanBuffer, {
-                    contentType: 'video/mp4',
-                    upsert: true
-                })
+            await redis.rpush('ffmpeg-jobs:merge', JSON.stringify({
+                cleanVideoPath: cleanPath,
+                inputAudio,
+                outputName
+            }))
 
-            console.log('✅ Upload video sạch thành công:', cleanFileName)
-            // ✅ Dừng lại tại đây — chưa đẩy sang merge
+            await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-jobs`, {
+                method: 'POST'
+            })
+
+            console.log('✅ Đã đẩy job merge và gọi trigger tiếp theo')
         } catch (err) {
-            console.error('❌ Upload video sạch thất bại:', err)
+            console.error('❌ Lỗi khi đẩy job merge:', err)
             continue
         }
     }
