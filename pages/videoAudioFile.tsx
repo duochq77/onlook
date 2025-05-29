@@ -10,11 +10,8 @@ export default function VideoAudioFilePage() {
     const [mergedUrl, setMergedUrl] = useState<string | null>(null)
     const [isStreaming, setIsStreaming] = useState(false)
 
-    useEffect(() => {
-        if (videoFile && audioFile) handleUpload()
-    }, [videoFile, audioFile])
-
     const handleUpload = async () => {
+        if (!videoFile || !audioFile) return
         setIsProcessing(true)
 
         const timestamp = Date.now()
@@ -24,27 +21,29 @@ export default function VideoAudioFilePage() {
         const outputPath = `outputs/${outputName}`
 
         // Upload video
-        const videoRes = await supabase.storage.from('stream-files').upload(videoPath, videoFile!, { upsert: true })
+        const videoRes = await supabase.storage.from('stream-files').upload(videoPath, videoFile, { upsert: true })
         if (videoRes.error) {
             alert('❌ Upload video thất bại: ' + videoRes.error.message)
-            return setIsProcessing(false)
+            setIsProcessing(false)
+            return
         }
 
         // Upload audio
-        const audioRes = await supabase.storage.from('stream-files').upload(audioPath, audioFile!, { upsert: true })
+        const audioRes = await supabase.storage.from('stream-files').upload(audioPath, audioFile, { upsert: true })
         if (audioRes.error) {
             alert('❌ Upload audio thất bại: ' + audioRes.error.message)
-            return setIsProcessing(false)
+            setIsProcessing(false)
+            return
         }
 
-        // ✅ Gửi job vào hàng đợi xử lý clean qua URL tuyệt đối
-        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/create-job`, {
+        // Gửi job CLEAN (tạo clean.mp4 từ video gốc)
+        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/create-clean-job`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ inputVideo: videoPath, outputName }) // 👈 Chỉ gửi video + outputName
+            body: JSON.stringify({ inputVideo: videoPath, outputName })
         })
 
-        // ⏳ Kiểm tra sau vài lần xem file output đã có chưa
+        // Theo dõi khi file merged xuất hiện → hiện nút livestream
         for (let i = 0; i < 30; i++) {
             const { data } = supabase.storage.from('stream-files').getPublicUrl(outputPath)
             const res = await fetch(data.publicUrl, { method: 'HEAD' })
@@ -67,15 +66,14 @@ export default function VideoAudioFilePage() {
             alert('▶️ Bắt đầu livestream')
             setIsStreaming(true)
         } else {
-            const fileName = `outputs/${mergedUrl.split('/').pop()}`
-            alert('⛔ Đã kết thúc livestream (chưa xoá file)')
+            alert('⛔ Đã kết thúc livestream (file chưa xoá)')
             setIsStreaming(false)
         }
     }
 
     return (
         <div style={{ padding: 40, fontFamily: 'sans-serif' }}>
-            <h1>📤 Seller: Upload video + audio để phát livestream</h1>
+            <h1>📤 Upload video + audio để phát livestream</h1>
 
             <div style={{ marginBottom: 12 }}>
                 <input type="file" accept="video/mp4" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
@@ -85,31 +83,47 @@ export default function VideoAudioFilePage() {
                 <input type="file" accept="audio/mp3" onChange={(e) => setAudioFile(e.target.files?.[0] || null)} />
             </div>
 
-            {isProcessing && <p>⏳ Đang xử lý file...</p>}
+            <button
+                onClick={handleUpload}
+                style={{
+                    padding: 10,
+                    background: '#007bff',
+                    color: 'white',
+                    marginTop: 10,
+                    border: 'none',
+                    borderRadius: 6
+                }}
+                disabled={!videoFile || !audioFile || isProcessing}
+            >
+                ⏫ Upload và xử lý
+            </button>
+
+            {isProcessing && <p>⏳ Đang xử lý video + audio...</p>}
 
             {mergedUrl && (
-                <button
-                    onClick={toggleStream}
-                    style={{
-                        padding: 10,
-                        background: isStreaming ? '#f44' : '#28a745',
-                        color: 'white',
-                        marginTop: 10
-                    }}
-                >
-                    {isStreaming ? '⛔ Kết thúc livestream' : '▶️ Bắt đầu livestream'}
-                </button>
-            )}
+                <>
+                    <button
+                        onClick={toggleStream}
+                        style={{
+                            padding: 10,
+                            background: isStreaming ? '#dc3545' : '#28a745',
+                            color: 'white',
+                            marginTop: 20,
+                            borderRadius: 6
+                        }}
+                    >
+                        {isStreaming ? '⛔ Kết thúc livestream' : '▶️ Bắt đầu livestream'}
+                    </button>
 
-            {mergedUrl && (
-                <div style={{ marginTop: 20 }}>
-                    <a href={mergedUrl} download>
-                        ⬇️ Tải video hoàn chỉnh
-                    </a>
-                    <p style={{ color: 'orange', fontSize: 13 }}>
-                        ⚠️ File này sẽ được giữ lại để kiểm tra lỗi.
-                    </p>
-                </div>
+                    <div style={{ marginTop: 20 }}>
+                        <a href={mergedUrl} download>
+                            ⬇️ Tải video hoàn chỉnh
+                        </a>
+                        <p style={{ color: 'orange', fontSize: 13 }}>
+                            ⚠️ File đã merge, giữ lại để kiểm tra lỗi nếu cần.
+                        </p>
+                    </div>
+                </>
             )}
         </div>
     )

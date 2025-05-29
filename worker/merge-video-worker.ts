@@ -9,6 +9,7 @@ import http from 'http'
 
 console.log('🔀 Merge Worker đã khởi động...')
 
+// Khởi tạo Redis & Supabase
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
     token: process.env.UPSTASH_REDIS_REST_TOKEN!
@@ -33,12 +34,12 @@ async function runMergeWorker() {
             const audioPath = path.join('/tmp', 'audio.mp3')
             const mergedPath = path.join('/tmp', outputName)
 
-            // ✅ Tải file audio từ Supabase
+            // ⏬ Tải file audio từ Supabase
             const { data: audioData } = supabase.storage.from('stream-files').getPublicUrl(inputAudio)
             const audioUrl = audioData.publicUrl
             if (!audioUrl) throw new Error(`❌ Không lấy được publicUrl của audio: ${inputAudio}`)
 
-            console.log('⏬ Tải audio từ Supabase:', audioUrl)
+            console.log('⏬ Đang tải audio từ Supabase:', audioUrl)
             await downloadFile(audioUrl, audioPath)
 
             // 🎬 Ghép clean.mp4 và audio.mp3 → tạo merged.mp4
@@ -46,9 +47,9 @@ async function runMergeWorker() {
             console.log('🎬 Chạy FFmpeg:', cmd)
             await execPromise(cmd)
 
-            console.log('✅ Đã tạo xong merged file:', mergedPath)
+            console.log('✅ Đã tạo merged file:', mergedPath)
 
-            // ✅ Upload merged file lên Supabase
+            // ☁️ Upload merged file lên Supabase
             const mergedBuffer = fs.readFileSync(mergedPath)
             await supabase.storage
                 .from('stream-files')
@@ -59,11 +60,8 @@ async function runMergeWorker() {
 
             console.log(`📤 Đã upload lên Supabase: outputs/${outputName}`)
 
-            // ✅ Gửi job upload xong (nếu cần signal)
-            // await redis.rpush('ffmpeg-jobs:upload', JSON.stringify({ outputName }))
-
         } catch (err) {
-            console.error('❌ Lỗi khi merge hoặc upload:', err)
+            console.error('❌ Lỗi khi xử lý merge hoặc upload:', err)
         }
     }
 }
@@ -85,7 +83,7 @@ function execPromise(cmd: string): Promise<void> {
     })
 }
 
-// ✅ HTTP server giữ job sống trên Cloud Run
+// ✅ HTTP server giữ job sống trên Cloud Run Job
 const port = parseInt(process.env.PORT || '8080', 10)
 http.createServer((_, res) => {
     res.writeHead(200)
