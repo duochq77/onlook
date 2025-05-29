@@ -1,22 +1,17 @@
 {
     "routes": [
         {
-            "src": "/api/create-job",
-            "methods": [
-                "POST"
-            ],
-            "headers": {
-                "Access-Control-Allow-Origin": "*"
-            }
-        },
-        {
             "src": "/api/.*",
             "methods": [
                 "GET",
                 "POST",
                 "OPTIONS"
             ],
-            "continue": true
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type"
+            }
         }
     ]
 }
