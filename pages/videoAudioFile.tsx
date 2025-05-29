@@ -37,8 +37,8 @@ export default function VideoAudioFilePage() {
             return setIsProcessing(false)
         }
 
-        // ✅ Gửi job vào hàng đợi xử lý clean
-        await fetch('/api/create-job', {
+        // ✅ Gửi job vào hàng đợi xử lý clean qua URL tuyệt đối
+        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/create-job`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ inputVideo: videoPath, outputName }) // 👈 Chỉ gửi video + outputName
