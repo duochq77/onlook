@@ -18,7 +18,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(405).json({ error: 'Method Not Allowed' })
     }
 
-    const { inputVideo, outputName } = req.body
+    // Debug log toàn bộ body
+    console.log('📦 Body nhận được:', req.body)
+
+    const { inputVideo, outputName } = req.body || {}
 
     if (typeof inputVideo !== 'string' || typeof outputName !== 'string') {
         return res.status(400).json({ error: 'Missing or invalid inputVideo or outputName' })
@@ -35,11 +38,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(500).json({ error: 'Redis push failed' })
     }
 
-    // Trigger job sau khi đẩy Redis
     try {
         const siteURL = process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL
-        await fetch(`${siteURL}/api/trigger-clean`, { method: 'POST' })
-        console.log('🚀 Triggered Cloud Run job')
+        if (!siteURL) throw new Error('SITE_URL không tồn tại')
+
+        const triggerRes = await fetch(`${siteURL}/api/trigger-clean`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+        })
+
+        console.log('🚀 Trigger gọi thành công:', triggerRes.status)
     } catch (err) {
         console.warn('⚠️ Gọi trigger job thất bại:', err)
     }
