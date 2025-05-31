@@ -9,11 +9,13 @@ import https from 'https'
 
 console.log('✂️ Clean Video Worker đã khởi động...')
 
+// Redis
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
     token: process.env.UPSTASH_REDIS_REST_TOKEN!
 })
 
+// Supabase
 const supabase = createClient(
     process.env.SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -40,12 +42,10 @@ async function runCleanVideoWorker() {
         const cleanPath = path.join('/tmp', 'clean.mp4')
 
         try {
-            // 🔗 Lấy public URL từ Supabase
             const { data } = supabase.storage.from('stream-files').getPublicUrl(inputVideo)
             const videoUrl = data.publicUrl
             if (!videoUrl) throw new Error('❌ Không có publicUrl của video')
 
-            // ⏬ Tải file video gốc về /tmp/input.mp4
             await downloadFile(videoUrl, inputPath)
         } catch (err) {
             console.error('❌ Lỗi tải video từ Supabase:', err)
@@ -53,7 +53,6 @@ async function runCleanVideoWorker() {
         }
 
         try {
-            // 🧼 Tách video khỏi audio
             const cmd = `ffmpeg -i "${inputPath}" -an -c:v copy "${cleanPath}"`
             await execPromise(cmd)
             console.log('✅ Đã tạo video sạch:', cleanPath)
@@ -63,26 +62,23 @@ async function runCleanVideoWorker() {
         }
 
         try {
-            // ✅ SUY RA đường dẫn audio tương ứng
             const inputAudio = inputVideo
                 .replace('input-videos/', 'input-audios/')
                 .replace('-video.mp4', '-audio.mp3')
 
-            // 🚀 Đẩy job sang hàng đợi merge
             await redis.rpush('ffmpeg-jobs:merge', JSON.stringify({
                 cleanVideoPath: cleanPath,
                 inputAudio,
                 outputName
             }))
 
-            // 🚨 Kích hoạt trigger tiếp theo
-            await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-jobs`, {
+            await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-merge`, {
                 method: 'POST'
             })
 
-            console.log('✅ Đã đẩy job merge và gọi trigger tiếp theo')
+            console.log('✅ Đã đẩy job merge và gọi trigger-merge')
         } catch (err) {
-            console.error('❌ Lỗi khi chuyển giao job merge:', err)
+            console.error('❌ Lỗi khi đẩy job merge:', err)
             continue
         }
     }
@@ -105,7 +101,7 @@ function downloadFile(url: string, dest: string): Promise<void> {
     })
 }
 
-// ✅ HTTP server giữ job sống trên Cloud Run Job (để check trạng thái)
+// HTTP Server giữ Job sống trên Cloud Run Job
 const port = parseInt(process.env.PORT || '8080', 10)
 http.createServer((_, res) => {
     res.writeHead(200)

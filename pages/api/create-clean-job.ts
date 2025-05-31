@@ -19,21 +19,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log('📥 Nhận job CLEAN:', { inputVideo, outputName })
 
+    // Gửi job vào Redis hàng đợi clean
     try {
         const result = await redis.rpush('ffmpeg-jobs:clean', JSON.stringify({ inputVideo, outputName }))
-        console.log('✅ Đẩy job vào Redis clean thành công:', result)
+        console.log('✅ Đẩy job vào Redis CLEAN thành công:', result)
     } catch (err) {
-        console.error('❌ Lỗi Redis khi đẩy job CLEAN:', err)
+        console.error('❌ Redis lỗi khi đẩy job CLEAN:', err)
         return res.status(500).json({ error: 'Failed to push job to Redis' })
     }
 
+    // Gọi API trigger clean
     try {
-        const triggerRes = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-jobs`, {
+        const triggerRes = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-clean`, {
             method: 'POST'
         })
-        console.log('🚀 Gọi trigger-jobs thành công:', triggerRes.status)
+        console.log('🚀 Gọi trigger-clean thành công:', triggerRes.status)
     } catch (err) {
-        console.error('⚠️ Trigger job thất bại:', err)
+        console.error('⚠️ Gọi trigger-clean thất bại:', err)
     }
 
     return res.status(200).json({ message: '✅ CLEAN job created and triggered' })
