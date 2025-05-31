@@ -1,9 +1,10 @@
+// pages/api/create-clean-job.ts
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { Redis } from '@upstash/redis'
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 })
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -18,28 +19,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Missing or invalid inputVideo or outputName' })
     }
 
-    const job = JSON.stringify({ inputVideo, outputName })
-    console.log('📥 Nhận job CLEAN:', job)
+    console.log('📥 Nhận job CLEAN:', { inputVideo, outputName })
 
-    // Gửi job vào Redis
     try {
-        const result = await redis.rpush('ffmpeg-jobs:clean', job)
-        console.log('✅ Đã đẩy vào Redis:', result)
+        const result = await redis.rpush('ffmpeg-jobs:clean', JSON.stringify({ inputVideo, outputName }))
+        console.log('✅ Đẩy job vào Redis CLEAN thành công:', result)
     } catch (err) {
-        console.error('❌ Lỗi Redis:', err)
-        return res.status(500).json({ error: 'Redis push failed' })
+        console.error('❌ Redis lỗi khi đẩy job CLEAN:', err)
+        return res.status(500).json({ error: 'Failed to push job to Redis' })
     }
 
-    // Gọi API trigger-clean
     try {
         const triggerRes = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-clean`, {
-            method: 'POST'
+            method: 'POST',
         })
-
-        const bodyText = await triggerRes.text()
-        console.log(`🚀 Gọi trigger-clean status: ${triggerRes.status} | body: ${bodyText}`)
+        console.log('🚀 Gọi trigger-clean thành công:', triggerRes.status)
     } catch (err) {
-        console.error('⚠️ Lỗi khi gọi trigger-clean:', err)
+        console.error('⚠️ Gọi trigger-clean thất bại:', err)
     }
 
     return res.status(200).json({ message: '✅ CLEAN job created and triggered' })
