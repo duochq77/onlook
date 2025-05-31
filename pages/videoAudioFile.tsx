@@ -51,11 +51,15 @@ export default function VideoAudioFilePage() {
                 .createSignedUrl(outputPath, 60)
 
             if (signedUrlData?.signedUrl) {
-                const res = await fetch(signedUrlData.signedUrl, { method: 'GET' })
-                if (res.ok) {
-                    setMergedUrl(signedUrlData.signedUrl)
-                    setIsProcessing(false)
-                    return
+                try {
+                    const res = await fetch(signedUrlData.signedUrl, { method: 'GET' })
+                    if (res.ok) {
+                        setMergedUrl(signedUrlData.signedUrl)
+                        setIsProcessing(false)
+                        return
+                    }
+                } catch (err) {
+                    console.error('❌ Lỗi khi kiểm tra file merged:', err)
                 }
             }
 
