@@ -13,7 +13,7 @@ export const config = {
     },
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function (req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {
         res.setHeader('Allow', ['POST'])
         return res.status(405).json({ error: 'Method Not Allowed' })
@@ -36,19 +36,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const siteUrl = process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL
-    if (!siteUrl) {
-        console.warn('⚠️ Thiếu biến môi trường SITE_URL')
-        return res.status(500).json({ error: 'SITE_URL is not defined' })
-    }
+    console.log('🔍 SITE_URL hiện tại là:', siteUrl)
 
-    try {
-        const response = await fetch(`${siteUrl}/api/trigger-clean`, {
-            method: 'POST',
-        })
-        console.log('🚀 Triggered clean job, status:', response.status)
-    } catch (err) {
-        console.warn('⚠️ Trigger clean failed:', err)
-    }
+    // ❌ Tạm bỏ trigger-clean để bạn kiểm tra Redis
+    // await fetch(`${siteUrl}/api/trigger-clean`, { method: 'POST' })
 
-    return res.status(200).json({ message: '✅ CLEAN job created and triggered' })
+    return res.status(200).json({ message: '✅ CLEAN job created (chưa trigger)' })
 }
