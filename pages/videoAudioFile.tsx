@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { supabase } from '@/services/SupabaseService'
 
 export default function VideoAudioFilePage() {
@@ -36,22 +36,29 @@ export default function VideoAudioFilePage() {
             return
         }
 
-        // Gửi job CLEAN (tạo clean.mp4 từ video gốc)
-        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/create-clean-job`, {
+        // Gửi job clean
+        await fetch('/api/create-clean-job', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ inputVideo: videoPath, outputName })
         })
 
-        // Theo dõi khi file merged xuất hiện → hiện nút livestream
+        // Theo dõi khi merged xuất hiện
         for (let i = 0; i < 30; i++) {
-            const { data } = supabase.storage.from('stream-files').getPublicUrl(outputPath)
-            const res = await fetch(data.publicUrl, { method: 'HEAD' })
-            if (res.ok) {
-                setMergedUrl(data.publicUrl)
-                setIsProcessing(false)
-                return
+            const { data: signedUrlData } = await supabase
+                .storage
+                .from('stream-files')
+                .createSignedUrl(outputPath, 60)
+
+            if (signedUrlData?.signedUrl) {
+                const res = await fetch(signedUrlData.signedUrl, { method: 'HEAD' })
+                if (res.ok) {
+                    setMergedUrl(signedUrlData.signedUrl)
+                    setIsProcessing(false)
+                    return
+                }
             }
+
             await new Promise((r) => setTimeout(r, 3000))
         }
 
@@ -59,7 +66,7 @@ export default function VideoAudioFilePage() {
         setIsProcessing(false)
     }
 
-    const toggleStream = async () => {
+    const toggleStream = () => {
         if (!mergedUrl) return
 
         if (!isStreaming) {
