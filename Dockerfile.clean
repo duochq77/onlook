@@ -1,16 +1,27 @@
-# Dockerfile.clean
 FROM node:20
 
+# 1. Cài đặt FFmpeg
+RUN apt-get update && apt-get install -y ffmpeg
+
+# 2. Tạo thư mục làm việc
 WORKDIR /app
-COPY package*.json ./
+
+# 3. Copy package & cài thư viện
+COPY package.json package-lock.json ./
 RUN npm install
 
+# 4. Cài TypeScript global (nếu bạn không dùng ts-node)
+RUN npm install -g typescript
+
+# 5. Copy toàn bộ source code vào container
 COPY . .
 
-# ✅ Build toàn bộ worker từ TypeScript
-RUN npm run build:worker
+# 6. Biên dịch toàn bộ worker TypeScript
+RUN npx tsc -p tsconfig.worker.json
 
+# 7. Thiết lập biến môi trường và cổng
 ENV PORT=8080
+ENV NODE_ENV=production
 
-# ✅ Gọi đúng file JS tương ứng
+# 8. Chạy đúng file JS đã build
 CMD ["node", "dist/worker/clean-video-worker.js"]
