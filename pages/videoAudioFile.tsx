@@ -36,14 +36,29 @@ export default function VideoAudioFilePage() {
             return
         }
 
-        // Gửi job clean
-        await fetch('/api/create-clean-job', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ inputVideo: videoPath, outputName })
-        })
+        // Gửi job CLEAN
+        try {
+            const res = await fetch('/api/create-clean-job', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ inputVideo: videoPath, outputName }),
+            })
 
-        // Theo dõi khi merged xuất hiện
+            const result = await res.json()
+            console.log('📩 Phản hồi từ create-clean-job:', result)
+
+            if (!res.ok) {
+                alert('❌ Tạo job clean thất bại: ' + (result.error || res.statusText))
+                setIsProcessing(false)
+                return
+            }
+        } catch (err) {
+            alert('❌ Gọi API create-clean-job lỗi: ' + err)
+            setIsProcessing(false)
+            return
+        }
+
+        // Theo dõi kết quả merge
         for (let i = 0; i < 30; i++) {
             const { data: signedUrlData } = await supabase
                 .storage
@@ -59,7 +74,7 @@ export default function VideoAudioFilePage() {
                         return
                     }
                 } catch (err) {
-                    console.error('❌ Lỗi khi kiểm tra file merged:', err)
+                    console.error('❌ Lỗi kiểm tra file merged:', err)
                 }
             }
 
