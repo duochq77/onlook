@@ -18,9 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(405).json({ error: 'Method Not Allowed' })
     }
 
-    // Debug log toàn bộ body
     console.log('📦 Body nhận được:', req.body)
-
     const { inputVideo, outputName } = req.body || {}
 
     if (typeof inputVideo !== 'string' || typeof outputName !== 'string') {
@@ -31,8 +29,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     try {
         console.log('📥 Nhận job CLEAN:', jobData)
-        const pushResult = await redis.rpush('ffmpeg-jobs:clean', JSON.stringify(jobData))
-        console.log('✅ Đẩy job vào Redis:', pushResult)
+        await redis.rpush('ffmpeg-jobs:clean', JSON.stringify(jobData))
+        await redis.set(`debug:clean:push:${outputName}`, JSON.stringify(jobData), { ex: 600 }) // 🪤 Bẫy debug
+        console.log('✅ Đẩy job vào Redis & lưu debug key')
     } catch (err) {
         console.error('❌ Lỗi khi push Redis:', err)
         return res.status(500).json({ error: 'Redis push failed' })
