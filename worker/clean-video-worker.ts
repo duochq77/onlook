@@ -29,11 +29,14 @@ async function runCleanVideoWorker() {
             continue
         }
 
+        await redis.set(`debug:clean:raw:${Date.now()}`, raw, { ex: 600 })
+
         let job
         try {
             job = JSON.parse(raw as string)
         } catch (err) {
             console.error('❌ JSON parse lỗi:', raw)
+            await redis.set(`debug:clean:error:parse:${Date.now()}`, String(err), { ex: 600 })
             continue
         }
 
@@ -46,9 +49,13 @@ async function runCleanVideoWorker() {
             const videoUrl = data.publicUrl
             if (!videoUrl) throw new Error('❌ Không có publicUrl của video')
 
+            await redis.set(`debug:clean:url:${outputName}`, videoUrl, { ex: 600 })
+
             await downloadFile(videoUrl, inputPath)
+            await redis.set(`debug:clean:downloaded:${outputName}`, Date.now(), { ex: 600 })
         } catch (err) {
             console.error('❌ Lỗi tải video từ Supabase:', err)
+            await redis.set(`debug:clean:error:download:${outputName}`, String(err), { ex: 600 })
             continue
         }
 
@@ -56,8 +63,10 @@ async function runCleanVideoWorker() {
             const cmd = `ffmpeg -i "${inputPath}" -an -c:v copy "${cleanPath}"`
             await execPromise(cmd)
             console.log('✅ Đã tạo video sạch:', cleanPath)
+            await redis.set(`debug:clean:ffmpeg:${outputName}`, Date.now(), { ex: 600 })
         } catch (err) {
             console.error('❌ Lỗi FFmpeg khi tách âm thanh:', err)
+            await redis.set(`debug:clean:error:ffmpeg:${outputName}`, String(err), { ex: 600 })
             continue
         }
 
@@ -71,14 +80,15 @@ async function runCleanVideoWorker() {
                 inputAudio,
                 outputName
             }))
+            await redis.set(`debug:clean:pushed-merge:${outputName}`, Date.now(), { ex: 600 })
 
             await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-merge`, {
                 method: 'POST'
             })
-
             console.log('✅ Đã đẩy job merge và gọi trigger-merge')
         } catch (err) {
             console.error('❌ Lỗi khi đẩy job merge:', err)
+            await redis.set(`debug:clean:error:merge:${outputName}`, String(err), { ex: 600 })
             continue
         }
     }
