@@ -36,7 +36,7 @@ export async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     try {
-        await fetch(`${process.env.SITE_URL}/api/trigger-clean`, { method: 'POST' })
+        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-clean`, { method: 'POST' })
         console.log('🚀 Triggered clean job')
     } catch (err) {
         console.warn('⚠️ Trigger clean failed:', err)
