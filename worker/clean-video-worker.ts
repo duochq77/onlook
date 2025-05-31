@@ -48,13 +48,16 @@ async function runCleanVideoWorker() {
         const cleanPath = path.join('/tmp', 'clean.mp4')
 
         try {
-            const { data, error } = supabase.storage.from('stream-files').getPublicUrl(inputVideo)
-            const videoUrl = data?.publicUrl
-            if (error || !videoUrl) {
+            const response = supabase.storage.from('stream-files').getPublicUrl(inputVideo)
+            const data = response.data
+            const error = response.error
+
+            if (error || !data?.publicUrl) {
                 console.error('❌ Không có publicUrl của video', error)
                 continue
             }
 
+            const videoUrl = data.publicUrl
             console.log('🟢 [4] Bắt đầu tải video từ Supabase...')
             await downloadFile(videoUrl, inputPath)
             console.log('✅ [4.1] Đã tải xong video về:', inputPath)
