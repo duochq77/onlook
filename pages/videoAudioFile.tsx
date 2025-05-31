@@ -36,14 +36,14 @@ export default function VideoAudioFilePage() {
             return
         }
 
-        // Gửi job clean
-        await fetch('/api/create-clean-job', {
+        // Gửi job CLEAN
+        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/create-clean-job`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ inputVideo: videoPath, outputName })
         })
 
-        // Theo dõi khi merged xuất hiện
+        // Theo dõi khi file merged xuất hiện → hiện nút livestream
         for (let i = 0; i < 30; i++) {
             const { data: signedUrlData } = await supabase
                 .storage
@@ -51,7 +51,8 @@ export default function VideoAudioFilePage() {
                 .createSignedUrl(outputPath, 60)
 
             if (signedUrlData?.signedUrl) {
-                const res = await fetch(signedUrlData.signedUrl, { method: 'HEAD' })
+                const res = await fetch(signedUrlData.signedUrl, { method: 'GET' }) // Sửa ở đây
+
                 if (res.ok) {
                     setMergedUrl(signedUrlData.signedUrl)
                     setIsProcessing(false)
@@ -66,7 +67,7 @@ export default function VideoAudioFilePage() {
         setIsProcessing(false)
     }
 
-    const toggleStream = () => {
+    const toggleStream = async () => {
         if (!mergedUrl) return
 
         if (!isStreaming) {
