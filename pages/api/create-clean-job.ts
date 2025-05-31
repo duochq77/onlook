@@ -1,5 +1,4 @@
 // pages/api/create-clean-job.ts
-
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { Redis } from '@upstash/redis'
 
@@ -14,7 +13,7 @@ const redis = new Redis({
     token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 })
 
-export async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {
         res.setHeader('Allow', ['POST'])
         return res.status(405).json({ error: 'Method Not Allowed' })
@@ -48,5 +47,4 @@ export async function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(200).json({ message: '✅ CLEAN job created and triggered' })
 }
 
-// 👇 Đây là phần rất quan trọng
 export default handler
