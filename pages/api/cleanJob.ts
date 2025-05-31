@@ -1,4 +1,3 @@
-// pages/api/cleanJob.ts
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { Redis } from '@upstash/redis'
 
@@ -13,7 +12,7 @@ export const config = {
     },
 }
 
-export default async function (req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {
         res.setHeader('Allow', ['POST'])
         return res.status(405).json({ error: 'Method Not Allowed' })
@@ -25,21 +24,25 @@ export default async function (req: NextApiRequest, res: NextApiResponse) {
         return res.status(400).json({ error: 'Missing or invalid inputVideo or outputName' })
     }
 
-    console.log('📥 Nhận job CLEAN:', { inputVideo, outputName })
+    const jobData = { inputVideo, outputName }
 
     try {
-        const result = await redis.rpush('ffmpeg-jobs:clean', JSON.stringify({ inputVideo, outputName }))
-        console.log('✅ Đẩy job vào Redis CLEAN thành công:', result)
+        console.log('📥 Nhận job CLEAN:', jobData)
+        const pushResult = await redis.rpush('ffmpeg-jobs:clean', JSON.stringify(jobData))
+        console.log('✅ Đẩy job vào Redis:', pushResult)
     } catch (err) {
-        console.error('❌ Redis lỗi:', err)
+        console.error('❌ Lỗi khi push Redis:', err)
         return res.status(500).json({ error: 'Redis push failed' })
     }
 
-    const siteUrl = process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL
-    console.log('🔍 SITE_URL hiện tại là:', siteUrl)
+    // Trigger job sau khi đẩy Redis
+    try {
+        const siteURL = process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL
+        await fetch(`${siteURL}/api/trigger-clean`, { method: 'POST' })
+        console.log('🚀 Triggered Cloud Run job')
+    } catch (err) {
+        console.warn('⚠️ Gọi trigger job thất bại:', err)
+    }
 
-    // ❌ Tạm bỏ trigger-clean để bạn kiểm tra Redis
-    // await fetch(`${siteUrl}/api/trigger-clean`, { method: 'POST' })
-
-    return res.status(200).json({ message: '✅ CLEAN job created (chưa trigger)' })
+    return res.status(200).json({ message: '✅ CLEAN job created and triggered' })
 }
