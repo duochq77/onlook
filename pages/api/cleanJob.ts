@@ -1,4 +1,4 @@
-// pages/api/create-clean-job.ts
+// pages/api/cleanJob.ts
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { Redis } from '@upstash/redis'
 
@@ -13,7 +13,7 @@ export const config = {
     },
 }
 
-export async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {
         res.setHeader('Allow', ['POST'])
         return res.status(405).json({ error: 'Method Not Allowed' })
@@ -35,14 +35,20 @@ export async function handler(req: NextApiRequest, res: NextApiResponse) {
         return res.status(500).json({ error: 'Redis push failed' })
     }
 
+    const siteUrl = process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL
+    if (!siteUrl) {
+        console.warn('⚠️ Thiếu biến môi trường SITE_URL')
+        return res.status(500).json({ error: 'SITE_URL is not defined' })
+    }
+
     try {
-        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-clean`, { method: 'POST' })
-        console.log('🚀 Triggered clean job')
+        const response = await fetch(`${siteUrl}/api/trigger-clean`, {
+            method: 'POST',
+        })
+        console.log('🚀 Triggered clean job, status:', response.status)
     } catch (err) {
         console.warn('⚠️ Trigger clean failed:', err)
     }
 
     return res.status(200).json({ message: '✅ CLEAN job created and triggered' })
 }
-
-export default handler
