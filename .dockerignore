@@ -1,16 +1,28 @@
+# Thư mục tạm và build
 node_modules
 .next
 dist
+
+# File media output
 uploads/
 outputs/
 *.mp4
 *.mp3
+
+# File tạm & log
 *.log
 *.zip
 *.tsbuildinfo
+tree.txt
+
+# Biến môi trường nhạy cảm
 .env
 .env.local
-package-lock.json
-yarn.lock
-tree.txt
+
+# Dockerfile (nếu không dùng trong build context)
 Dockerfile.*
+
+# Giữ lại lock file để Docker COPY được
+# ❌ KHÔNG ignore các file sau:
+# package-lock.json
+# yarn.lock
