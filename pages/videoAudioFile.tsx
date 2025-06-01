@@ -10,16 +10,26 @@ export default function VideoAudioFilePage() {
     const [isProcessing, setIsProcessing] = useState(false)
     const [mergedUrl, setMergedUrl] = useState<string | null>(null)
     const [isStreaming, setIsStreaming] = useState(false)
+    const [outputName, setOutputName] = useState<string>('')
+
+    const handleVideoChange = (e) => {
+        setVideoFile(e.target.files?.[0] || null)
+    }
+
+    const handleAudioChange = (e) => {
+        setAudioFile(e.target.files?.[0] || null)
+    }
 
     const handleUpload = async () => {
-        if (!videoFile || !audioFile) return
-        setIsProcessing(true)
+        if (!videoFile || !audioFile) return alert('Vui lòng chọn đầy đủ video và audio')
 
+        setIsProcessing(true)
         const timestamp = Date.now()
         const videoPath = `input-videos/${timestamp}-video.mp4`
         const audioPath = `input-audios/${timestamp}-audio.mp3`
-        const outputName = `${timestamp}-merged.mp4`
-        const outputPath = `outputs/${outputName}`
+        const mergedOutput = `${timestamp}-merged.mp4`
+        const outputPath = `outputs/${mergedOutput}`
+        setOutputName(mergedOutput)
 
         // Upload video
         const videoRes = await supabase.storage.from('stream-files').upload(videoPath, videoFile, { upsert: true })
@@ -38,63 +48,53 @@ export default function VideoAudioFilePage() {
         }
 
         // Gửi job CLEAN
-        try {
-            const res = await fetch('/api/create-clean-job', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ inputVideo: videoPath, outputName }),
-            })
+        const res = await fetch('/api/create-job', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ inputVideo: videoPath, outputName: mergedOutput }),
+        })
 
-            const result = await res.json()
-            console.log('📩 Phản hồi từ create-clean-job:', result)
-
-            if (!res.ok) {
-                alert('❌ Tạo job clean thất bại: ' + (result.error || res.statusText))
-                setIsProcessing(false)
-                return
-            }
-        } catch (err) {
-            alert('❌ Gọi API create-clean-job lỗi: ' + err)
+        const result = await res.json()
+        if (!res.ok) {
+            alert('❌ Tạo job clean thất bại: ' + (result.error || res.statusText))
             setIsProcessing(false)
             return
         }
 
-        // Theo dõi kết quả merge
+        // Theo dõi kết quả merge và lấy signed URL
         for (let i = 0; i < 30; i++) {
-            const { data: signedUrlData } = await supabase
-                .storage
-                .from('stream-files')
-                .createSignedUrl(outputPath, 60)
-
-            if (signedUrlData?.signedUrl) {
-                try {
-                    const res = await fetch(signedUrlData.signedUrl, { method: 'GET' })
-                    if (res.ok) {
-                        setMergedUrl(signedUrlData.signedUrl)
-                        setIsProcessing(false)
-                        return
-                    }
-                } catch (err) {
-                    console.error('❌ Lỗi kiểm tra file merged:', err)
+            const { data } = await supabase.storage.from('stream-files').createSignedUrl(outputPath, 60)
+            if (data?.signedUrl) {
+                const res = await fetch(data.signedUrl)
+                if (res.ok) {
+                    setMergedUrl(data.signedUrl)
+                    setIsProcessing(false)
+                    return
                 }
             }
-
             await new Promise((r) => setTimeout(r, 3000))
         }
 
-        alert('❌ Hệ thống xử lý quá lâu.')
+        alert('❌ Xử lý quá lâu, thử lại sau.')
         setIsProcessing(false)
     }
 
-    const toggleStream = () => {
+    const toggleStream = async () => {
         if (!mergedUrl) return
 
         if (!isStreaming) {
             alert('▶️ Bắt đầu livestream')
             setIsStreaming(true)
         } else {
-            alert('⛔ Đã kết thúc livestream (file chưa xoá)')
+            alert('⛔ Kết thúc livestream (sẽ xoá file sau 5 phút)')
             setIsStreaming(false)
+
+            // Gửi tín hiệu dừng stream
+            await fetch('/api/stop-stream', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ outputName }),
+            })
         }
     }
 
@@ -102,13 +102,8 @@ export default function VideoAudioFilePage() {
         <div style={{ padding: 40, fontFamily: 'sans-serif' }}>
             <h1>📤 Upload video + audio để phát livestream</h1>
 
-            <div style={{ marginBottom: 12 }}>
-                <input type="file" accept="video/mp4" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
-            </div>
-
-            <div style={{ marginBottom: 12 }}>
-                <input type="file" accept="audio/mp3" onChange={(e) => setAudioFile(e.target.files?.[0] || null)} />
-            </div>
+            <input type="file" accept="video/mp4" onChange={handleVideoChange} style={{ marginBottom: 12 }} />
+            <input type="file" accept="audio/mp3" onChange={handleAudioChange} style={{ marginBottom: 12 }} />
 
             <button
                 onClick={handleUpload}
@@ -143,11 +138,9 @@ export default function VideoAudioFilePage() {
                     </button>
 
                     <div style={{ marginTop: 20 }}>
-                        <a href={mergedUrl} download>
-                            ⬇️ Tải video hoàn chỉnh
-                        </a>
+                        <a href={mergedUrl} download>⬇️ Tải video hoàn chỉnh</a>
                         <p style={{ color: 'orange', fontSize: 13 }}>
-                            ⚠️ File đã merge, giữ lại để kiểm tra lỗi nếu cần.
+                            ⚠️ File đã merge, sẽ tự động xoá sau khi kết thúc livestream.
                         </p>
                     </div>
                 </>

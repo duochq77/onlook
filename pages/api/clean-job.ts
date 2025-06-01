@@ -18,7 +18,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(405).json({ error: 'Method Not Allowed' })
     }
 
-    console.log('📦 Body nhận được:', req.body)
     const { inputVideo, outputName } = req.body || {}
 
     if (typeof inputVideo !== 'string' || typeof outputName !== 'string') {
@@ -30,26 +29,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
         console.log('📥 Nhận job CLEAN:', jobData)
         await redis.rpush('ffmpeg-jobs:clean', JSON.stringify(jobData))
-        await redis.set(`debug:clean:push:${outputName}`, JSON.stringify(jobData), { ex: 600 }) // 🪤 Bẫy debug
+        await redis.set(`debug:clean:push:${outputName}`, JSON.stringify(jobData), { ex: 600 })
         console.log('✅ Đẩy job vào Redis & lưu debug key')
     } catch (err) {
         console.error('❌ Lỗi khi push Redis:', err)
         return res.status(500).json({ error: 'Redis push failed' })
     }
 
+    // Gọi Cloud Run Job clean-video-worker thông qua HTTP Trigger
     try {
-        const siteURL = process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL
-        if (!siteURL) throw new Error('SITE_URL không tồn tại')
+        const triggerURL = 'https://asia-southeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/onlook-main/jobs/clean-video-worker:run'
 
-        const triggerRes = await fetch(`${siteURL}/api/trigger-clean`, {
+        const response = await fetch(triggerURL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                Authorization: `Bearer ${process.env.GOOGLE_CLOUD_RUN_TOKEN!}`,
+                'Content-Type': 'application/json',
+            },
         })
 
-        console.log('🚀 Trigger gọi thành công:', triggerRes.status)
+        if (!response.ok) {
+            const errorText = await response.text()
+            console.warn('⚠️ Trigger job thất bại:', errorText)
+        } else {
+            console.log('🚀 Trigger job clean-video-worker thành công:', response.status)
+        }
     } catch (err) {
-        console.warn('⚠️ Gọi trigger job thất bại:', err)
+        console.warn('❌ Không thể gọi HTTP Trigger của clean-video-worker:', err)
     }
 
-    return res.status(200).json({ message: '✅ CLEAN job created and triggered' })
+    return res.status(200).json({ message: '✅ CLEAN job created & triggered via Cloud Run' })
 }

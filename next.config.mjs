@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
-    swcMinify: true,
     env: {
         NEXT_PUBLIC_LIVEKIT_URL: process.env.NEXT_PUBLIC_LIVEKIT_URL,
         NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -14,9 +13,9 @@ const nextConfig = {
         domains: ['lh3.googleusercontent.com', 'cdn.livekit.io'],
     },
     experimental: {
-        serverActions: true // ✅ Giữ lại nếu bạn dùng server actions
-        // ❌ typedRoutes đã bị loại bỏ để Pages Router hoạt động bình thường
-    }
-}
+        serverActions: true // Nếu bạn sử dụng Server Actions
+    },
+    swcMinify: false, // Bỏ swcMinify nếu không cần
+};
 
-export default nextConfig
+export default nextConfig;

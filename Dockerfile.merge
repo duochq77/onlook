@@ -2,16 +2,21 @@
 
 FROM node:20
 
+# 1. Tạo thư mục làm việc
 WORKDIR /app
+
+# 2. Copy package.json và package-lock.json vào container và cài đặt các phụ thuộc
 COPY package*.json ./
 RUN npm install
 
+# 3. Copy toàn bộ mã nguồn vào container
 COPY . .
 
-# ✅ Biên dịch toàn bộ mã nguồn TypeScript sang JavaScript
+# 4. Biên dịch toàn bộ mã nguồn TypeScript sang JavaScript
 RUN npm run build:worker
 
+# 5. Thiết lập biến môi trường
 ENV NODE_ENV=production
 
-# ✅ Gọi đúng file merge đã được build
+# 6. Chạy file JavaScript đã được build
 CMD ["node", "dist/worker/merge-video-worker.js"]

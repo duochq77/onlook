@@ -1,61 +1,66 @@
 import 'dotenv/config'
 import { Redis } from '@upstash/redis'
 import { createClient } from '@supabase/supabase-js'
-import http from 'http'
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 })
 
 const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-async function runCleanupWorker() {
-    console.log('🧹 Cleanup Livestream Worker started...')
+async function runCleanupLivestreamWorker() {
+    console.log('🧹 Bắt đầu cleanup-livestream-worker...')
 
-    while (true) {
-        try {
-            const keys = await redis.keys('cleanup-after:*')
+    // Lấy toàn bộ key cleanup-after:...
+    const keys = await redis.keys('cleanup-after:*')
+    console.log(`🔍 Tìm thấy ${keys.length} key cleanup-after`)
 
-            for (const key of keys) {
-                const value = await redis.get<string>(key)
-                if (!value) continue
-
-                const { fileName, timestamp } = JSON.parse(value)
-                const now = Date.now()
-
-                // ✅ Chờ đúng 10 phút sau khi kết thúc livestream
-                if (now - timestamp >= 10 * 60 * 1000) {
-                    console.log(`🗑️ Đã đủ 10 phút — xoá file: ${fileName}`)
-
-                    const { error } = await supabase.storage.from('stream-files').remove([fileName])
-
-                    if (error) {
-                        console.error('❌ Lỗi xoá file:', error)
-                    } else {
-                        console.log(`✅ Đã xoá file khỏi Supabase: ${fileName}`)
-                        await redis.del(key)
-                    }
-                }
-            }
-        } catch (err) {
-            console.error('❌ Lỗi trong cleanup livestream worker:', err)
+    for (const key of keys) {
+        const status = await redis.get(key)
+        if (status !== 'pending') {
+            console.log(`❎ Bỏ qua key ${key} vì đã xử lý hoặc không hợp lệ`)
+            continue
         }
 
-        await new Promise((res) => setTimeout(res, 10_000)) // nghỉ 10s giữa các lượt
+        const outputName = key.replace('cleanup-after:', '')
+        const path = `outputs/${outputName}`
+
+        // Kiểm tra file có tồn tại không
+        const { data: fileStat, error: statError } = await supabase
+            .storage
+            .from('stream-files')
+            .list('outputs', { search: outputName })
+
+        if (statError || !fileStat || fileStat.length === 0) {
+            console.warn(`⚠️ File không tồn tại hoặc lỗi đọc: ${outputName}`)
+            await redis.del(key)
+            continue
+        }
+
+        // Xoá file
+        const { error: deleteError } = await supabase
+            .storage
+            .from('stream-files')
+            .remove([path])
+
+        if (deleteError) {
+            console.error(`❌ Lỗi khi xoá file ${path}:`, deleteError)
+        } else {
+            console.log(`🗑 Đã xoá file ${path} khỏi Supabase`)
+        }
+
+        // Xoá key khỏi Redis
+        await redis.del(key)
+        console.log(`✅ Đã xoá Redis key: ${key}`)
     }
+
+    console.log('🎉 cleanup-livestream-worker hoàn tất.')
 }
 
-runCleanupWorker()
-
-// ✅ HTTP server giữ tiến trình sống
-const port = parseInt(process.env.PORT || '8080', 10)
-http.createServer((_, res) => {
-    res.writeHead(200)
-    res.end('🧹 Cleanup livestream worker is running')
-}).listen(port, () => {
-    console.log(`✅ Dummy server is listening on port ${port}`)
+runCleanupLivestreamWorker().catch((err) => {
+    console.error('❌ Lỗi tổng thể cleanup-livestream-worker:', err)
 })

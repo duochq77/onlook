@@ -4,102 +4,105 @@ import { createClient } from '@supabase/supabase-js'
 import fs from 'fs'
 import path from 'path'
 import { exec } from 'child_process'
-import https from 'https'
-import http from 'http'
+import { promisify } from 'util'
 
-console.log('🎬 Merge Video Worker khởi động...')
+const execPromise = promisify(exec)
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 })
 
 const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-async function runMergeVideoWorker() {
+async function runMergeWorker() {
+    console.log('🎬 Merge Video Worker bắt đầu...')
+
     while (true) {
-        const raw = await redis.lpop('ffmpeg-jobs:merge')
-        if (!raw) {
-            await new Promise((r) => setTimeout(r, 3000))
+        const job = await redis.lpop<string>('ffmpeg-jobs:merge')
+        if (!job) {
+            await new Promise((r) => setTimeout(r, 2000))
             continue
         }
 
-        let job
+        const { cleanVideo, audio, outputName } = JSON.parse(job)
+        console.log('📦 Nhận job MERGE:', { cleanVideo, audio, outputName })
+
+        const tmpCleanVideo = path.join('/tmp', 'clean-video.mp4')
+        const tmpAudio = path.join('/tmp', 'audio.mp3')
+        const tmpOutput = path.join('/tmp', outputName)
+
+        // 1. Tải cleanVideo từ Supabase về RAM
+        const { data: cleanVideoData, error: err1 } = await supabase.storage
+            .from('stream-files')
+            .download(cleanVideo)
+        if (err1 || !cleanVideoData) {
+            console.error('❌ Không tải được cleanVideo:', err1)
+            continue
+        }
+        fs.writeFileSync(tmpCleanVideo, Buffer.from(await cleanVideoData.arrayBuffer()))
+
+        // 2. Tải audio từ Supabase về RAM
+        const { data: audioData, error: err2 } = await supabase.storage
+            .from('stream-files')
+            .download(audio)
+        if (err2 || !audioData) {
+            console.error('❌ Không tải được audio:', err2)
+            continue
+        }
+        fs.writeFileSync(tmpAudio, Buffer.from(await audioData.arrayBuffer()))
+
+        // 3. Dùng FFmpeg để ghép video và audio → ra tmpOutput
         try {
-            job = JSON.parse(raw as string)
+            console.log('🔧 Ghép video + audio...')
+            await execPromise(`ffmpeg -y -i ${tmpCleanVideo} -i ${tmpAudio} -c:v copy -c:a aac ${tmpOutput}`)
+            console.log('✅ Ghép xong:', tmpOutput)
         } catch (err) {
-            console.error('❌ JSON parse lỗi:', raw)
+            console.error('❌ Lỗi khi chạy FFmpeg merge:', err)
             continue
         }
 
-        const { cleanVideoPath, inputAudio, outputName } = job
-        const audioPath = path.join('/tmp', 'audio.mp3')
-        const outputPath = path.join('/tmp', outputName)
-
+        // 4. Upload file hoàn chỉnh lên Supabase
         try {
-            const { data } = supabase.storage.from('stream-files').getPublicUrl(inputAudio)
-            const audioUrl = data.publicUrl
-            if (!audioUrl) throw new Error('Không lấy được public URL của audio')
-            await downloadFile(audioUrl, audioPath)
-        } catch (err) {
-            console.error('❌ Lỗi tải audio:', err)
-            continue
-        }
-
-        try {
-            const cmd = `ffmpeg -i "${cleanVideoPath}" -i "${audioPath}" -c:v copy -c:a aac -strict experimental "${outputPath}"`
-            await execPromise(cmd)
-            console.log('✅ Đã merge xong:', outputPath)
-        } catch (err) {
-            console.error('❌ Lỗi FFmpeg khi ghép video + audio:', err)
-            continue
-        }
-
-        try {
-            const fileBuffer = fs.readFileSync(outputPath)
-            const { error } = await supabase
-                .storage
+            const { error: uploadError } = await supabase.storage
                 .from('stream-files')
-                .upload(`outputs/${outputName}`, fileBuffer, {
+                .upload(`outputs/${outputName}`, fs.createReadStream(tmpOutput), {
                     contentType: 'video/mp4',
-                    upsert: true
+                    duplex: 'half',
                 })
 
-            if (error) throw error
+            if (uploadError) {
+                console.error('❌ Lỗi upload lên Supabase:', uploadError)
+                continue
+            }
 
-            console.log('✅ Đã upload merged.mp4 lên Supabase')
+            console.log('📤 Upload lên Supabase thành công:', `outputs/${outputName}`)
         } catch (err) {
-            console.error('❌ Lỗi khi upload merged.mp4:', err)
+            console.error('❌ Lỗi khi upload merged video:', err)
             continue
+        }
+
+        // 5. Gọi job cleanup-worker.ts để dọn dẹp file gốc
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/trigger-cleanup`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cleanVideo, audio }),
+            })
+
+            if (!res.ok) {
+                const text = await res.text()
+                console.warn('⚠️ Trigger cleanup thất bại:', text)
+            } else {
+                console.log('🧹 Đã gọi job cleanup-worker.ts')
+            }
+        } catch (err) {
+            console.warn('⚠️ Không gọi được API cleanup:', err)
         }
     }
 }
 
-function execPromise(cmd: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-        exec(cmd, (err) => (err ? reject(err) : resolve()))
-    })
-}
-
-function downloadFile(url: string, dest: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-        const file = fs.createWriteStream(dest)
-        https.get(url, (res) => {
-            if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}`))
-            res.pipe(file)
-            file.on('finish', () => file.close(() => resolve()))
-        }).on('error', reject)
-    })
-}
-
-// HTTP server giữ job sống trên Cloud Run Job
-const port = parseInt(process.env.PORT || '8080', 10)
-http.createServer((_, res) => {
-    res.writeHead(200)
-    res.end('✅ merge-video-worker is alive')
-}).listen(port)
-
-runMergeVideoWorker()
+runMergeWorker().catch((err) => console.error('❌ Worker crash:', err))

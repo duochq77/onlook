@@ -7,21 +7,24 @@ RUN apt-get update && apt-get install -y ffmpeg
 WORKDIR /app
 
 # 3. Copy package & cài thư viện
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json ./  # Copy package.json và package-lock.json
 RUN npm install
 
 # 4. Cài TypeScript global (nếu bạn không dùng ts-node)
 RUN npm install -g typescript
 
 # 5. Copy toàn bộ source code vào container
-COPY . .
+COPY . .  # Copy tất cả source code vào container
 
 # 6. Biên dịch toàn bộ worker TypeScript
-RUN npx tsc -p tsconfig.worker.json
+RUN npx tsc -p tsconfig.worker.json  # Biên dịch TypeScript vào thư mục dist
 
 # 7. Thiết lập biến môi trường và cổng
 ENV PORT=8080
 ENV NODE_ENV=production
 
-# 8. Chạy đúng file JS đã build
+# 8. Kiểm tra và đảm bảo thư mục dist và file clean-video-worker.js đã có trong container
+RUN ls -l /app/dist/worker  # Kiểm tra file đã được tạo đúng thư mục
+
+# 9. Chạy đúng file JS đã build
 CMD ["node", "dist/worker/clean-video-worker.js"]

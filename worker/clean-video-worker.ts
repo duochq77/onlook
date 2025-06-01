@@ -1,126 +1,87 @@
 import 'dotenv/config'
-import { Redis } from '@upstash/redis'
 import { createClient } from '@supabase/supabase-js'
+import { Redis } from '@upstash/redis'
+import { exec } from 'child_process'
 import fs from 'fs'
 import path from 'path'
-import { exec } from 'child_process'
-import http from 'http'
-import https from 'https'
+import util from 'util'
 
-console.log('🟢 [1] Worker khởi động...')
-
-const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!
-})
+const execPromise = util.promisify(exec)
 
 const supabase = createClient(
     process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    process.env.SUPABASE_ANON_KEY!
 )
 
-async function runCleanVideoWorker() {
-    console.log('🟢 [2] Bắt đầu vòng lặp lấy job từ Redis...')
+const redis = new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+})
+
+async function runWorker() {
+    console.log('🎬 CLEAN Video Worker đang chạy...')
 
     while (true) {
-        const raw = await redis.lpop('ffmpeg-jobs:clean')
-        if (!raw) {
-            console.log('🟡 [2.1] Không có job trong Redis, nghỉ 3s...')
+        const job = await redis.lpop<string>('ffmpeg-jobs:clean')
+        if (!job) {
             await new Promise((r) => setTimeout(r, 3000))
             continue
         }
 
-        console.log('🟢 [2.2] Đã lấy được job từ Redis:', raw)
-
-        let job
         try {
-            console.log('🟢 [2.4] Đang parse job:', raw);
-            job = JSON.parse(raw as string)  // Kiểm tra dữ liệu trước khi parse
-        } catch (err) {
-            console.error('❌ [2.3] JSON parse lỗi:', raw)
-            continue
-        }
+            const { inputVideo, outputName } = JSON.parse(job)
+            console.log('📥 Nhận job CLEAN:', inputVideo)
 
-        const { inputVideo, outputName } = job
-        console.log('🟢 [3] Job chi tiết:', inputVideo, outputName)
+            const tmpInputPath = path.join('/tmp', 'input.mp4')
+            const tmpOutputPath = path.join('/tmp', `${outputName}-clean.mp4`)
 
-        const inputPath = path.join('/tmp', 'input.mp4')
-        const cleanPath = path.join('/tmp', 'clean.mp4')
+            // 🧲 Tải video từ Supabase
+            const { data, error } = await supabase
+                .storage
+                .from(process.env.SUPABASE_STORAGE_BUCKET!)
+                .download(inputVideo)
 
-        try {
-            const response = supabase.storage.from('stream-files').getPublicUrl(inputVideo)
-            const data = response.data
-            const error = response.error
-
-            if (error || !data?.publicUrl) {
-                console.error('❌ Không có publicUrl của video', error)
+            if (error || !data) {
+                console.error('❌ Lỗi tải video từ Supabase:', error)
                 continue
             }
 
-            const videoUrl = data.publicUrl
-            console.log('🟢 [4] Bắt đầu tải video từ Supabase...')
-            await downloadFile(videoUrl, inputPath)
-            console.log('✅ [4.1] Đã tải xong video về:', inputPath)
-        } catch (err) {
-            console.error('❌ [4.2] Lỗi tải video:', err)
-            continue
-        }
+            const fileBuffer = await data.arrayBuffer()
+            fs.writeFileSync(tmpInputPath, Buffer.from(fileBuffer))
 
-        try {
-            console.log('🟢 [5] Chạy FFmpeg để tách audio...')
-            const cmd = `ffmpeg -i "${inputPath}" -an -c:v copy "${cleanPath}"`
+            // ✂️ Tách audio khỏi video
+            const cmd = `ffmpeg -y -i ${tmpInputPath} -an -c:v copy ${tmpOutputPath}`
+            console.log('⚙️ Chạy FFmpeg:', cmd)
             await execPromise(cmd)
-            console.log('✅ [5.1] Đã tạo video sạch:', cleanPath)
-        } catch (err) {
-            console.error('❌ [5.2] FFmpeg lỗi:', err)
-            continue
-        }
 
-        try {
-            const inputAudio = inputVideo
-                .replace('input-videos/', 'input-audios/')
-                .replace('-video.mp4', '-audio.mp3')
+            console.log('✅ Đã tạo video sạch:', tmpOutputPath)
 
-            console.log('🟢 [6] Gửi job MERGE vào Redis...')
-            await redis.rpush('ffmpeg-jobs:merge', JSON.stringify({
-                cleanVideoPath: cleanPath,
-                inputAudio,
-                outputName
-            }))
+            // 📤 Gọi API /api/merge-job.ts
+            const siteURL = process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL
+            if (!siteURL) {
+                throw new Error('SITE_URL chưa được cấu hình trong biến môi trường')
+            }
 
-            await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/trigger-merge`, {
-                method: 'POST'
+            const res = await fetch(`${siteURL}/api/merge-job`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    cleanVideoPath: tmpOutputPath,
+                    originalAudioPath: inputVideo.replace('input-videos/', 'input-audios/').replace('.mp4', '.mp3'),
+                    outputName,
+                }),
             })
 
-            console.log('✅ [6.1] Đã đẩy MERGE job và gọi trigger')
+            if (!res.ok) {
+                const errorText = await res.text()
+                console.warn('⚠️ Gọi merge-job thất bại:', errorText)
+            } else {
+                console.log('🚀 Đã gọi API merge-job thành công')
+            }
         } catch (err) {
-            console.error('❌ [6.2] Lỗi khi trigger merge:', err)
-            continue
+            console.error('💥 Lỗi xử lý CLEAN:', err)
         }
     }
 }
 
-function execPromise(cmd: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-        exec(cmd, (err) => (err ? reject(err) : resolve()))
-    })
-}
-
-function downloadFile(url: string, dest: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-        const file = fs.createWriteStream(dest)
-        https.get(url, (res) => {
-            if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}`))
-            res.pipe(file)
-            file.on('finish', () => file.close(() => resolve()))
-        }).on('error', reject)
-    })
-}
-
-const port = parseInt(process.env.PORT || '8080', 10)
-http.createServer((_, res) => {
-    res.writeHead(200)
-    res.end('✅ clean-video-worker is alive')
-}).listen(port)
-
-runCleanVideoWorker()
+runWorker().catch(console.error)
