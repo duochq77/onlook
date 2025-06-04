@@ -1,28 +1,34 @@
-# Thư mục tạm và build
+# ❌ Bỏ toàn bộ thư viện cài sẵn – Docker sẽ cài lại trong image
 node_modules
+
+# ❌ Bỏ cache build của Next.js
 .next
-dist
 
-# File media output
-uploads/
-outputs/
-*.mp4
-*.mp3
-
-# File tạm & log
-*.log
-*.zip
-*.tsbuildinfo
-tree.txt
-
-# Biến môi trường nhạy cảm
+# ❌ Bỏ file môi trường cá nhân
 .env
 .env.local
 
-# Dockerfile (nếu không dùng trong build context)
-Dockerfile.*
+# ❌ Bỏ cache hệ thống
+.vscode
+.idea
+.DS_Store
+*.log
+*.swp
 
-# Giữ lại lock file để Docker COPY được
-# ❌ KHÔNG ignore các file sau:
-# package-lock.json
-# yarn.lock
+# ❌ Bỏ các file test nếu có
+__tests__/
+test/
+*.test.ts
+*.test.js
+
+# ✅ Giữ lại các file cấu hình/build:
+!package.json
+!package-lock.json
+!tsconfig.worker.json
+!Dockerfile*
+
+# ✅ Giữ lại source code worker:
+!worker/
+!dist/
+!src/
+!pages/
