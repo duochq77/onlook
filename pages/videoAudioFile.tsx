@@ -48,7 +48,7 @@ export default function VideoAudioFilePage() {
         }
 
         // Gửi job CLEAN
-        const res = await fetch('/api/create-job', {
+        const res = await fetch('/api/clean-job', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ inputVideo: videoPath, outputName: mergedOutput }),
