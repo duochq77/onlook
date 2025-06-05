@@ -1,4 +1,3 @@
-import 'dotenv/config'
 import { createClient } from '@supabase/supabase-js'
 import { Redis } from '@upstash/redis'
 import { exec } from 'child_process'
@@ -8,9 +7,10 @@ import util from 'util'
 
 const execPromise = util.promisify(exec)
 
+// ✅ Sửa đúng key thành SUPABASE_ANON_KEY (khớp biến môi trường Cloud Run)
 const supabase = createClient(
     process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY! // ✅ Đã sửa chỗ này
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
 const redis = new Redis({
