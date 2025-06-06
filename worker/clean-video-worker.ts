@@ -33,10 +33,10 @@ async function runWorker() {
         if (typeof rawJob === 'string') {
             job = JSON.parse(rawJob)
         } else {
-            job = rawJob as any
+            throw new Error('Dữ liệu từ Redis không phải là chuỗi JSON hợp lệ.')
         }
     } catch (err) {
-        console.error('💥 Lỗi: Không thể parse job JSON:', rawJob)
+        console.error('💥 Lỗi: Không thể parse job JSON:', rawJob, err)
         return
     }
 
@@ -72,7 +72,6 @@ async function runWorker() {
         return
     }
 
-    // Gọi merge-job
     const siteURL = process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL
     if (!siteURL) {
         console.error('❌ Thiếu biến môi trường SITE_URL')

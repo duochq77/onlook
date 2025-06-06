@@ -29,20 +29,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     try {
         console.log('📥 Nhận job CLEAN:', jobDataString)
-
-        // Đẩy vào hàng đợi Redis
         await redis.rpush('ffmpeg-jobs:clean', jobDataString)
-
-        // Lưu key debug tạm thời (600 giây)
         await redis.set(`debug:clean:push:${outputName}`, jobDataString, { ex: 600 })
-
         console.log('✅ Đã đẩy job vào Redis và lưu debug key')
     } catch (err) {
         console.error('❌ Redis push failed:', err)
         return res.status(500).json({ error: 'Redis push failed' })
     }
 
-    // Gọi Cloud Run Job bằng HTTP Trigger
     try {
         const triggerURL =
             'https://asia-southeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/onlook-main/jobs/clean-video-worker:run'
