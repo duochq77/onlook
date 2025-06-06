@@ -27,21 +27,25 @@ async function runWorker() {
         return
     }
 
+    console.log('📥 Dữ liệu từ Redis:', rawJob)
+
     let job: { inputVideo: string; outputName: string }
 
     try {
         if (typeof rawJob === 'string') {
             job = JSON.parse(rawJob)
+        } else if (typeof rawJob === 'object' && rawJob !== null) {
+            job = rawJob as any
         } else {
-            throw new Error('Dữ liệu từ Redis không phải là chuỗi JSON hợp lệ.')
+            throw new Error('Dữ liệu job không hợp lệ')
         }
     } catch (err) {
-        console.error('💥 Lỗi: Không thể parse job JSON:', rawJob, err)
+        console.error('💥 Lỗi parse JSON:', rawJob, err)
         return
     }
 
     const { inputVideo, outputName } = job
-    console.log('📥 Nhận job CLEAN:', job)
+    console.log('📦 Nhận job CLEAN:', job)
 
     const tmpInputPath = path.join('/tmp', 'input.mp4')
     const tmpOutputPath = path.join('/tmp', 'clean-video.mp4')
@@ -57,8 +61,7 @@ async function runWorker() {
         return
     }
 
-    const fileBuffer = await data.arrayBuffer()
-    fs.writeFileSync(tmpInputPath, Buffer.from(fileBuffer))
+    fs.writeFileSync(tmpInputPath, Buffer.from(await data.arrayBuffer()))
 
     const ffmpegCmd = `ffmpeg -y -i ${tmpInputPath} -an -c:v copy ${tmpOutputPath} 2> ${errorLogPath}`
     console.log('⚙️ Chạy FFmpeg:', ffmpegCmd)
@@ -82,11 +85,9 @@ async function runWorker() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            cleanVideoPath: tmpOutputPath,
-            originalAudioPath: inputVideo
-                .replace('input-videos/', 'input-audios/')
-                .replace('-video.mp4', '-audio.mp3'),
-            outputName,
+            cleanVideo: `stream-files/clean-videos/${outputName}`,
+            audio: `stream-files/input-audios/${outputName.replace('.mp4', '.mp3')}`,
+            outputName: outputName.replace('.mp4', '-merged.mp4'),
         }),
     })
 

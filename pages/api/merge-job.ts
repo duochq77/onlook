@@ -16,25 +16,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(405).json({ error: 'Method Not Allowed' })
     }
 
-    const { outputName } = req.body
-    if (typeof outputName !== 'string') {
-        return res.status(400).json({ error: 'Missing outputName' })
+    const { cleanVideo, audio, outputName } = req.body
+
+    if (!cleanVideo || !audio || !outputName) {
+        return res.status(400).json({ error: 'Thiếu dữ liệu merge job' })
     }
 
-    const cleanVideoPath = `stream-files/clean-videos/${outputName}`
-    const audioPath = `stream-files/input-audios/${outputName.replace('.mp4', '.mp3')}`
-    const mergedOutputName = outputName.replace('.mp4', '-merged.mp4')
-
-    const jobData = {
-        cleanVideo: cleanVideoPath,
-        audio: audioPath,
-        outputName: mergedOutputName,
-    }
+    const jobData = { cleanVideo, audio, outputName }
 
     try {
         console.log('🎬 Gửi job MERGE:', jobData)
         await redis.rpush('ffmpeg-jobs:merge', JSON.stringify(jobData))
-        await redis.set(`debug:merge:push:${mergedOutputName}`, JSON.stringify(jobData), { ex: 600 })
+        await redis.set(`debug:merge:push:${outputName}`, JSON.stringify(jobData), { ex: 600 })
     } catch (err) {
         console.error('❌ Redis push lỗi:', err)
         return res.status(500).json({ error: 'Redis push failed' })
