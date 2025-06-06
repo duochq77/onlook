@@ -13,11 +13,11 @@ export default function VideoAudioFilePage() {
     const [isStreaming, setIsStreaming] = useState(false)
     const [outputName, setOutputName] = useState<string>('')
 
-    const handleVideoChange = (e) => {
+    const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setVideoFile(e.target.files?.[0] || null)
     }
 
-    const handleAudioChange = (e) => {
+    const handleAudioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setAudioFile(e.target.files?.[0] || null)
     }
 
@@ -64,7 +64,17 @@ export default function VideoAudioFilePage() {
 
         // Theo dõi kết quả merge và lấy signed URL
         for (let i = 0; i < 30; i++) {
-            const { data } = await supabase.storage.from('stream-files').createSignedUrl(outputPath, 60)
+            const { data, error } = await supabase
+                .storage
+                .from('stream-files')
+                .createSignedUrl(outputPath, 60) // thời hạn 60 giây
+
+            if (error) {
+                console.error('❌ Lỗi tạo signed URL:', error.message)
+                await new Promise((r) => setTimeout(r, 3000))
+                continue
+            }
+
             if (data?.signedUrl) {
                 const res = await fetch(data.signedUrl)
                 if (res.ok) {
@@ -73,6 +83,7 @@ export default function VideoAudioFilePage() {
                     return
                 }
             }
+
             await new Promise((r) => setTimeout(r, 3000))
         }
 
@@ -90,7 +101,6 @@ export default function VideoAudioFilePage() {
             alert('⛔ Kết thúc livestream (sẽ xoá file sau 5 phút)')
             setIsStreaming(false)
 
-            // Gửi tín hiệu dừng stream
             await fetch('/api/stop-stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
