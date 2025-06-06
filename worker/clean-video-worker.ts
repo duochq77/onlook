@@ -21,7 +21,7 @@ const redis = new Redis({
 async function runWorker() {
     console.log('🎬 CLEAN Video Worker đang chạy...')
 
-    const rawJob = await redis.lpop<string>('ffmpeg-jobs:clean')
+    const rawJob = await redis.lpop('ffmpeg-jobs:clean')
     if (!rawJob) {
         console.log('⏹ Không có job nào trong hàng đợi. Kết thúc worker.')
         return
@@ -30,7 +30,11 @@ async function runWorker() {
     let job: { inputVideo: string; outputName: string }
 
     try {
-        job = JSON.parse(rawJob)
+        if (typeof rawJob === 'string') {
+            job = JSON.parse(rawJob)
+        } else {
+            job = rawJob as any
+        }
     } catch (err) {
         console.error('💥 Lỗi: Không thể parse job JSON:', rawJob)
         return
@@ -80,7 +84,9 @@ async function runWorker() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             cleanVideoPath: tmpOutputPath,
-            originalAudioPath: inputVideo.replace('input-videos/', 'input-audios/').replace('-video.mp4', '-audio.mp3'),
+            originalAudioPath: inputVideo
+                .replace('input-videos/', 'input-audios/')
+                .replace('-video.mp4', '-audio.mp3'),
             outputName,
         }),
     })
