@@ -1,4 +1,3 @@
-// Force rebuild on Vercel: 2025-06-06
 'use client'
 export const dynamic = 'force-dynamic'
 
@@ -13,6 +12,23 @@ export default function VideoAudioFilePage() {
     const [isStreaming, setIsStreaming] = useState(false)
     const [outputName, setOutputName] = useState<string>('')
 
+    const createFoldersIfNeeded = async () => {
+        const dummy = new File(["keep"], "keep.txt", { type: 'text/plain' })
+
+        const paths = [
+            'input-videos/.keep',
+            'input-audios/.keep',
+            'outputs/.keep',
+        ]
+
+        for (const path of paths) {
+            const { error } = await supabase.storage.from('stream-files').upload(path, dummy, { upsert: false })
+            if (error && !error.message.includes('The resource already exists')) {
+                console.warn('⚠️ Lỗi tạo thư mục:', path, error.message)
+            }
+        }
+    }
+
     const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setVideoFile(e.target.files?.[0] || null)
     }
@@ -25,6 +41,8 @@ export default function VideoAudioFilePage() {
         if (!videoFile || !audioFile) return alert('Vui lòng chọn đầy đủ video và audio')
 
         setIsProcessing(true)
+        await createFoldersIfNeeded() // 🔧 Tạo thư mục nếu chưa có
+
         const timestamp = Date.now()
         const videoPath = `input-videos/${timestamp}-video.mp4`
         const audioPath = `input-audios/${timestamp}-audio.mp3`
@@ -67,7 +85,7 @@ export default function VideoAudioFilePage() {
             const { data, error } = await supabase
                 .storage
                 .from('stream-files')
-                .createSignedUrl(outputPath, 60) // thời hạn 60 giây
+                .createSignedUrl(outputPath, 60)
 
             if (error) {
                 console.error('❌ Lỗi tạo signed URL:', error.message)
