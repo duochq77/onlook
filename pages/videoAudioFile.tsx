@@ -1,3 +1,4 @@
+// Force rebuild on Vercel: 2025-06-06
 'use client'
 export const dynamic = 'force-dynamic'
 
