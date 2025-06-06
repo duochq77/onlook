@@ -36,7 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(500).json({ error: 'Redis push failed' })
     }
 
-    // Gọi Cloud Run Job clean-video-worker thông qua HTTP Trigger
+    // Gọi Cloud Run Job clean-video-worker
     try {
         const triggerURL = 'https://asia-southeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/onlook-main/jobs/clean-video-worker:run'
 

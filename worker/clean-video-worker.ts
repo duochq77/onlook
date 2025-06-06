@@ -7,13 +7,11 @@ import util from 'util'
 
 const execPromise = util.promisify(exec)
 
-// ✅ Khởi tạo Supabase
 const supabase = createClient(
     process.env.SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// ✅ Khởi tạo Redis
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
     token: process.env.UPSTASH_REDIS_REST_TOKEN!,
@@ -22,20 +20,20 @@ const redis = new Redis({
 async function runWorker() {
     console.log('🎬 CLEAN Video Worker đang chạy...')
 
-    const job = await redis.lpop<string>('ffmpeg-jobs:clean')
-    if (!job) {
+    const rawJob = await redis.lpop<string>('ffmpeg-jobs:clean')
+    if (!rawJob) {
         console.log('⏹ Không có job nào trong hàng đợi. Kết thúc worker.')
         return
     }
 
     try {
-        const { inputVideo, outputName } = JSON.parse(job)
+        const { inputVideo, outputName } = JSON.parse(rawJob)
         console.log('📥 Nhận job CLEAN:', inputVideo)
 
         const tmpInputPath = path.join('/tmp', 'input.mp4')
         const tmpOutputPath = path.join('/tmp', `${outputName}-clean.mp4`)
+        const errorLogPath = path.join('/tmp', 'ffmpeg-error.log')
 
-        // 🧲 Tải video từ Supabase
         const { data, error } = await supabase
             .storage
             .from(process.env.SUPABASE_STORAGE_BUCKET!)
@@ -49,17 +47,20 @@ async function runWorker() {
         const fileBuffer = await data.arrayBuffer()
         fs.writeFileSync(tmpInputPath, Buffer.from(fileBuffer))
 
-        // ✂️ Tách audio khỏi video
-        const cmd = `ffmpeg -y -i ${tmpInputPath} -an -c:v copy ${tmpOutputPath}`
+        const cmd = `ffmpeg -y -i ${tmpInputPath} -an -c:v copy ${tmpOutputPath} 2> ${errorLogPath}`
         console.log('⚙️ Chạy FFmpeg:', cmd)
-        await execPromise(cmd)
-        console.log('✅ Đã tạo video sạch:', tmpOutputPath)
 
-        // 📤 Gọi API /api/merge-job.ts
-        const siteURL = process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL
-        if (!siteURL) {
-            throw new Error('SITE_URL chưa được cấu hình trong biến môi trường')
+        try {
+            await execPromise(cmd)
+            console.log('✅ FFmpeg chạy xong → tạo video sạch:', tmpOutputPath)
+        } catch (ffmpegError) {
+            const ffmpegLogs = fs.readFileSync(errorLogPath, 'utf-8')
+            console.error('💥 FFmpeg lỗi:', ffmpegLogs)
+            return
         }
+
+        const siteURL = process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL
+        if (!siteURL) throw new Error('SITE_URL chưa được cấu hình trong biến môi trường')
 
         const res = await fetch(`${siteURL}/api/merge-job`, {
             method: 'POST',
@@ -77,6 +78,7 @@ async function runWorker() {
         } else {
             console.log('🚀 Đã gọi API merge-job thành công')
         }
+
     } catch (err) {
         console.error('💥 Lỗi xử lý CLEAN:', err)
     }
