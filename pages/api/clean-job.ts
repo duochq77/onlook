@@ -25,19 +25,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const jobData = { inputVideo, outputName }
+    const jobDataString = JSON.stringify(jobData)
 
     try {
-        // ✅ Sửa: dùng JSON.stringify để log đúng
-        console.log('📥 Nhận job CLEAN:', JSON.stringify(jobData))
-        await redis.rpush('ffmpeg-jobs:clean', JSON.stringify(jobData))
-        await redis.set(`debug:clean:push:${outputName}`, JSON.stringify(jobData), { ex: 600 })
-        console.log('✅ Đẩy job vào Redis & lưu debug key')
+        console.log('📥 Nhận job CLEAN:', jobDataString)
+
+        // Đẩy vào hàng đợi Redis
+        await redis.rpush('ffmpeg-jobs:clean', jobDataString)
+
+        // Lưu key debug tạm thời (600 giây)
+        await redis.set(`debug:clean:push:${outputName}`, jobDataString, { ex: 600 })
+
+        console.log('✅ Đã đẩy job vào Redis và lưu debug key')
     } catch (err) {
-        console.error('❌ Lỗi khi push Redis:', err)
+        console.error('❌ Redis push failed:', err)
         return res.status(500).json({ error: 'Redis push failed' })
     }
 
-    // Gọi Cloud Run Job clean-video-worker
+    // Gọi Cloud Run Job bằng HTTP Trigger
     try {
         const triggerURL =
             'https://asia-southeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/onlook-main/jobs/clean-video-worker:run'
@@ -52,13 +57,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         if (!response.ok) {
             const errorText = await response.text()
-            console.warn('⚠️ Trigger job thất bại:', errorText)
+            console.warn('⚠️ Gọi Cloud Run Job thất bại:', errorText)
         } else {
-            console.log('🚀 Trigger job clean-video-worker thành công:', response.status)
+            console.log('🚀 Đã gọi clean-video-worker thành công (status):', response.status)
         }
     } catch (err) {
-        console.warn('❌ Không thể gọi HTTP Trigger của clean-video-worker:', err)
+        console.warn('❌ Không thể gọi Cloud Run Trigger:', err)
     }
 
-    return res.status(200).json({ message: '✅ CLEAN job created & triggered via Cloud Run' })
+    return res.status(200).json({ message: '✅ CLEAN job đã được tạo và kích hoạt' })
 }
