@@ -27,7 +27,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const jobData = { inputVideo, outputName }
 
     try {
-        console.log('📥 Nhận job CLEAN:', jobData)
+        // ✅ Sửa: dùng JSON.stringify để log đúng
+        console.log('📥 Nhận job CLEAN:', JSON.stringify(jobData))
         await redis.rpush('ffmpeg-jobs:clean', JSON.stringify(jobData))
         await redis.set(`debug:clean:push:${outputName}`, JSON.stringify(jobData), { ex: 600 })
         console.log('✅ Đẩy job vào Redis & lưu debug key')
@@ -38,7 +39,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Gọi Cloud Run Job clean-video-worker
     try {
-        const triggerURL = 'https://asia-southeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/onlook-main/jobs/clean-video-worker:run'
+        const triggerURL =
+            'https://asia-southeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/onlook-main/jobs/clean-video-worker:run'
 
         const response = await fetch(triggerURL, {
             method: 'POST',
