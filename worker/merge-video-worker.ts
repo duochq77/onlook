@@ -1,108 +1,98 @@
-import 'dotenv/config'
-import { Redis } from '@upstash/redis'
-import { createClient } from '@supabase/supabase-js'
-import fs from 'fs'
-import path from 'path'
-import { exec } from 'child_process'
-import { promisify } from 'util'
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
+import { Redis } from '@upstash/redis';
+import { exec } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import util from 'util';
 
-const execPromise = promisify(exec)
+const execPromise = util.promisify(exec);
+
+const supabase = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
     token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-})
+});
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+async function runWorker() {
+    console.log('🎬 MERGE Video Worker đang chạy...');
 
-async function runMergeWorker() {
-    console.log('🎬 Merge Video Worker bắt đầu...')
+    const rawJob = await redis.lpop('ffmpeg-jobs:merge');
+    console.log('📥 Dữ liệu từ Redis:', typeof rawJob, rawJob);
 
-    while (true) {
-        const job = await redis.lpop<string>('ffmpeg-jobs:merge')
-        if (!job) {
-            await new Promise((r) => setTimeout(r, 2000))
-            continue
-        }
-
-        const { cleanVideo, audio, outputName } = JSON.parse(job)
-        console.log('📦 Nhận job MERGE:', { cleanVideo, audio, outputName })
-
-        const tmpCleanVideo = path.join('/tmp', 'clean-video.mp4')
-        const tmpAudio = path.join('/tmp', 'audio.mp3')
-        const tmpOutput = path.join('/tmp', outputName)
-
-        // 1. Tải cleanVideo từ Supabase về RAM
-        const { data: cleanVideoData, error: err1 } = await supabase.storage
-            .from('stream-files')
-            .download(cleanVideo)
-        if (err1 || !cleanVideoData) {
-            console.error('❌ Không tải được cleanVideo:', err1)
-            continue
-        }
-        fs.writeFileSync(tmpCleanVideo, Buffer.from(await cleanVideoData.arrayBuffer()))
-
-        // 2. Tải audio từ Supabase về RAM
-        const { data: audioData, error: err2 } = await supabase.storage
-            .from('stream-files')
-            .download(audio)
-        if (err2 || !audioData) {
-            console.error('❌ Không tải được audio:', err2)
-            continue
-        }
-        fs.writeFileSync(tmpAudio, Buffer.from(await audioData.arrayBuffer()))
-
-        // 3. Dùng FFmpeg để ghép video và audio → ra tmpOutput
-        try {
-            console.log('🔧 Ghép video + audio...')
-            await execPromise(`ffmpeg -y -i ${tmpCleanVideo} -i ${tmpAudio} -c:v copy -c:a aac ${tmpOutput}`)
-            console.log('✅ Ghép xong:', tmpOutput)
-        } catch (err) {
-            console.error('❌ Lỗi khi chạy FFmpeg merge:', err)
-            continue
-        }
-
-        // 4. Upload file hoàn chỉnh lên Supabase
-        try {
-            const { error: uploadError } = await supabase.storage
-                .from('stream-files')
-                .upload(`outputs/${outputName}`, fs.createReadStream(tmpOutput), {
-                    contentType: 'video/mp4',
-                    duplex: 'half',
-                })
-
-            if (uploadError) {
-                console.error('❌ Lỗi upload lên Supabase:', uploadError)
-                continue
-            }
-
-            console.log('📤 Upload lên Supabase thành công:', `outputs/${outputName}`)
-        } catch (err) {
-            console.error('❌ Lỗi khi upload merged video:', err)
-            continue
-        }
-
-        // 5. Gọi job cleanup-worker.ts để dọn dẹp file gốc
-        try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/trigger-cleanup`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cleanVideo, audio }),
-            })
-
-            if (!res.ok) {
-                const text = await res.text()
-                console.warn('⚠️ Trigger cleanup thất bại:', text)
-            } else {
-                console.log('🧹 Đã gọi job cleanup-worker.ts')
-            }
-        } catch (err) {
-            console.warn('⚠️ Không gọi được API cleanup:', err)
-        }
+    if (!rawJob) {
+        console.log('⏹ Không có job nào trong hàng đợi. Kết thúc worker.');
+        return;
     }
+
+    let job: { cleanVideo: string; audio: string; outputName: string };
+
+    try {
+        if (typeof rawJob === 'string') {
+            job = JSON.parse(rawJob);
+        } else if (typeof rawJob === 'object' && rawJob !== null) {
+            job = rawJob;
+        } else {
+            throw new Error('Dữ liệu job không hợp lệ');
+        }
+    } catch (err) {
+        console.error('💥 Lỗi parse JSON:', rawJob, err);
+        return;
+    }
+
+    console.log('📦 Nhận job MERGE:', job);
+
+    const tmpVideoPath = path.join('/tmp', 'clean-video.mp4');
+    const tmpAudioPath = path.join('/tmp', 'audio.mp3');
+    const tmpOutputPath = path.join('/tmp', 'merged-video.mp4');
+    const errorLogPath = path.join('/tmp', 'ffmpeg-error.log');
+
+    // Tải video sạch từ /tmp/
+    fs.copyFileSync(job.cleanVideo, tmpVideoPath);
+
+    // Tải audio từ Supabase
+    const { data, error } = await supabase
+        .storage
+        .from(process.env.SUPABASE_STORAGE_BUCKET!)
+        .download(job.audio);
+
+    if (error || !data) {
+        console.error('❌ Lỗi tải audio từ Supabase:', error);
+        return;
+    }
+
+    fs.writeFileSync(tmpAudioPath, Buffer.from(await data.arrayBuffer()));
+
+    // Ghép âm thanh vào video sạch
+    const ffmpegCmd = `ffmpeg -y -i ${tmpVideoPath} -i ${tmpAudioPath} -c:v copy -c:a aac ${tmpOutputPath} 2> ${errorLogPath}`;
+    console.log('⚙️ Chạy FFmpeg:', ffmpegCmd);
+
+    try {
+        await execPromise(ffmpegCmd);
+        console.log('✅ Đã ghép âm thanh vào video:', tmpOutputPath);
+    } catch (err) {
+        const ffmpegLogs = fs.readFileSync(errorLogPath, 'utf-8');
+        console.error('💥 FFmpeg lỗi:', ffmpegLogs);
+        return;
+    }
+
+    // Upload video hoàn chỉnh lên Supabase
+    const { error: uploadError } = await supabase.storage
+        .from(process.env.SUPABASE_STORAGE_BUCKET!)
+        .upload(`outputs/${job.outputName}`, fs.readFileSync(tmpOutputPath), { upsert: true });
+
+    if (uploadError) {
+        console.error('❌ Lỗi upload video hoàn chỉnh lên Supabase:', uploadError);
+        return;
+    }
+
+    console.log('🚀 Merge hoàn tất! Video đã được lưu vào Supabase.');
+
+    console.log('✅ Worker đã hoàn thành 1 job. Thoát.');
 }
 
-runMergeWorker().catch((err) => console.error('❌ Worker crash:', err))
+runWorker().catch(console.error);

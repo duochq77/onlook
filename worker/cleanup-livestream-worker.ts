@@ -1,66 +1,48 @@
-import 'dotenv/config'
-import { Redis } from '@upstash/redis'
-import { createClient } from '@supabase/supabase-js'
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
+import { Redis } from '@upstash/redis';
+import fs from 'fs';
+import path from 'path';
+
+const supabase = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
     token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-})
+});
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+async function cleanupLivestreamFiles() {
+    console.log('🧹 Cleanup Livestream Worker đang chạy...');
 
-async function runCleanupLivestreamWorker() {
-    console.log('🧹 Bắt đầu cleanup-livestream-worker...')
-
-    // Lấy toàn bộ key cleanup-after:...
-    const keys = await redis.keys('cleanup-after:*')
-    console.log(`🔍 Tìm thấy ${keys.length} key cleanup-after`)
-
-    for (const key of keys) {
-        const status = await redis.get(key)
-        if (status !== 'pending') {
-            console.log(`❎ Bỏ qua key ${key} vì đã xử lý hoặc không hợp lệ`)
-            continue
-        }
-
-        const outputName = key.replace('cleanup-after:', '')
-        const path = `outputs/${outputName}`
-
-        // Kiểm tra file có tồn tại không
-        const { data: fileStat, error: statError } = await supabase
-            .storage
-            .from('stream-files')
-            .list('outputs', { search: outputName })
-
-        if (statError || !fileStat || fileStat.length === 0) {
-            console.warn(`⚠️ File không tồn tại hoặc lỗi đọc: ${outputName}`)
-            await redis.del(key)
-            continue
-        }
-
-        // Xoá file
-        const { error: deleteError } = await supabase
-            .storage
-            .from('stream-files')
-            .remove([path])
-
-        if (deleteError) {
-            console.error(`❌ Lỗi khi xoá file ${path}:`, deleteError)
-        } else {
-            console.log(`🗑 Đã xoá file ${path} khỏi Supabase`)
-        }
-
-        // Xoá key khỏi Redis
-        await redis.del(key)
-        console.log(`✅ Đã xoá Redis key: ${key}`)
+    const keys = await redis.keys('livestream:end:*');
+    if (!keys.length) {
+        console.log('⏹ Không có livestream cần xóa. Kết thúc worker.');
+        return;
     }
 
-    console.log('🎉 cleanup-livestream-worker hoàn tất.')
+    for (const key of keys) {
+        const outputName = key.replace('livestream:end:', '');
+
+        // Xóa file trên Supabase
+        const { error } = await supabase.storage
+            .from(process.env.SUPABASE_STORAGE_BUCKET!)
+            .remove([`outputs/${outputName}`]);
+
+        if (error) {
+            console.error(`❌ Lỗi xóa file livestream (${outputName}) trên Supabase:`, error);
+            continue;
+        }
+
+        console.log(`✅ Đã xóa file livestream: ${outputName}`);
+
+        // Xóa key khỏi Redis
+        await redis.del(key);
+    }
+
+    console.log('🧹 Cleanup Livestream hoàn tất.');
 }
 
-runCleanupLivestreamWorker().catch((err) => {
-    console.error('❌ Lỗi tổng thể cleanup-livestream-worker:', err)
-})
+cleanupLivestreamFiles().catch(console.error);
