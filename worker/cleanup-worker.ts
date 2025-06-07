@@ -23,14 +23,7 @@ async function cleanupFiles() {
         return;
     }
 
-    let job: { outputName: string };
-
-    try {
-        job = JSON.parse(rawJob);
-    } catch (err) {
-        console.error('💥 Lỗi parse JSON:', rawJob, err);
-        return;
-    }
+    const job = JSON.parse(rawJob as string);
 
     console.log('📦 Nhận job CLEANUP:', job);
 

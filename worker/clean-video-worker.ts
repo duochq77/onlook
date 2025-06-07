@@ -22,36 +22,19 @@ async function runWorker() {
     console.log('🎬 CLEAN Video Worker đang chạy...');
 
     const rawJob = await redis.lpop('ffmpeg-jobs:clean');
-    console.log('📥 Dữ liệu từ Redis:', typeof rawJob, rawJob);
-
     if (!rawJob) {
         console.log('⏹ Không có job nào trong hàng đợi. Kết thúc worker.');
         return;
     }
 
-    let job: { inputVideo: string; outputName: string };
-
-    try {
-        if (typeof rawJob === 'string') {
-            job = JSON.parse(rawJob);
-        } else if (typeof rawJob === 'object' && rawJob !== null) {
-            job = rawJob;
-        } else {
-            throw new Error('Dữ liệu job không hợp lệ');
-        }
-    } catch (err) {
-        console.error('💥 Lỗi parse JSON:', rawJob, err);
-        return;
-    }
+    const job = rawJob as { inputVideo: string; outputName: string };
 
     console.log('📦 Nhận job CLEAN:', job);
 
     const tmpInputPath = path.join('/tmp', 'input.mp4');
     const tmpOutputPath = path.join('/tmp', 'clean-video.mp4');
-    const errorLogPath = path.join('/tmp', 'ffmpeg-error.log');
 
-    const { data, error } = await supabase
-        .storage
+    const { data, error } = await supabase.storage
         .from(process.env.SUPABASE_STORAGE_BUCKET!)
         .download(job.inputVideo);
 
@@ -62,19 +45,16 @@ async function runWorker() {
 
     fs.writeFileSync(tmpInputPath, Buffer.from(await data.arrayBuffer()));
 
-    const ffmpegCmd = `ffmpeg -y -i ${tmpInputPath} -an -c:v copy ${tmpOutputPath} 2> ${errorLogPath}`;
+    const ffmpegCmd = `ffmpeg -y -i ${tmpInputPath} -an -c:v copy ${tmpOutputPath}`;
     console.log('⚙️ Chạy FFmpeg:', ffmpegCmd);
 
     try {
         await execPromise(ffmpegCmd);
         console.log('✅ Đã tạo video sạch:', tmpOutputPath);
     } catch (err) {
-        const ffmpegLogs = fs.readFileSync(errorLogPath, 'utf-8');
-        console.error('💥 FFmpeg lỗi:', ffmpegLogs);
+        console.error('💥 FFmpeg lỗi:', err);
         return;
     }
-
-    console.log('🚀 Gửi job MERGE:', { cleanVideo: tmpOutputPath, audio: job.inputVideo, outputName: job.outputName });
 
     await fetch(process.env.SITE_URL + '/api/merge-job', {
         method: 'POST',

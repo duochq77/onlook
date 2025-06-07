@@ -22,41 +22,22 @@ async function runWorker() {
     console.log('🎬 MERGE Video Worker đang chạy...');
 
     const rawJob = await redis.lpop('ffmpeg-jobs:merge');
-    console.log('📥 Dữ liệu từ Redis:', typeof rawJob, rawJob);
-
     if (!rawJob) {
         console.log('⏹ Không có job nào trong hàng đợi. Kết thúc worker.');
         return;
     }
 
-    let job: { cleanVideo: string; audio: string; outputName: string };
-
-    try {
-        if (typeof rawJob === 'string') {
-            job = JSON.parse(rawJob);
-        } else if (typeof rawJob === 'object' && rawJob !== null) {
-            job = rawJob;
-        } else {
-            throw new Error('Dữ liệu job không hợp lệ');
-        }
-    } catch (err) {
-        console.error('💥 Lỗi parse JSON:', rawJob, err);
-        return;
-    }
+    const job = rawJob as { cleanVideo: string; audio: string; outputName: string };
 
     console.log('📦 Nhận job MERGE:', job);
 
     const tmpVideoPath = path.join('/tmp', 'clean-video.mp4');
     const tmpAudioPath = path.join('/tmp', 'audio.mp3');
     const tmpOutputPath = path.join('/tmp', 'merged-video.mp4');
-    const errorLogPath = path.join('/tmp', 'ffmpeg-error.log');
 
-    // Tải video sạch từ /tmp/
     fs.copyFileSync(job.cleanVideo, tmpVideoPath);
 
-    // Tải audio từ Supabase
-    const { data, error } = await supabase
-        .storage
+    const { data, error } = await supabase.storage
         .from(process.env.SUPABASE_STORAGE_BUCKET!)
         .download(job.audio);
 
@@ -67,20 +48,17 @@ async function runWorker() {
 
     fs.writeFileSync(tmpAudioPath, Buffer.from(await data.arrayBuffer()));
 
-    // Ghép âm thanh vào video sạch
-    const ffmpegCmd = `ffmpeg -y -i ${tmpVideoPath} -i ${tmpAudioPath} -c:v copy -c:a aac ${tmpOutputPath} 2> ${errorLogPath}`;
+    const ffmpegCmd = `ffmpeg -y -i ${tmpVideoPath} -i ${tmpAudioPath} -c:v copy -c:a aac ${tmpOutputPath}`;
     console.log('⚙️ Chạy FFmpeg:', ffmpegCmd);
 
     try {
         await execPromise(ffmpegCmd);
         console.log('✅ Đã ghép âm thanh vào video:', tmpOutputPath);
     } catch (err) {
-        const ffmpegLogs = fs.readFileSync(errorLogPath, 'utf-8');
-        console.error('💥 FFmpeg lỗi:', ffmpegLogs);
+        console.error('💥 FFmpeg lỗi:', err);
         return;
     }
 
-    // Upload video hoàn chỉnh lên Supabase
     const { error: uploadError } = await supabase.storage
         .from(process.env.SUPABASE_STORAGE_BUCKET!)
         .upload(`outputs/${job.outputName}`, fs.readFileSync(tmpOutputPath), { upsert: true });
@@ -91,8 +69,6 @@ async function runWorker() {
     }
 
     console.log('🚀 Merge hoàn tất! Video đã được lưu vào Supabase.');
-
-    console.log('✅ Worker đã hoàn thành 1 job. Thoát.');
 }
 
 runWorker().catch(console.error);
