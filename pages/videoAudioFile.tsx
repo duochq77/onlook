@@ -2,6 +2,12 @@
 export const dynamic = 'force-dynamic'
 
 import { useState } from 'react'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export default function VideoAudioFile() {
     const [videoFile, setVideoFile] = useState<File | null>(null)
@@ -9,7 +15,6 @@ export default function VideoAudioFile() {
     const [status, setStatus] = useState('')
     const [sessionId, setSessionId] = useState('')
 
-    const SUPABASE_URL = 'https://hlfhsozgnjxzwzqgjpbk.supabase.co'
     const STORAGE_PATH = 'stream-files'
     const token = process.env.NEXT_PUBLIC_GOOGLE_CLOUD_RUN_TOKEN!
 
@@ -23,21 +28,17 @@ export default function VideoAudioFile() {
         const audioName = `input-${sid}.mp3`
         const outputName = `merged-${sid}.mp4`
 
-        const upload = async (file: File, path: string) => {
-            const res = await fetch(`${SUPABASE_URL}/storage/v1/object/upload/sign/${path}`, {
-                method: 'POST',
-                headers: {
-                    apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-                    Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!}`,
-                },
-                body: file,
-            })
-            return res.ok
+        // ✅ Upload bằng Supabase SDK
+        setStatus('📤 Đang tải lên Supabase...')
+        const { error: videoErr } = await supabase.storage.from(STORAGE_PATH).upload(`input-videos/${videoName}`, videoFile)
+        const { error: audioErr } = await supabase.storage.from(STORAGE_PATH).upload(`input-audios/${audioName}`, audioFile)
+
+        if (videoErr || audioErr) {
+            console.error('❌ Upload lỗi:', videoErr || audioErr)
+            setStatus('❌ Upload thất bại.')
+            return
         }
 
-        setStatus('📤 Đang tải lên Supabase...')
-        await upload(videoFile, `${STORAGE_PATH}/input-videos/${videoName}`)
-        await upload(audioFile, `${STORAGE_PATH}/input-audios/${audioName}`)
         setStatus('🚀 Đã tải xong. Đang khởi động xử lý...')
 
         // ✅ Gọi job xử lý (process-video-worker)
@@ -54,8 +55,8 @@ export default function VideoAudioFile() {
                             name: 'onlook-process-video',
                             env: [
                                 { name: 'OUTPUT_NAME', value: outputName },
-                                { name: 'INPUT_VIDEO_URL', value: `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_PATH}/input-videos/${videoName}` },
-                                { name: 'INPUT_AUDIO_URL', value: `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_PATH}/input-audios/${audioName}` },
+                                { name: 'INPUT_VIDEO_URL', value: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${STORAGE_PATH}/input-videos/${videoName}` },
+                                { name: 'INPUT_AUDIO_URL', value: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${STORAGE_PATH}/input-audios/${audioName}` },
                             ],
                         },
                     ],
@@ -65,7 +66,6 @@ export default function VideoAudioFile() {
 
         setStatus('⏳ Đã gửi job xử lý, đang chờ hoàn tất...')
 
-        // ⏳ Kiểm tra khi nào có file đầu ra thì cho phép tải
         const check = async () => {
             for (let i = 0; i < 30; i++) {
                 const res = await fetch(`https://onlook-process-upload-ncdt2ep7dq-as.a.run.app/check?file=${outputName}`)
