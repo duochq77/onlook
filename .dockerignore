@@ -1,34 +1,30 @@
-# ❌ Bỏ toàn bộ thư viện cài sẵn – Docker sẽ cài lại trong image
+# ❌ Bỏ các thư mục/phần không cần cho Docker
 node_modules
-
-# ❌ Bỏ cache build của Next.js
 .next
-
-# ❌ Bỏ file môi trường cá nhân
-.env
-.env.local
-
-# ❌ Bỏ cache hệ thống
+.out
 .vscode
 .idea
-.DS_Store
-*.log
-*.swp
-
-# ❌ Bỏ các file test nếu có
+dist        # dist sẽ được tạo lại trong Docker build
+coverage
+test
 __tests__/
-test/
 *.test.ts
 *.test.js
 
-# ✅ Giữ lại các file cấu hình/build:
+# ❌ Bỏ các file cache và cấu hình cục bộ
+*.log
+*.swp
+*.tsbuildinfo
+.DS_Store
+.env
+.env.local
+.env*.local
+google-service-account.json
+
+# ✅ Giữ lại các file cần cho build Docker worker
 !package.json
 !package-lock.json
 !tsconfig.worker.json
 !Dockerfile*
-
-# ✅ Giữ lại source code worker:
 !worker/
-!dist/
-!src/
-!pages/
+!tsconfig.json

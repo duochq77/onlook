@@ -1,52 +1,60 @@
 // worker/process-video-worker.ts
 import fs from 'fs'
 import path from 'path'
+import fetch from 'node-fetch'
 import { execSync } from 'child_process'
 
 const TEMP = '/tmp'
 
-function waitForFile(filePath: string, retries = 30) {
-    for (let i = 0; i < retries; i++) {
-        if (fs.existsSync(filePath)) return true
-        console.log(`⏳ Chờ file ${filePath}...`)
-        execSync('sleep 1')
-    }
-    return false
+function log(msg: string) {
+    console.log(`[PROCESS] ${msg}`)
+}
+
+async function download(url: string, dest: string) {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`❌ Không tải được: ${url}`)
+    const fileStream = fs.createWriteStream(dest)
+    await new Promise((resolve, reject) => {
+        res.body.pipe(fileStream)
+        res.body.on('error', reject)
+        fileStream.on('finish', resolve)
+    })
 }
 
 async function run() {
     const outputName = process.env.OUTPUT_NAME
-    if (!outputName) {
-        console.error('❌ Thiếu OUTPUT_NAME trong ENV!')
-        return
+    const videoURL = process.env.INPUT_VIDEO_URL
+    const audioURL = process.env.INPUT_AUDIO_URL
+
+    if (!outputName || !videoURL || !audioURL) {
+        console.error('❌ Thiếu ENV: OUTPUT_NAME / INPUT_VIDEO_URL / INPUT_AUDIO_URL')
+        process.exit(1)
     }
 
-    const jobId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const jobDir = path.join(TEMP, jobId)
+    const jobDir = path.join(TEMP, `job-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     fs.mkdirSync(jobDir)
 
-    // Đường dẫn tạm trong thư mục riêng
-    const inputVideo = path.join(jobDir, `input-${outputName}.mp4`)
-    const inputAudio = path.join(jobDir, `input-${outputName}.mp3`)
-    const cleanVideo = path.join(jobDir, `clean-${outputName}`)
-    const output = path.join(TEMP, outputName) // Xuất ra TEMP gốc để client tải
+    const inputVideo = path.join(jobDir, 'input.mp4')
+    const inputAudio = path.join(jobDir, 'input.mp3')
+    const cleanVideo = path.join(jobDir, 'clean.mp4')
+    const output = path.join(TEMP, outputName) // Xuất file vào /tmp
 
-    // Copy từ gốc về thư mục riêng để xử lý an toàn
-    fs.copyFileSync(path.join(TEMP, `input-${outputName}.mp4`), inputVideo)
-    fs.copyFileSync(path.join(TEMP, `input-${outputName}.mp3`), inputAudio)
+    log('🔽 Đang tải video gốc...')
+    await download(videoURL, inputVideo)
 
-    if (!waitForFile(inputVideo) || !waitForFile(inputAudio)) {
-        console.error('❌ Không tìm thấy file video hoặc audio!')
-        return
-    }
+    log('🔽 Đang tải audio gốc...')
+    await download(audioURL, inputAudio)
 
-    console.log('✂️ Đang tách audio khỏi video...')
+    log('✂️ Tách audio khỏi video...')
     execSync(`ffmpeg -i ${inputVideo} -an -c:v copy ${cleanVideo} -y`)
 
-    console.log('🎧 Đang ghép audio gốc vào video sạch...')
+    log('🎧 Ghép audio mới vào video sạch...')
     execSync(`ffmpeg -i ${cleanVideo} -i ${inputAudio} -c:v copy -c:a aac -shortest ${output} -y`)
 
-    console.log('✅ Hoàn tất xử lý file:', output)
+    log(`✅ Xử lý xong! Kết quả: ${output}`)
 }
 
-run()
+run().catch(err => {
+    console.error('❌ Lỗi xử lý:', err)
+    process.exit(1)
+})

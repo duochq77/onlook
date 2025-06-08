@@ -1,59 +1,36 @@
-import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
-import { Redis } from '@upstash/redis';
-import fs from 'fs';
-import path from 'path';
+// worker/cleanup-worker.ts
+import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
     process.env.SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+)
 
-const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
+async function run() {
+    const videoFile = process.env.VIDEO_FILE
+    const audioFile = process.env.AUDIO_FILE
 
-async function cleanupFiles() {
-    console.log('🧹 Cleanup Worker đang chạy...');
-
-    const rawJob = await redis.lpop('ffmpeg-jobs:cleanup');
-    if (!rawJob) {
-        console.log('⏹ Không có file cần xóa. Kết thúc worker.');
-        return;
+    if (!videoFile || !audioFile) {
+        console.error('❌ Thiếu VIDEO_FILE hoặc AUDIO_FILE trong ENV')
+        process.exit(1)
     }
 
-    const job = JSON.parse(rawJob as string);
+    console.log('🧹 Đang xoá các file gốc:', videoFile, audioFile)
 
-    console.log('📦 Nhận job CLEANUP:', job);
-
-    const tmpFiles = [
-        path.join('/tmp', 'input.mp4'),
-        path.join('/tmp', 'clean-video.mp4'),
-        path.join('/tmp', 'merged-video.mp4'),
-    ];
-
-    for (const file of tmpFiles) {
-        try {
-            if (fs.existsSync(file)) {
-                fs.unlinkSync(file);
-                console.log(`✅ Đã xóa: ${file}`);
-            }
-        } catch (err) {
-            console.error(`❌ Lỗi xóa file: ${file}`, err);
-        }
-    }
-
-    const { error } = await supabase.storage
-        .from(process.env.SUPABASE_STORAGE_BUCKET!)
-        .remove([`outputs/${job.outputName}`]);
+    const { error } = await supabase.storage.from('stream-files').remove([
+        `input-videos/${videoFile}`,
+        `input-audios/${audioFile}`
+    ])
 
     if (error) {
-        console.error('❌ Lỗi xóa file trên Supabase:', error);
-        return;
+        console.error('❌ Lỗi xoá file:', error.message)
+        process.exit(1)
     }
 
-    console.log('✅ Đã xóa video hoàn chỉnh trên Supabase.');
+    console.log('✅ Đã xoá xong các file gốc thành công')
 }
 
-cleanupFiles().catch(console.error);
+run().catch((err) => {
+    console.error('❌ Lỗi cleanup:', err)
+    process.exit(1)
+})

@@ -1,42 +1,61 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
+# 📦 Dependency folders
 /node_modules
 /.pnp
 .pnp.js
 
-# testing
-/coverage
+# ✅ Giữ lại package
+!package.json
+!package-lock.json
 
-# next.js
+# ✅ Giữ lại cấu hình TypeScript cho worker
+!tsconfig.worker.json
+
+# ✅ Giữ lại Dockerfile (mọi loại)
+!Dockerfile*
+
+# ✅ Giữ lại thư mục source code
+!worker/
+!dist/
+!src/
+!pages/
+
+# ✅ Giữ lại cấu hình Next.js (nếu cần)
+!next.config.js
+!tsconfig.json
+
+# 🧪 Test files
+/coverage
+__tests__/
+test/
+*.test.ts
+*.test.js
+
+# ⚙️ Next.js
 /.next/
+next-env.d.ts
 /out/
 
-# production
+# ⚒️ Build outputs
 /build
+*.tsbuildinfo
+dist/  # Bỏ toàn bộ dist nếu bạn không muốn commit build (tuỳ bạn)
 
-# misc
-.DS_Store
-*.pem
-
-# debug
+# 🧪 Logs và cache IDE
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.log
 
-# local env files
-.env*.local
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-node_modules
-.next
-.env.local
-dist
-.vercel
-google-service-account.json
+# 🔐 Env files
 .env
+.env.local
+.env*.local
+google-service-account.json
+
+# 🚀 Vercel
+.vercel
+
