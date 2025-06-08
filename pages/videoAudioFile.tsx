@@ -40,7 +40,7 @@ export default function VideoAudioFile() {
         await upload(audioFile, `${STORAGE_PATH}/input-audios/${audioName}`)
         setStatus('🚀 Đã tải xong. Đang khởi động xử lý...')
 
-        // ✅ Gọi job process
+        // ✅ Gọi job xử lý (process-video-worker)
         await fetch(`https://asia-southeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/onlook-main/jobs/process-video-worker:run`, {
             method: 'POST',
             headers: {
@@ -65,6 +65,7 @@ export default function VideoAudioFile() {
 
         setStatus('⏳ Đã gửi job xử lý, đang chờ hoàn tất...')
 
+        // ⏳ Kiểm tra khi nào có file đầu ra thì cho phép tải
         const check = async () => {
             for (let i = 0; i < 30; i++) {
                 const res = await fetch(`https://onlook-process-upload-ncdt2ep7dq-as.a.run.app/check?file=${outputName}`)
