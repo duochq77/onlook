@@ -6,42 +6,70 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // worker/process-video-worker.ts
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
+const node_fetch_1 = __importDefault(require("node-fetch"));
 const child_process_1 = require("child_process");
 const TEMP = '/tmp';
-function waitForFile(filePath, retries = 30) {
-    for (let i = 0; i < retries; i++) {
-        if (fs_1.default.existsSync(filePath))
-            return true;
-        console.log(`⏳ Chờ file ${filePath}...`);
-        (0, child_process_1.execSync)('sleep 1');
-    }
-    return false;
+function log(msg) {
+    console.log(`[PROCESS] ${msg}`);
+}
+async function download(url, dest) {
+    const res = await (0, node_fetch_1.default)(url);
+    if (!res.ok)
+        throw new Error(`❌ Không tải được: ${url}`);
+    if (!res.body)
+        throw new Error(`❌ Phản hồi từ ${url} không có dữ liệu!`);
+    const fileStream = fs_1.default.createWriteStream(dest);
+    await new Promise((resolve, reject) => {
+        res.body.pipe(fileStream);
+        res.body.on('error', (err) => {
+            console.error('❌ Lỗi khi tải file:', err);
+            reject(err);
+        });
+        fileStream.on('finish', resolve);
+    });
 }
 async function run() {
     const outputName = process.env.OUTPUT_NAME;
-    if (!outputName) {
-        console.error('❌ Thiếu OUTPUT_NAME trong ENV!');
-        return;
+    const videoURL = process.env.INPUT_VIDEO_URL;
+    const audioURL = process.env.INPUT_AUDIO_URL;
+    if (!outputName || !videoURL || !audioURL) {
+        console.error('❌ Thiếu ENV: OUTPUT_NAME / INPUT_VIDEO_URL / INPUT_AUDIO_URL');
+        process.exit(1);
     }
-    const jobId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const jobDir = path_1.default.join(TEMP, jobId);
+    const jobDir = path_1.default.join(TEMP, `job-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     fs_1.default.mkdirSync(jobDir);
-    // Đường dẫn tạm trong thư mục riêng
-    const inputVideo = path_1.default.join(jobDir, `input-${outputName}.mp4`);
-    const inputAudio = path_1.default.join(jobDir, `input-${outputName}.mp3`);
-    const cleanVideo = path_1.default.join(jobDir, `clean-${outputName}`);
-    const output = path_1.default.join(TEMP, outputName); // Xuất ra TEMP gốc để client tải
-    // Copy từ gốc về thư mục riêng để xử lý an toàn
-    fs_1.default.copyFileSync(path_1.default.join(TEMP, `input-${outputName}.mp4`), inputVideo);
-    fs_1.default.copyFileSync(path_1.default.join(TEMP, `input-${outputName}.mp3`), inputAudio);
-    if (!waitForFile(inputVideo) || !waitForFile(inputAudio)) {
-        console.error('❌ Không tìm thấy file video hoặc audio!');
-        return;
+    const inputVideo = path_1.default.join(jobDir, 'input.mp4');
+    const inputAudio = path_1.default.join(jobDir, 'input.mp3');
+    const cleanVideo = path_1.default.join(jobDir, 'clean.mp4');
+    const output = path_1.default.join(TEMP, outputName);
+    log('🔽 Đang tải video gốc...');
+    await download(videoURL, inputVideo);
+    log('🔽 Đang tải audio gốc...');
+    await download(audioURL, inputAudio);
+    // ✅ Kiểm tra sự tồn tại của file
+    if (!fs_1.default.existsSync(inputVideo) || !fs_1.default.existsSync(inputAudio)) {
+        console.error('❌ File tải xuống bị lỗi hoặc không tồn tại!');
+        process.exit(1);
     }
-    console.log('✂️ Đang tách audio khỏi video...');
-    (0, child_process_1.execSync)(`ffmpeg -i ${inputVideo} -an -c:v copy ${cleanVideo} -y`);
-    console.log('🎧 Đang ghép audio gốc vào video sạch...');
-    (0, child_process_1.execSync)(`ffmpeg -i ${cleanVideo} -i ${inputAudio} -c:v copy -c:a aac -shortest ${output} -y`);
-    console.log('✅ Hoàn tất xử lý file:', output);
+    log('✂️ Tách audio khỏi video...');
+    try {
+        (0, child_process_1.execSync)(`ffmpeg -i ${inputVideo} -an -c:v copy ${cleanVideo} -y`);
+    }
+    catch (err) {
+        console.error('❌ Lỗi khi tách audio:', err);
+        process.exit(1);
+    }
+    log('🎧 Ghép audio mới vào video sạch...');
+    try {
+        (0, child_process_1.execSync)(`ffmpeg -i ${cleanVideo} -i ${inputAudio} -c:v copy -c:a aac -shortest ${output} -y`);
+    }
+    catch (err) {
+        console.error('❌ Lỗi khi ghép audio:', err);
+        process.exit(1);
+    }
+    log(`✅ Xử lý xong! Kết quả: ${output}`);
 }
-run();
+run().catch(err => {
+    console.error('❌ Lỗi xử lý:', err);
+    process.exit(1);
+});

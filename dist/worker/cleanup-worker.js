@@ -1,50 +1,27 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-require("dotenv/config");
+// worker/cleanup-worker.ts
 const supabase_js_1 = require("@supabase/supabase-js");
-const redis_1 = require("@upstash/redis");
-const fs_1 = __importDefault(require("fs"));
-const path_1 = __importDefault(require("path"));
 const supabase = (0, supabase_js_1.createClient)(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-const redis = new redis_1.Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN,
-});
-async function cleanupFiles() {
-    console.log('🧹 Cleanup Worker đang chạy...');
-    const rawJob = await redis.lpop('ffmpeg-jobs:cleanup');
-    if (!rawJob) {
-        console.log('⏹ Không có file cần xóa. Kết thúc worker.');
-        return;
+async function run() {
+    const videoFile = process.env.VIDEO_FILE;
+    const audioFile = process.env.AUDIO_FILE;
+    if (!videoFile || !audioFile) {
+        console.error('❌ Thiếu VIDEO_FILE hoặc AUDIO_FILE trong ENV');
+        process.exit(1);
     }
-    const job = JSON.parse(rawJob);
-    console.log('📦 Nhận job CLEANUP:', job);
-    const tmpFiles = [
-        path_1.default.join('/tmp', 'input.mp4'),
-        path_1.default.join('/tmp', 'clean-video.mp4'),
-        path_1.default.join('/tmp', 'merged-video.mp4'),
-    ];
-    for (const file of tmpFiles) {
-        try {
-            if (fs_1.default.existsSync(file)) {
-                fs_1.default.unlinkSync(file);
-                console.log(`✅ Đã xóa: ${file}`);
-            }
-        }
-        catch (err) {
-            console.error(`❌ Lỗi xóa file: ${file}`, err);
-        }
-    }
-    const { error } = await supabase.storage
-        .from(process.env.SUPABASE_STORAGE_BUCKET)
-        .remove([`outputs/${job.outputName}`]);
+    console.log('🧹 Đang xoá các file gốc:', videoFile, audioFile);
+    const { error } = await supabase.storage.from('stream-files').remove([
+        `input-videos/${videoFile}`,
+        `input-audios/${audioFile}`
+    ]);
     if (error) {
-        console.error('❌ Lỗi xóa file trên Supabase:', error);
-        return;
+        console.error('❌ Lỗi xoá file:', error.message);
+        process.exit(1);
     }
-    console.log('✅ Đã xóa video hoàn chỉnh trên Supabase.');
+    console.log('✅ Đã xoá xong các file gốc thành công');
 }
-cleanupFiles().catch(console.error);
+run().catch((err) => {
+    console.error('❌ Lỗi cleanup:', err);
+    process.exit(1);
+});
