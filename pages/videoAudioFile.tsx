@@ -1,151 +1,90 @@
-'use client';
-export const dynamic = 'force-dynamic';
+'use client'
 
-import { useState } from 'react';
-import { supabase } from '@/services/SupabaseService';
+import { useState } from 'react'
 
-export default function VideoAudioFilePage() {
-    const [videoFile, setVideoFile] = useState<File | null>(null);
-    const [audioFile, setAudioFile] = useState<File | null>(null);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [mergedUrl, setMergedUrl] = useState<string | null>(null);
-    const [isStreaming, setIsStreaming] = useState(false);
-    const [outputName, setOutputName] = useState<string>('');
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'video' | 'audio') => {
-        const file = e.target.files?.[0] || null;
-        if (type === 'video') setVideoFile(file);
-        else setAudioFile(file);
-    };
+export default function VideoAudioFile() {
+    const [videoFile, setVideoFile] = useState<File | null>(null)
+    const [audioFile, setAudioFile] = useState<File | null>(null)
+    const [outputName, setOutputName] = useState('')
+    const [status, setStatus] = useState('')
 
     const handleUpload = async () => {
-        if (!videoFile || !audioFile) {
-            return alert('❌ Vui lòng chọn đầy đủ video và audio!');
+        if (!videoFile || !audioFile) return alert('Vui lòng chọn đủ 2 file!')
+
+        const output = `${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`
+        setOutputName(output)
+
+        const formData = new FormData()
+        formData.append('video', videoFile)
+        formData.append('audio', audioFile)
+        formData.append('outputName', output)
+
+        // Upload file lên Cloud Run Worker
+        const uploadURL = `https://onlook-process-upload-ncdt2ep7dq-as.a.run.app/upload`
+        const uploadRes = await fetch(uploadURL, {
+            method: 'POST',
+            body: formData,
+        })
+
+        if (!uploadRes.ok) {
+            setStatus('❌ Upload thất bại')
+            return
         }
 
-        setIsProcessing(true);
+        setStatus('📤 Upload thành công. Đang khởi động xử lý...')
 
-        const timestamp = Date.now();
-        const videoPath = `input-videos/${timestamp}-video.mp4`;
-        const audioPath = `input-audios/${timestamp}-audio.mp3`;
-        const mergedOutput = `${timestamp}-merged.mp4`;
-        const outputPath = `outputs/${mergedOutput}`;
-        setOutputName(mergedOutput);
+        // Gọi Cloud Run Job, truyền outputName qua ENV
+        const triggerURL = 'https://asia-southeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/onlook-main/jobs/process-video-worker:run'
 
-        try {
-            console.log('📤 Đang upload video:', videoPath);
-            await supabase.storage.from('stream-files').upload(videoPath, videoFile, { upsert: true });
+        await fetch(triggerURL, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${process.env.NEXT_PUBLIC_GOOGLE_CLOUD_RUN_TOKEN!}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                envs: [{ name: 'OUTPUT_NAME', value: output }],
+            }),
+        })
 
-            console.log('📤 Đang upload audio:', audioPath);
-            await supabase.storage.from('stream-files').upload(audioPath, audioFile, { upsert: true });
+        setStatus('🚀 Đã gửi lệnh xử lý. Đang chờ kết quả...')
 
-            console.log('🚀 Gửi job CLEAN:', { inputVideo: videoPath, outputName: mergedOutput });
-            await fetch('/api/clean-job', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ inputVideo: videoPath, outputName: mergedOutput }),
-            });
-
-            console.log('⏳ Đang theo dõi tiến trình merge...');
-            await checkMergeCompletion(outputPath);
-        } catch (error) {
-            console.error('❌ Lỗi trong quá trình upload:', error);
-            alert('Lỗi khi xử lý video/audio!');
-        }
-
-        setIsProcessing(false);
-    };
-
-    const checkMergeCompletion = async (outputPath: string) => {
-        for (let i = 0; i < 30; i++) {
-            const { data, error } = await supabase.storage.from('stream-files').createSignedUrl(outputPath, 60);
-            if (error) {
-                console.warn('⚠️ Lỗi lấy signed URL:', error.message);
-                await new Promise((r) => setTimeout(r, 3000));
-                continue;
-            }
-
-            if (data?.signedUrl) {
-                const res = await fetch(data.signedUrl);
-                if (res.ok) {
-                    console.log('✅ File merge hoàn tất:', data.signedUrl);
-                    setMergedUrl(data.signedUrl);
-                    return;
+        // Polling file: giới hạn 30 lần (60 giây)
+        const checkExist = async () => {
+            for (let i = 0; i < 30; i++) {
+                const res = await fetch(`https://onlook-process-upload-ncdt2ep7dq-as.a.run.app/check?file=${output}`)
+                const json = await res.json()
+                if (json.exists) {
+                    setStatus('✅ Đã xử lý xong. Bấm nút bên dưới để tải về')
+                    return
                 }
+                await new Promise((r) => setTimeout(r, 2000)) // Đợi 2 giây rồi thử lại
             }
-
-            await new Promise((r) => setTimeout(r, 3000));
+            setStatus('❌ Hết thời gian chờ (60 giây). Vui lòng thử lại.')
         }
 
-        alert('❌ Xử lý quá lâu, thử lại sau.');
-    };
-
-    const toggleStream = async () => {
-        if (!mergedUrl) return;
-
-        if (!isStreaming) {
-            alert('▶️ Bắt đầu livestream');
-            setIsStreaming(true);
-        } else {
-            alert('⛔ Kết thúc livestream (sẽ xoá file sau 5 phút)');
-            setIsStreaming(false);
-
-            console.log('🚀 Gửi yêu cầu dừng stream:', outputName);
-            await fetch('/api/stop-stream', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ outputName }),
-            });
-        }
-    };
+        checkExist()
+    }
 
     return (
-        <div style={{ padding: 40, fontFamily: 'sans-serif' }}>
-            <h1>📤 Upload video + audio để phát livestream</h1>
+        <main className="p-4 space-y-4">
+            <h1 className="text-xl font-bold">🎬 Phát video + âm thanh riêng (Giai đoạn 1)</h1>
 
-            <input type="file" accept="video/mp4" onChange={(e) => handleFileChange(e, 'video')} style={{ marginBottom: 12 }} />
-            <input type="file" accept="audio/mp3" onChange={(e) => handleFileChange(e, 'audio')} style={{ marginBottom: 12 }} />
+            <input type="file" accept="video/mp4" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
+            <input type="file" accept="audio/mpeg" onChange={(e) => setAudioFile(e.target.files?.[0] || null)} />
+            <button onClick={handleUpload} className="px-4 py-2 bg-blue-600 text-white rounded">Tải lên & Bắt đầu xử lý</button>
 
-            <button
-                onClick={handleUpload}
-                style={{
-                    padding: 10,
-                    background: '#007bff',
-                    color: 'white',
-                    marginTop: 10,
-                    border: 'none',
-                    borderRadius: 6
-                }}
-                disabled={!videoFile || !audioFile || isProcessing}
-            >
-                ⏫ Upload và xử lý
-            </button>
+            <p>{status}</p>
 
-            {isProcessing && <p>⏳ Đang xử lý video + audio...</p>}
-
-            {mergedUrl && (
-                <>
-                    <button
-                        onClick={toggleStream}
-                        style={{
-                            padding: 10,
-                            background: isStreaming ? '#dc3545' : '#28a745',
-                            color: 'white',
-                            marginTop: 20,
-                            borderRadius: 6
-                        }}
-                    >
-                        {isStreaming ? '⛔ Kết thúc livestream' : '▶️ Bắt đầu livestream'}
-                    </button>
-
-                    <div style={{ marginTop: 20 }}>
-                        <a href={mergedUrl} download>⬇️ Tải video hoàn chỉnh</a>
-                        <p style={{ color: 'orange', fontSize: 13 }}>
-                            ⚠️ File đã merge, sẽ tự động xoá sau khi kết thúc livestream.
-                        </p>
-                    </div>
-                </>
+            {status.includes('✅') && (
+                <a
+                    href={`https://onlook-process-upload-ncdt2ep7dq-as.a.run.app/tmp/${outputName}`}
+                    download
+                    className="underline text-green-700"
+                >
+                    ⬇️ Tải file hoàn chỉnh
+                </a>
             )}
-        </div>
-    );
+        </main>
+    )
 }
