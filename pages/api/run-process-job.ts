@@ -7,7 +7,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { videoUrl, audioUrl, outputName } = req.body
 
     if (!videoUrl || !audioUrl || !outputName) {
-        return res.status(400).json({ error: 'Thiếu videoUrl, audioUrl hoặc outputName' })
+        return res.status(400).json({ error: 'Thiếu thông tin videoUrl, audioUrl hoặc outputName' })
     }
 
     let accessToken: string
@@ -42,6 +42,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(500).json({ error: 'Không gọi được job xử lý', detail: errorText })
     }
 
-    console.log('✅ Job xử lý đã gửi thành công.')
-    return res.status(200).json({ outputName })
+    console.log('✅ Đã gửi job xử lý thành công.')
+    return res.status(200).json({ message: 'Đã gửi job xử lý' })
 }
