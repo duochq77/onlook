@@ -4,6 +4,7 @@ import { execSync } from 'child_process'
 import path from 'path'
 import { createClient } from '@supabase/supabase-js'
 import { Redis } from '@upstash/redis'
+import { Readable } from 'stream'
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -17,14 +18,17 @@ const supabase = createClient(
 
 const TMP = '/tmp'
 
+// Sửa hàm download để chuyển ReadableStream web sang Node.js stream
 async function download(url: string, dest: string) {
     const res = await fetch(url)
     if (!res.ok || !res.body) throw new Error(`❌ Không tải được: ${url}`)
 
     const fileStream = fs.createWriteStream(dest)
+    const nodeStream = Readable.from(res.body as any) // chuyển sang Node.js stream
+
     await new Promise<void>((resolve, reject) => {
-        res.body!.pipe(fileStream)
-        res.body!.on('error', reject)
+        nodeStream.pipe(fileStream)
+        nodeStream.on('error', reject)
         fileStream.on('finish', resolve)
     })
 }
