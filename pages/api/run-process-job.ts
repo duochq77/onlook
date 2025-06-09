@@ -26,11 +26,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            taskOverrides: {
-                env: [
-                    { name: 'OUTPUT_NAME', value: outputName },
-                    { name: 'INPUT_VIDEO_URL', value: videoUrl },
-                    { name: 'INPUT_AUDIO_URL', value: audioUrl },
+            overrides: {
+                containerOverrides: [
+                    {
+                        environment: [
+                            { name: 'OUTPUT_NAME', value: outputName },
+                            { name: 'INPUT_VIDEO_URL', value: videoUrl },
+                            { name: 'INPUT_AUDIO_URL', value: audioUrl },
+                        ],
+                    },
                 ],
             },
         }),
