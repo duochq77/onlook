@@ -2,6 +2,12 @@
 export const dynamic = 'force-dynamic'
 
 import { useState } from 'react'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export default function VideoAudioFile() {
     const [videoFile, setVideoFile] = useState<File | null>(null)
@@ -9,41 +15,66 @@ export default function VideoAudioFile() {
     const [status, setStatus] = useState('')
     const [sessionId, setSessionId] = useState('')
 
+    const STORAGE_PATH = 'stream-files'
+
     const handleUpload = async () => {
         if (!videoFile || !audioFile) return alert('❗ Vui lòng chọn đủ 2 file!')
 
         const sid = `${Date.now()}-${Math.random().toString(36).slice(2)}`
         setSessionId(sid)
 
-        setStatus('📤 Đang tải lên Supabase và gửi job...')
+        const videoName = `input-${sid}.mp4`
+        const audioName = `input-${sid}.mp3`
+        const outputName = `merged-${sid}.mp4`
 
-        const formData = new FormData()
-        formData.append('video', videoFile)
-        formData.append('audio', audioFile)
+        const videoPath = `${STORAGE_PATH}/input-videos/${videoName}`
+        const audioPath = `${STORAGE_PATH}/input-audios/${audioName}`
+        const videoUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${videoPath}`
+        const audioUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${audioPath}`
 
-        const res = await fetch('/api/run-process-job', {
+        setStatus('📤 Đang tải lên Supabase...')
+
+        const { error: videoErr } = await supabase.storage
+            .from(STORAGE_PATH)
+            .upload(`input-videos/${videoName}`, videoFile, { upsert: true })
+
+        const { error: audioErr } = await supabase.storage
+            .from(STORAGE_PATH)
+            .upload(`input-audios/${audioName}`, audioFile, { upsert: true })
+
+        if (videoErr || audioErr) {
+            console.error('❌ Upload lỗi:', videoErr || audioErr)
+            setStatus('❌ Upload thất bại.')
+            return
+        }
+
+        const videoCheck = await fetch(videoUrl)
+        const audioCheck = await fetch(audioUrl)
+
+        if (!videoCheck.ok || !audioCheck.ok) {
+            setStatus('❌ File chưa tồn tại công khai!')
+            return
+        }
+
+        setStatus('🚀 Đã upload. Đang gửi job xử lý...')
+
+        const runRes = await fetch('/api/run-process-job', {
             method: 'POST',
-            body: formData,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                videoUrl,
+                audioUrl,
+                outputName,
+            }),
         })
 
-        if (!res.ok) {
-            const errText = await res.text()
-            console.error('❌ Upload hoặc job lỗi:', errText)
-            setStatus('❌ Upload hoặc job lỗi.')
+        if (!runRes.ok) {
+            const err = await runRes.json().catch(() => null)
+            console.error('❌ Job lỗi:', err)
+            setStatus('❌ Gửi job xử lý thất bại!')
             return
         }
 
-        let outputName = ''
-        try {
-            const data = await res.json()
-            outputName = data.outputName
-        } catch (e) {
-            console.error('❌ Lỗi khi đọc phản hồi JSON:', e)
-            setStatus('❌ Job lỗi: Không thể đọc phản hồi.')
-            return
-        }
-
-        const file = outputName.replace('merged-', '')
         setStatus('⏳ Đã gửi job. Đang kiểm tra file kết quả...')
 
         const poll = async () => {
