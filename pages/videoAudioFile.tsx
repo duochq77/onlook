@@ -27,16 +27,23 @@ export default function VideoAudioFile() {
         })
 
         if (!res.ok) {
-            const err = await res.json()
-            console.error('❌ Upload hoặc job lỗi:', err)
+            const errText = await res.text()
+            console.error('❌ Upload hoặc job lỗi:', errText)
             setStatus('❌ Upload hoặc job lỗi.')
             return
         }
 
-        const data = await res.json()
-        const outputName = data.outputName
-        const file = outputName.replace('merged-', '')
+        let outputName = ''
+        try {
+            const data = await res.json()
+            outputName = data.outputName
+        } catch (e) {
+            console.error('❌ Lỗi khi đọc phản hồi JSON:', e)
+            setStatus('❌ Job lỗi: Không thể đọc phản hồi.')
+            return
+        }
 
+        const file = outputName.replace('merged-', '')
         setStatus('⏳ Đã gửi job. Đang kiểm tra file kết quả...')
 
         const poll = async () => {
