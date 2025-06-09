@@ -91,20 +91,18 @@ async function runWorker() {
 
     while (true) {
         try {
-            // Lấy job cuối (đẩy vào đầu), đợi tối đa 30s
-            const jobJson = await redis.brpop('onlook:process-video-queue', 30)
+            const jobJson = await redis.rpop('onlook:process-video-queue')
             if (!jobJson) {
-                // Không có job, tiếp tục vòng lặp
+                // Không có job, đợi 3s rồi thử lại
+                await new Promise((r) => setTimeout(r, 3000))
                 continue
             }
 
-            // brpop trả về [key, value]
-            const jobPayload = jobJson[1]
-            const job = JSON.parse(jobPayload)
+            const job = JSON.parse(jobJson)
             await processJob(job)
         } catch (err) {
             console.error('❌ Lỗi worker:', err)
-            // Có thể thêm delay để tránh vòng lặp quá nhanh khi lỗi
+            // Delay để tránh vòng lặp quá nhanh khi lỗi
             await new Promise((r) => setTimeout(r, 5000))
         }
     }
