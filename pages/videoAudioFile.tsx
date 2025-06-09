@@ -19,7 +19,7 @@ export default function VideoAudioFile() {
     const token = process.env.NEXT_PUBLIC_GOOGLE_CLOUD_RUN_TOKEN!
 
     const handleUpload = async () => {
-        if (!videoFile || !audioFile) return alert('Vui lòng chọn đủ 2 file!')
+        if (!videoFile || !audioFile) return alert('❗ Vui lòng chọn đủ 2 file!')
 
         const sid = `${Date.now()}-${Math.random().toString(36).slice(2)}`
         setSessionId(sid)
@@ -33,40 +33,32 @@ export default function VideoAudioFile() {
         const videoUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${videoPath}`
         const audioUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${audioPath}`
 
-        // ✅ Upload bằng SDK
         setStatus('📤 Đang tải lên Supabase...')
 
-        const { data: videoData, error: videoErr } = await supabase.storage
+        const { error: videoErr } = await supabase.storage
             .from(STORAGE_PATH)
             .upload(`input-videos/${videoName}`, videoFile, { upsert: true })
 
-        const { data: audioData, error: audioErr } = await supabase.storage
+        const { error: audioErr } = await supabase.storage
             .from(STORAGE_PATH)
             .upload(`input-audios/${audioName}`, audioFile, { upsert: true })
 
-        if (videoErr || audioErr || !videoData || !audioData) {
+        if (videoErr || audioErr) {
             console.error('❌ Upload lỗi:', videoErr || audioErr)
             setStatus('❌ Upload thất bại.')
             return
         }
 
-        console.log('✅ Upload xong:', videoData, audioData)
-
-        // ✅ Kiểm tra file đã tồn tại công khai
         const videoCheck = await fetch(videoUrl)
         const audioCheck = await fetch(audioUrl)
 
         if (!videoCheck.ok || !audioCheck.ok) {
-            console.warn('❌ File chưa tồn tại công khai:', videoCheck.status, audioCheck.status)
             setStatus('❌ File video hoặc audio chưa tồn tại công khai!')
             return
         }
 
-        console.log('✅ Đã kiểm tra tồn tại file trên Supabase.')
+        setStatus('🚀 Đã tải lên. Đang gửi job xử lý...')
 
-        setStatus('🚀 Đã tải xong. Đang gọi job xử lý...')
-
-        // ✅ Gọi Cloud Run Job đúng chuẩn
         const runRes = await fetch(`https://asia-southeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/onlook-main/jobs/process-video-worker:run`, {
             method: 'POST',
             headers: {
@@ -78,7 +70,7 @@ export default function VideoAudioFile() {
                     env: [
                         { name: 'OUTPUT_NAME', value: outputName },
                         { name: 'INPUT_VIDEO_URL', value: videoUrl },
-                        { name: 'INPUT_AUDIO_URL', value: audioUrl }
+                        { name: 'INPUT_AUDIO_URL', value: audioUrl },
                     ],
                 },
             }),
@@ -86,16 +78,15 @@ export default function VideoAudioFile() {
 
         if (!runRes.ok) {
             setStatus('❌ Gửi job xử lý thất bại!')
-            console.error('❌ Lỗi job:', await runRes.text())
+            console.error('❌ Job lỗi:', await runRes.text())
             return
         }
 
-        setStatus('⏳ Đã gửi job xử lý, đang chờ kết quả...')
+        setStatus('⏳ Đã gửi job. Đang kiểm tra file kết quả...')
 
-        // ⏳ Poll kết quả merge
-        const check = async () => {
+        const poll = async () => {
             for (let i = 0; i < 30; i++) {
-                const res = await fetch(`https://onlook-process-upload-ncdt2ep7dq-as.a.run.app/check?file=${outputName}`)
+                const res = await fetch(`https://onlook-process-upload-ncdt2ep7dq-as.a.run.app/check?file=merged-${sid}.mp4`)
                 const json = await res.json()
                 if (json.exists) {
                     setStatus('✅ File đã sẵn sàng. Bạn có thể tải về.')
@@ -103,32 +94,10 @@ export default function VideoAudioFile() {
                 }
                 await new Promise((r) => setTimeout(r, 3000))
             }
-            setStatus('❌ Hết thời gian chờ. Vui lòng thử lại.')
+            setStatus('❌ Quá thời gian chờ. Vui lòng thử lại.')
         }
 
-        check()
-    }
-
-    const handleDownload = async () => {
-        setStatus('♻️ Gửi yêu cầu xoá file gốc...')
-
-        await fetch(`https://asia-southeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/onlook-main/jobs/cleanup-worker:run`, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                taskOverrides: {
-                    env: [
-                        { name: 'VIDEO_FILE', value: `input-${sessionId}.mp4` },
-                        { name: 'AUDIO_FILE', value: `input-${sessionId}.mp3` },
-                    ],
-                },
-            }),
-        })
-
-        setStatus('🧹 Đã gửi yêu cầu cleanup.')
+        poll()
     }
 
     return (
@@ -148,7 +117,6 @@ export default function VideoAudioFile() {
                 <a
                     href={`https://onlook-process-upload-ncdt2ep7dq-as.a.run.app/tmp/merged-${sessionId}.mp4`}
                     download
-                    onClick={handleDownload}
                     className="underline text-green-700"
                 >
                     ⬇️ Tải file hoàn chỉnh
