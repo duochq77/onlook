@@ -1,26 +1,21 @@
-# Dockerfile.process
 FROM node:20
 
-# 1. Thiết lập thư mục làm việc
 WORKDIR /app
 
-# 2. Copy package.json và package-lock.json trước để cache dependencies
 COPY package.json package-lock.json ./
 
-# 3. Cài đặt dependencies
 RUN npm install
 
-# 4. Sao chép toàn bộ source code vào container
 COPY . .
 
-# 5. Cài TypeScript toàn cục để biên dịch trong container
 RUN npm install -g typescript
 
-# 6. Biên dịch các file worker từ TypeScript sang JavaScript
 RUN npx tsc -p tsconfig.worker.json
 
-# 7. Thiết lập biến môi trường (nếu cần)
 ENV PORT=8080
 
-# 8. Chạy worker xử lý video/audio chính
-CMD ["node", "dist/worker/process-video-worker.js"]
+# Nếu bạn cần load biến môi trường từ .env (dotenv)
+CMD ["node", "-r", "dotenv/config", "dist/worker/process-video-worker.js"]
+
+# Nếu không dùng dotenv, dùng lệnh này thay thế:
+# CMD ["node", "dist/worker/process-video-worker.js"]

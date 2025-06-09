@@ -12,14 +12,21 @@ const supabase = createClient(
 )
 
 const TMP = '/tmp'
+
+// Kiểm tra biến môi trường bắt buộc
+const INPUT_VIDEO_URL = process.env.INPUT_VIDEO_URL
+const INPUT_AUDIO_URL = process.env.INPUT_AUDIO_URL
+const OUTPUT_NAME = process.env.OUTPUT_NAME
+
+if (!INPUT_VIDEO_URL || !INPUT_AUDIO_URL || !OUTPUT_NAME) {
+    console.error('❌ Thiếu biến môi trường bắt buộc: INPUT_VIDEO_URL, INPUT_AUDIO_URL hoặc OUTPUT_NAME')
+    process.exit(1)
+}
+
 const inputVideo = path.join(TMP, 'input.mp4')
 const inputAudio = path.join(TMP, 'input.mp3')
 const cleanVideo = path.join(TMP, 'clean.mp4')
-const outputFile = path.join(TMP, process.env.OUTPUT_NAME!)
-
-const INPUT_VIDEO_URL = process.env.INPUT_VIDEO_URL!
-const INPUT_AUDIO_URL = process.env.INPUT_AUDIO_URL!
-const OUTPUT_NAME = process.env.OUTPUT_NAME!
+const outputFile = path.join(TMP, OUTPUT_NAME)
 
 async function download(url: string, dest: string) {
     const res = await fetch(url)
