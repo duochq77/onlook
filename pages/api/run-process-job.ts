@@ -3,7 +3,6 @@ import { createClient } from '@supabase/supabase-js'
 import { v4 as uuidv4 } from 'uuid'
 import formidable from 'formidable'
 import fs from 'fs'
-import path from 'path'
 import { getGoogleAccessToken } from '@/utils/getGoogleToken'
 
 export const config = {
@@ -44,7 +43,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const audioName = `input-audios/${id}.mp3`
         const outputName = `merged-${id}.mp4`
 
-        console.log('📤 Đang upload file lên Supabase...')
+        console.log('📤 Upload lên Supabase...')
         const uploadVideo = await supabase.storage
             .from(bucket)
             .upload(videoName, fs.createReadStream(video.filepath), {
@@ -67,17 +66,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const videoUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${bucket}/${videoName}`
         const audioUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${bucket}/${audioName}`
 
-        console.log('🔑 Đang lấy Google Access Token từ Service Account...')
         let accessToken: string
         try {
             accessToken = await getGoogleAccessToken()
-            console.log('✅ Token lấy thành công.')
         } catch (err) {
             console.error('❌ Lỗi lấy Google token:', err)
             return res.status(500).json({ error: 'Không lấy được access token từ Google' })
         }
 
-        console.log('🚀 Gửi yêu cầu tới Cloud Run Job:', process.env.CLOUD_RUN_URL)
+        console.log('🚀 Gửi job Cloud Run...')
         const triggerRes = await fetch(`${process.env.CLOUD_RUN_URL}`, {
             method: 'POST',
             headers: {
@@ -85,19 +82,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                INPUT_VIDEO_URL: videoUrl,
-                INPUT_AUDIO_URL: audioUrl,
-                OUTPUT_NAME: outputName,
+                taskOverrides: {
+                    env: [
+                        { name: 'OUTPUT_NAME', value: outputName },
+                        { name: 'INPUT_VIDEO_URL', value: videoUrl },
+                        { name: 'INPUT_AUDIO_URL', value: audioUrl },
+                    ],
+                },
             }),
         })
 
         if (!triggerRes.ok) {
             const errorText = await triggerRes.text()
-            console.error('❌ Lỗi gọi Cloud Run:', errorText)
-            return res.status(500).json({ error: 'Không gọi được job xử lý video', detail: errorText })
+            console.error('❌ Cloud Run lỗi:', errorText)
+            return res.status(500).json({ error: 'Không gọi được job xử lý', detail: errorText })
         }
 
-        console.log('✅ Job xử lý đã được gửi thành công tới Cloud Run.')
+        console.log('✅ Job xử lý đã gửi thành công.')
         return res.status(200).json({ outputName })
     })
 }

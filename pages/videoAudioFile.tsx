@@ -2,12 +2,6 @@
 export const dynamic = 'force-dynamic'
 
 import { useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 export default function VideoAudioFile() {
     const [videoFile, setVideoFile] = useState<File | null>(null)
@@ -15,78 +9,39 @@ export default function VideoAudioFile() {
     const [status, setStatus] = useState('')
     const [sessionId, setSessionId] = useState('')
 
-    const STORAGE_PATH = 'stream-files'
-    const token = process.env.NEXT_PUBLIC_GOOGLE_CLOUD_RUN_TOKEN!
-
     const handleUpload = async () => {
         if (!videoFile || !audioFile) return alert('❗ Vui lòng chọn đủ 2 file!')
 
         const sid = `${Date.now()}-${Math.random().toString(36).slice(2)}`
         setSessionId(sid)
 
-        const videoName = `input-${sid}.mp4`
-        const audioName = `input-${sid}.mp3`
-        const outputName = `merged-${sid}.mp4`
+        setStatus('📤 Đang tải lên Supabase và gửi job...')
 
-        const videoPath = `${STORAGE_PATH}/input-videos/${videoName}`
-        const audioPath = `${STORAGE_PATH}/input-audios/${audioName}`
-        const videoUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${videoPath}`
-        const audioUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${audioPath}`
+        const formData = new FormData()
+        formData.append('video', videoFile)
+        formData.append('audio', audioFile)
 
-        setStatus('📤 Đang tải lên Supabase...')
-
-        const { error: videoErr } = await supabase.storage
-            .from(STORAGE_PATH)
-            .upload(`input-videos/${videoName}`, videoFile, { upsert: true })
-
-        const { error: audioErr } = await supabase.storage
-            .from(STORAGE_PATH)
-            .upload(`input-audios/${audioName}`, audioFile, { upsert: true })
-
-        if (videoErr || audioErr) {
-            console.error('❌ Upload lỗi:', videoErr || audioErr)
-            setStatus('❌ Upload thất bại.')
-            return
-        }
-
-        const videoCheck = await fetch(videoUrl)
-        const audioCheck = await fetch(audioUrl)
-
-        if (!videoCheck.ok || !audioCheck.ok) {
-            setStatus('❌ File video hoặc audio chưa tồn tại công khai!')
-            return
-        }
-
-        setStatus('🚀 Đã tải lên. Đang gửi job xử lý...')
-
-        const runRes = await fetch(`https://asia-southeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/onlook-main/jobs/process-video-worker:run`, {
+        const res = await fetch('/api/run-process-job', {
             method: 'POST',
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                taskOverrides: {
-                    env: [
-                        { name: 'OUTPUT_NAME', value: outputName },
-                        { name: 'INPUT_VIDEO_URL', value: videoUrl },
-                        { name: 'INPUT_AUDIO_URL', value: audioUrl },
-                    ],
-                },
-            }),
+            body: formData,
         })
 
-        if (!runRes.ok) {
-            setStatus('❌ Gửi job xử lý thất bại!')
-            console.error('❌ Job lỗi:', await runRes.text())
+        if (!res.ok) {
+            const err = await res.json()
+            console.error('❌ Upload hoặc job lỗi:', err)
+            setStatus('❌ Upload hoặc job lỗi.')
             return
         }
+
+        const data = await res.json()
+        const outputName = data.outputName
+        const file = outputName.replace('merged-', '')
 
         setStatus('⏳ Đã gửi job. Đang kiểm tra file kết quả...')
 
         const poll = async () => {
             for (let i = 0; i < 30; i++) {
-                const res = await fetch(`https://onlook-process-upload-ncdt2ep7dq-as.a.run.app/check?file=merged-${sid}.mp4`)
+                const res = await fetch(`/api/check-merged?file=${outputName}`)
                 const json = await res.json()
                 if (json.exists) {
                     setStatus('✅ File đã sẵn sàng. Bạn có thể tải về.')
@@ -115,7 +70,7 @@ export default function VideoAudioFile() {
 
             {status.includes('✅') && (
                 <a
-                    href={`https://onlook-process-upload-ncdt2ep7dq-as.a.run.app/tmp/merged-${sessionId}.mp4`}
+                    href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/stream-files/outputs/merged-${sessionId}.mp4`}
                     download
                     className="underline text-green-700"
                 >
