@@ -58,7 +58,7 @@ export default function VideoAudioFile() {
 
         setStatus('🚀 Đã upload. Đang gửi job xử lý...')
 
-        const runRes = await fetch('/api/run-process-job', {
+        const runRes = await fetch('/api/create-process-job', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -75,22 +75,7 @@ export default function VideoAudioFile() {
             return
         }
 
-        setStatus('⏳ Đã gửi job. Đang kiểm tra file kết quả...')
-
-        const poll = async () => {
-            for (let i = 0; i < 30; i++) {
-                const res = await fetch(`/api/check-merged?file=${outputName}`)
-                const json = await res.json()
-                if (json.exists) {
-                    setStatus('✅ File đã sẵn sàng. Bạn có thể tải về.')
-                    return
-                }
-                await new Promise((r) => setTimeout(r, 3000))
-            }
-            setStatus('❌ Quá thời gian chờ. Vui lòng thử lại.')
-        }
-
-        poll()
+        setStatus('⏳ Đã gửi job. Đang chờ xử lý...')
     }
 
     return (
@@ -105,16 +90,6 @@ export default function VideoAudioFile() {
             </button>
 
             <p>{status}</p>
-
-            {status.includes('✅') && (
-                <a
-                    href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/stream-files/outputs/merged-${sessionId}.mp4`}
-                    download
-                    className="underline text-green-700"
-                >
-                    ⬇️ Tải file hoàn chỉnh
-                </a>
-            )}
         </main>
     )
 }
