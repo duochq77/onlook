@@ -18,13 +18,13 @@ const supabase = createClient(
 
 const TMP = '/tmp'
 
-// Sửa hàm download để chuyển ReadableStream web sang Node.js stream
+// Hàm tải file từ URL về đĩa, chuyển ReadableStream web sang Node.js stream
 async function download(url: string, dest: string) {
     const res = await fetch(url)
     if (!res.ok || !res.body) throw new Error(`❌ Không tải được: ${url}`)
 
     const fileStream = fs.createWriteStream(dest)
-    const nodeStream = Readable.from(res.body as any) // chuyển sang Node.js stream
+    const nodeStream = Readable.from(res.body as any)
 
     await new Promise<void>((resolve, reject) => {
         nodeStream.pipe(fileStream)
@@ -62,14 +62,12 @@ async function processJob(job: {
         execSync(`ffmpeg -i ${cleanVideo} -i ${inputAudio} -c:v copy -c:a aac -shortest ${outputFile} -y`)
 
         console.log('🚀 Upload file merged lên Supabase...')
-        const uploadRes = await supabase.storage.from('stream-files').upload(
-            `outputs/${job.outputName}`,
-            fs.createReadStream(outputFile),
-            {
+        const uploadRes = await supabase.storage
+            .from('stream-files')
+            .upload(`outputs/${job.outputName}`, fs.createReadStream(outputFile), {
                 contentType: 'video/mp4',
                 upsert: true,
-            }
-        )
+            })
 
         if (uploadRes.error) {
             throw new Error(`❌ Lỗi khi upload file merged: ${uploadRes.error.message}`)
@@ -93,7 +91,6 @@ async function runWorker() {
         try {
             const jobJson = await redis.rpop('onlook:process-video-queue')
             if (!jobJson) {
-                // Không có job, đợi 3s rồi thử lại
                 await new Promise((r) => setTimeout(r, 3000))
                 continue
             }
@@ -102,7 +99,6 @@ async function runWorker() {
             await processJob(job)
         } catch (err) {
             console.error('❌ Lỗi worker:', err)
-            // Delay để tránh vòng lặp quá nhanh khi lỗi
             await new Promise((r) => setTimeout(r, 5000))
         }
     }

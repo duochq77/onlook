@@ -3,74 +3,85 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-// worker/process-video-worker.ts
 require("dotenv/config");
 const fs_1 = __importDefault(require("fs"));
 const child_process_1 = require("child_process");
-const node_fetch_1 = __importDefault(require("node-fetch"));
 const path_1 = __importDefault(require("path"));
 const supabase_js_1 = require("@supabase/supabase-js");
+const redis_1 = require("@upstash/redis");
+const stream_1 = require("stream");
+const redis = new redis_1.Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
 const supabase = (0, supabase_js_1.createClient)(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 const TMP = '/tmp';
-// Lấy biến môi trường, có thể undefined
-const INPUT_VIDEO_URL = process.env.INPUT_VIDEO_URL;
-const INPUT_AUDIO_URL = process.env.INPUT_AUDIO_URL;
-const OUTPUT_NAME = process.env.OUTPUT_NAME;
-// Kiểm tra biến môi trường bắt buộc
-if (!INPUT_VIDEO_URL || !INPUT_AUDIO_URL || !OUTPUT_NAME) {
-    console.error('❌ Thiếu biến môi trường bắt buộc: INPUT_VIDEO_URL, INPUT_AUDIO_URL hoặc OUTPUT_NAME');
-    process.exit(1);
-}
-// Ép kiểu chắc chắn là string
-const inputVideoUrl = INPUT_VIDEO_URL;
-const inputAudioUrl = INPUT_AUDIO_URL;
-const outputName = OUTPUT_NAME;
-const inputVideo = path_1.default.join(TMP, 'input.mp4');
-const inputAudio = path_1.default.join(TMP, 'input.mp3');
-const cleanVideo = path_1.default.join(TMP, 'clean.mp4');
-const outputFile = path_1.default.join(TMP, outputName);
+// Sửa hàm download để chuyển ReadableStream web sang Node.js stream
 async function download(url, dest) {
-    const res = await (0, node_fetch_1.default)(url);
+    const res = await fetch(url);
     if (!res.ok || !res.body)
         throw new Error(`❌ Không tải được: ${url}`);
     const fileStream = fs_1.default.createWriteStream(dest);
+    const nodeStream = stream_1.Readable.from(res.body); // chuyển sang Node.js stream
     await new Promise((resolve, reject) => {
-        res.body.pipe(fileStream);
-        res.body.on('error', reject);
+        nodeStream.pipe(fileStream);
+        nodeStream.on('error', reject);
         fileStream.on('finish', resolve);
     });
 }
-async function run() {
-    console.log('📥 Đang tải video + audio từ Supabase...');
-    await download(inputVideoUrl, inputVideo);
-    await download(inputAudioUrl, inputAudio);
-    if (!fs_1.default.existsSync(inputVideo) || !fs_1.default.existsSync(inputAudio)) {
-        console.error('❌ File tải về không tồn tại!');
-        process.exit(1);
+async function processJob(job) {
+    const inputVideo = path_1.default.join(TMP, 'input.mp4');
+    const inputAudio = path_1.default.join(TMP, 'input.mp3');
+    const cleanVideo = path_1.default.join(TMP, 'clean.mp4');
+    const outputFile = path_1.default.join(TMP, job.outputName);
+    console.log(`🟢 Bắt đầu xử lý job ${job.jobId}`);
+    try {
+        console.log('📥 Đang tải video + audio từ Supabase...');
+        await download(job.videoUrl, inputVideo);
+        await download(job.audioUrl, inputAudio);
+        if (!fs_1.default.existsSync(inputVideo) || !fs_1.default.existsSync(inputAudio)) {
+            throw new Error('❌ File tải về không tồn tại!');
+        }
+        console.log('✂️ Đang tách audio khỏi video...');
+        (0, child_process_1.execSync)(`ffmpeg -i ${inputVideo} -an -c:v copy ${cleanVideo} -y`);
+        console.log('🎧 Đang ghép audio gốc vào video sạch...');
+        (0, child_process_1.execSync)(`ffmpeg -i ${cleanVideo} -i ${inputAudio} -c:v copy -c:a aac -shortest ${outputFile} -y`);
+        console.log('🚀 Upload file merged lên Supabase...');
+        const uploadRes = await supabase.storage.from('stream-files').upload(`outputs/${job.outputName}`, fs_1.default.createReadStream(outputFile), {
+            contentType: 'video/mp4',
+            upsert: true,
+        });
+        if (uploadRes.error) {
+            throw new Error(`❌ Lỗi khi upload file merged: ${uploadRes.error.message}`);
+        }
+        // Xoá file nguyên liệu cũ
+        const extractPath = (url) => url.split('/object/public/stream-files/')[1];
+        await supabase.storage.from('stream-files').remove([extractPath(job.videoUrl)]);
+        await supabase.storage.from('stream-files').remove([extractPath(job.audioUrl)]);
+        console.log(`✅ Hoàn tất job ${job.jobId}: outputs/${job.outputName}`);
     }
-    console.log('✂️ Đang tách audio khỏi video...');
-    (0, child_process_1.execSync)(`ffmpeg -i ${inputVideo} -an -c:v copy ${cleanVideo} -y`);
-    console.log('🎧 Đang ghép audio gốc vào video sạch...');
-    (0, child_process_1.execSync)(`ffmpeg -i ${cleanVideo} -i ${inputAudio} -c:v copy -c:a aac -shortest ${outputFile} -y`);
-    console.log('🚀 Upload file merged lên Supabase...');
-    const uploadRes = await supabase.storage.from('stream-files').upload(`outputs/${outputName}`, fs_1.default.createReadStream(outputFile), {
-        contentType: 'video/mp4',
-        upsert: true,
-    });
-    if (uploadRes.error) {
-        console.error('❌ Lỗi khi upload file merged:', uploadRes.error);
-        process.exit(1);
+    catch (err) {
+        console.error(`❌ Lỗi xử lý job ${job.jobId}:`, err);
     }
-    // Tự động xoá 2 file nguyên liệu cũ
-    const extractPath = (url) => url.split('/object/public/stream-files/')[1];
-    const deleteVideo = await supabase.storage.from('stream-files').remove([extractPath(inputVideoUrl)]);
-    const deleteAudio = await supabase.storage.from('stream-files').remove([extractPath(inputAudioUrl)]);
-    if (deleteVideo.error || deleteAudio.error) {
-        console.warn('⚠️ Lỗi khi xoá file gốc:', deleteVideo.error || '', deleteAudio.error || '');
-    }
-    else {
-        console.log('🗑️ Đã xoá file nguyên liệu khỏi Supabase.');
-    }
-    console.log(`✅ Xử lý hoàn tất: outputs/${outputName}`);
 }
-run();
+async function runWorker() {
+    console.log('⏳ Worker Onlook đang chạy...');
+    while (true) {
+        try {
+            const jobJson = await redis.rpop('onlook:process-video-queue');
+            if (!jobJson) {
+                // Không có job, đợi 3s rồi thử lại
+                await new Promise((r) => setTimeout(r, 3000));
+                continue;
+            }
+            const job = JSON.parse(jobJson);
+            await processJob(job);
+        }
+        catch (err) {
+            console.error('❌ Lỗi worker:', err);
+            // Delay để tránh vòng lặp quá nhanh khi lỗi
+            await new Promise((r) => setTimeout(r, 5000));
+        }
+    }
+}
+runWorker();
