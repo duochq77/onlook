@@ -4,21 +4,23 @@ FROM node:20
 # 1. Thiết lập thư mục làm việc
 WORKDIR /app
 
-# 2. Cài đặt dependencies
+# 2. Copy package.json và package-lock.json trước để cache dependencies
 COPY package.json package-lock.json ./
+
+# 3. Cài đặt dependencies
 RUN npm install
 
-# 3. Sao chép toàn bộ source code vào container
+# 4. Sao chép toàn bộ source code vào container
 COPY . .
 
-# 4. Cài TypeScript để biên dịch trong container (nếu cần)
+# 5. Cài TypeScript toàn cục để biên dịch trong container
 RUN npm install -g typescript
 
-# 5. Biên dịch các file worker từ TypeScript → JavaScript
+# 6. Biên dịch các file worker từ TypeScript sang JavaScript
 RUN npx tsc -p tsconfig.worker.json
 
-# 6. Thiết lập biến môi trường (nếu cần)
+# 7. Thiết lập biến môi trường (nếu cần)
 ENV PORT=8080
 
-# 7. Chạy worker xử lý video/audio chính
+# 8. Chạy worker xử lý video/audio chính
 CMD ["node", "dist/worker/process-video-worker.js"]
