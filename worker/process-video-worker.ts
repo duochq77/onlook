@@ -38,14 +38,14 @@ async function processJob(job: {
     audioUrl: string
     outputName: string
 }) {
-    // Kiểm tra biến môi trường cần thiết
-    if (!process.env.SUPABASE_STORAGE_BUCKET) {
-        console.error('❌ Thiếu biến môi trường: SUPABASE_STORAGE_BUCKET')
-        process.exit(1)
-    }
+    // Debug và kiểm tra biến môi trường & tham số
+    console.log("📌 Debug: job.outputName =", job.outputName)
+    console.log("📌 Debug: job.videoUrl =", job.videoUrl)
+    console.log("📌 Debug: job.audioUrl =", job.audioUrl)
+    console.log("📌 Debug: SUPABASE_STORAGE_BUCKET =", process.env.SUPABASE_STORAGE_BUCKET)
 
-    if (!job.outputName) {
-        console.error('❌ Thiếu job.outputName')
+    if (!job.outputName || !job.videoUrl || !job.audioUrl || !process.env.SUPABASE_STORAGE_BUCKET) {
+        console.error('❌ Thiếu biến môi trường hoặc tham số job!')
         process.exit(1)
     }
 
@@ -55,8 +55,6 @@ async function processJob(job: {
     const outputFile = path.join(TMP, job.outputName)
 
     console.log(`🟢 Bắt đầu xử lý job ${job.jobId}`)
-    console.log("📌 outputName:", job.outputName)
-    console.log("📌 SUPABASE_STORAGE_BUCKET:", process.env.SUPABASE_STORAGE_BUCKET)
 
     try {
         console.log('📥 Đang tải video + audio từ Supabase...')
@@ -85,7 +83,7 @@ async function processJob(job: {
             throw new Error(`❌ Lỗi khi upload file merged: ${uploadRes.error.message}`)
         }
 
-        // Xoá file nguyên liệu cũ
+        // Xóa file nguyên liệu cũ
         const extractPath = (url: string) => url.split(`/object/public/${process.env.SUPABASE_STORAGE_BUCKET}/`)[1]
         await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET!).remove([extractPath(job.videoUrl)])
         await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET!).remove([extractPath(job.audioUrl)])

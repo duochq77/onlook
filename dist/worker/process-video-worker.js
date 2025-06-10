@@ -29,11 +29,22 @@ async function download(url, dest) {
     });
 }
 async function processJob(job) {
+    // Kiểm tra biến môi trường cần thiết
+    if (!process.env.SUPABASE_STORAGE_BUCKET) {
+        console.error('❌ Thiếu biến môi trường: SUPABASE_STORAGE_BUCKET');
+        process.exit(1);
+    }
+    if (!job.outputName) {
+        console.error('❌ Thiếu job.outputName');
+        process.exit(1);
+    }
     const inputVideo = path_1.default.join(TMP, 'input.mp4');
     const inputAudio = path_1.default.join(TMP, 'input.mp3');
     const cleanVideo = path_1.default.join(TMP, 'clean.mp4');
     const outputFile = path_1.default.join(TMP, job.outputName);
     console.log(`🟢 Bắt đầu xử lý job ${job.jobId}`);
+    console.log("📌 outputName:", job.outputName);
+    console.log("📌 SUPABASE_STORAGE_BUCKET:", process.env.SUPABASE_STORAGE_BUCKET);
     try {
         console.log('📥 Đang tải video + audio từ Supabase...');
         await download(job.videoUrl, inputVideo);
