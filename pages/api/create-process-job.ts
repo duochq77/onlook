@@ -1,3 +1,5 @@
+// pages/api/create-process-job.ts
+
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { Redis } from '@upstash/redis'
 
@@ -7,13 +9,18 @@ const redis = new Redis({
 })
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-    if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' })
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method Not Allowed' })
+    }
 
     const { videoUrl, audioUrl, outputName } = req.body
-    if (!videoUrl || !audioUrl || !outputName)
+
+    if (!videoUrl || !audioUrl || !outputName) {
         return res.status(400).json({ error: 'Thiếu tham số videoUrl, audioUrl hoặc outputName' })
+    }
 
     const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2)}`
+
     const jobPayload = {
         jobId,
         videoUrl,
@@ -25,9 +32,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
         await redis.lpush('onlook:process-video-queue', JSON.stringify(jobPayload))
         console.log('🟢 Đã đẩy job vào queue:', jobId)
-        res.status(200).json({ message: 'Job đã được tạo', jobId })
+        return res.status(200).json({ message: 'Job đã được tạo', jobId })
     } catch (error) {
         console.error('❌ Lỗi đẩy job vào queue:', error)
-        res.status(500).json({ error: 'Không thể tạo job' })
+        return res.status(500).json({ error: 'Không thể tạo job' })
     }
 }

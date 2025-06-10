@@ -16,13 +16,13 @@ const redis = new redis_1.Redis({
 });
 const supabase = (0, supabase_js_1.createClient)(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 const TMP = '/tmp';
-// Sửa hàm download để chuyển ReadableStream web sang Node.js stream
+// Hàm tải file từ URL về đĩa, chuyển ReadableStream web sang Node.js stream
 async function download(url, dest) {
     const res = await fetch(url);
     if (!res.ok || !res.body)
         throw new Error(`❌ Không tải được: ${url}`);
     const fileStream = fs_1.default.createWriteStream(dest);
-    const nodeStream = stream_1.Readable.from(res.body); // chuyển sang Node.js stream
+    const nodeStream = stream_1.Readable.from(res.body);
     await new Promise((resolve, reject) => {
         nodeStream.pipe(fileStream);
         nodeStream.on('error', reject);
@@ -47,7 +47,9 @@ async function processJob(job) {
         console.log('🎧 Đang ghép audio gốc vào video sạch...');
         (0, child_process_1.execSync)(`ffmpeg -i ${cleanVideo} -i ${inputAudio} -c:v copy -c:a aac -shortest ${outputFile} -y`);
         console.log('🚀 Upload file merged lên Supabase...');
-        const uploadRes = await supabase.storage.from('stream-files').upload(`outputs/${job.outputName}`, fs_1.default.createReadStream(outputFile), {
+        const uploadRes = await supabase.storage
+            .from('stream-files')
+            .upload(`outputs/${job.outputName}`, fs_1.default.createReadStream(outputFile), {
             contentType: 'video/mp4',
             upsert: true,
         });
@@ -70,7 +72,6 @@ async function runWorker() {
         try {
             const jobJson = await redis.rpop('onlook:process-video-queue');
             if (!jobJson) {
-                // Không có job, đợi 3s rồi thử lại
                 await new Promise((r) => setTimeout(r, 3000));
                 continue;
             }
@@ -79,7 +80,6 @@ async function runWorker() {
         }
         catch (err) {
             console.error('❌ Lỗi worker:', err);
-            // Delay để tránh vòng lặp quá nhanh khi lỗi
             await new Promise((r) => setTimeout(r, 5000));
         }
     }
