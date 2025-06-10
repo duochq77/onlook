@@ -52,13 +52,18 @@ async function processJob(job: {
     audioUrl: string
     outputName: string
 }) {
-    console.log("📌 Debug: job.outputName =", job.outputName)
-    console.log("📌 Debug: job.videoUrl =", job.videoUrl)
-    console.log("📌 Debug: job.audioUrl =", job.audioUrl)
+    console.log("📌 Debug: job.outputName =", job.outputName, "typeof =", typeof job.outputName)
+    console.log("📌 Debug: job.videoUrl =", job.videoUrl, "typeof =", typeof job.videoUrl)
+    console.log("📌 Debug: job.audioUrl =", job.audioUrl, "typeof =", typeof job.audioUrl)
     console.log("📌 Debug: SUPABASE_STORAGE_BUCKET =", process.env.SUPABASE_STORAGE_BUCKET)
 
-    if (!job.outputName || !job.videoUrl || !job.audioUrl || !process.env.SUPABASE_STORAGE_BUCKET) {
-        console.error('❌ Thiếu biến môi trường hoặc tham số job!')
+    if (
+        typeof job.outputName !== 'string' || job.outputName.length === 0 ||
+        typeof job.videoUrl !== 'string' || job.videoUrl.length === 0 ||
+        typeof job.audioUrl !== 'string' || job.audioUrl.length === 0 ||
+        !process.env.SUPABASE_STORAGE_BUCKET
+    ) {
+        console.error('❌ Thiếu biến môi trường hoặc tham số job không hợp lệ!')
         process.exit(1)
     }
 
