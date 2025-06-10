@@ -16,7 +16,6 @@ const redis = new redis_1.Redis({
 });
 const supabase = (0, supabase_js_1.createClient)(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 const TMP = '/tmp';
-// Hàm tải file từ URL về đĩa, chuyển ReadableStream web sang Node.js stream
 async function download(url, dest) {
     const res = await fetch(url);
     if (!res.ok || !res.body)
@@ -48,7 +47,7 @@ async function processJob(job) {
         (0, child_process_1.execSync)(`ffmpeg -i ${cleanVideo} -i ${inputAudio} -c:v copy -c:a aac -shortest ${outputFile} -y`);
         console.log('🚀 Upload file merged lên Supabase...');
         const uploadRes = await supabase.storage
-            .from('stream-files')
+            .from(process.env.SUPABASE_STORAGE_BUCKET)
             .upload(`outputs/${job.outputName}`, fs_1.default.createReadStream(outputFile), {
             contentType: 'video/mp4',
             upsert: true,
@@ -57,9 +56,9 @@ async function processJob(job) {
             throw new Error(`❌ Lỗi khi upload file merged: ${uploadRes.error.message}`);
         }
         // Xoá file nguyên liệu cũ
-        const extractPath = (url) => url.split('/object/public/stream-files/')[1];
-        await supabase.storage.from('stream-files').remove([extractPath(job.videoUrl)]);
-        await supabase.storage.from('stream-files').remove([extractPath(job.audioUrl)]);
+        const extractPath = (url) => url.split(`/object/public/${process.env.SUPABASE_STORAGE_BUCKET}/`)[1];
+        await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET).remove([extractPath(job.videoUrl)]);
+        await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET).remove([extractPath(job.audioUrl)]);
         console.log(`✅ Hoàn tất job ${job.jobId}: outputs/${job.outputName}`);
     }
     catch (err) {

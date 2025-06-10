@@ -48,9 +48,9 @@ export default function VideoAudioFile() {
             return
         }
 
+        // Kiểm tra file đã public có thể truy cập được không
         const videoCheck = await fetch(videoUrl)
         const audioCheck = await fetch(audioUrl)
-
         if (!videoCheck.ok || !audioCheck.ok) {
             setStatus('❌ File chưa tồn tại công khai!')
             return
@@ -82,10 +82,21 @@ export default function VideoAudioFile() {
         <main className="p-4 space-y-4">
             <h1 className="text-xl font-bold">🎬 Phương thức 3 – Giai đoạn 1</h1>
 
-            <input type="file" accept="video/mp4" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
-            <input type="file" accept="audio/mpeg" onChange={(e) => setAudioFile(e.target.files?.[0] || null)} />
+            <input
+                type="file"
+                accept="video/mp4"
+                onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+            />
+            <input
+                type="file"
+                accept="audio/mpeg"
+                onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
+            />
 
-            <button onClick={handleUpload} className="bg-blue-600 text-white px-4 py-2 rounded">
+            <button
+                onClick={handleUpload}
+                className="bg-blue-600 text-white px-4 py-2 rounded"
+            >
                 Tải lên & xử lý
             </button>
 
