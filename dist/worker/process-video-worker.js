@@ -16,6 +16,10 @@ const redis = new redis_1.Redis({
 });
 const supabase = (0, supabase_js_1.createClient)(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 const TMP = '/tmp';
+if (!fs_1.default.existsSync(TMP)) {
+    console.error('❌ Thư mục /tmp không tồn tại hoặc không thể ghi!');
+    process.exit(1);
+}
 async function download(url, dest) {
     const res = await fetch(url);
     if (!res.ok || !res.body)
@@ -28,8 +32,16 @@ async function download(url, dest) {
         fileStream.on('finish', resolve);
     });
 }
+const checkFileSize = (filePath) => {
+    try {
+        const stats = fs_1.default.statSync(filePath);
+        return stats.size > 0;
+    }
+    catch {
+        return false;
+    }
+};
 async function processJob(job) {
-    // Log debug các tham số và biến môi trường
     console.log("📌 Debug: job.outputName =", job.outputName);
     console.log("📌 Debug: job.videoUrl =", job.videoUrl);
     console.log("📌 Debug: job.audioUrl =", job.audioUrl);
@@ -47,22 +59,47 @@ async function processJob(job) {
         console.log('📥 Đang tải video + audio từ Supabase...');
         await download(job.videoUrl, inputVideo);
         await download(job.audioUrl, inputAudio);
+        console.log("📌 Kiểm tra file tải về:");
+        console.log("📌 inputVideo tồn tại:", fs_1.default.existsSync(inputVideo));
+        console.log("📌 inputAudio tồn tại:", fs_1.default.existsSync(inputAudio));
+        console.log("📌 Kiểm tra dung lượng file:");
+        console.log("📌 inputVideo kích thước:", checkFileSize(inputVideo) ? "OK" : "Không hợp lệ");
+        console.log("📌 inputAudio kích thước:", checkFileSize(inputAudio) ? "OK" : "Không hợp lệ");
         if (!fs_1.default.existsSync(inputVideo) || !fs_1.default.existsSync(inputAudio)) {
             throw new Error('❌ File tải về không tồn tại!');
         }
-        console.log('✂️ Đang tách audio khỏi video...');
-        (0, child_process_1.execSync)(`ffmpeg -i ${inputVideo} -an -c:v copy ${cleanVideo} -y`);
-        console.log('🎧 Đang ghép audio gốc vào video sạch...');
-        (0, child_process_1.execSync)(`ffmpeg -i ${cleanVideo} -i ${inputAudio} -c:v copy -c:a aac -shortest ${outputFile} -y`);
-        console.log('🚀 Upload file merged lên Supabase...');
-        const uploadRes = await supabase.storage
+        if (!checkFileSize(inputVideo) || !checkFileSize(inputAudio)) {
+            throw new Error('❌ File tải về có dung lượng 0, không hợp lệ!');
+        }
+        try {
+            console.log('✂️ Đang tách audio khỏi video...');
+            (0, child_process_1.execSync)(`ffmpeg -i ${inputVideo} -an -c:v copy ${cleanVideo} -y`);
+        }
+        catch (ffmpegErr) {
+            console.error('❌ Lỗi FFmpeg tách audio:', ffmpegErr);
+            throw ffmpegErr;
+        }
+        try {
+            console.log('🎧 Đang ghép audio gốc vào video sạch...');
+            (0, child_process_1.execSync)(`ffmpeg -i ${cleanVideo} -i ${inputAudio} -c:v copy -c:a aac -shortest ${outputFile} -y`);
+        }
+        catch (ffmpegErr) {
+            console.error('❌ Lỗi FFmpeg ghép audio:', ffmpegErr);
+            throw ffmpegErr;
+        }
+        console.log('📌 Upload lên Supabase...');
+        const { data, error } = await supabase.storage
             .from(process.env.SUPABASE_STORAGE_BUCKET)
             .upload(`outputs/${job.outputName}`, fs_1.default.createReadStream(outputFile), {
             contentType: 'video/mp4',
             upsert: true,
         });
-        if (uploadRes.error) {
-            throw new Error(`❌ Lỗi khi upload file merged: ${uploadRes.error.message}`);
+        if (error) {
+            console.error(`❌ Lỗi upload file merged:`, error.message);
+            throw error;
+        }
+        else {
+            console.log(`✅ File uploaded thành công:`, data);
         }
         // Xóa file nguyên liệu cũ
         const extractPath = (url) => url.split(`/object/public/${process.env.SUPABASE_STORAGE_BUCKET}/`)[1];
@@ -83,7 +120,18 @@ async function runWorker() {
                 await new Promise((r) => setTimeout(r, 3000));
                 continue;
             }
-            const job = JSON.parse(jobJson);
+            let job;
+            try {
+                job = JSON.parse(jobJson);
+            }
+            catch (parseErr) {
+                console.error('❌ Job nhận từ Redis không hợp lệ:', jobJson);
+                continue;
+            }
+            if (!job || typeof job !== 'object') {
+                console.error('❌ Job nhận từ Redis bị lỗi hoặc không hợp lệ:', job);
+                continue;
+            }
             await processJob(job);
         }
         catch (err) {
