@@ -29,7 +29,7 @@ async function download(url, dest) {
     });
 }
 async function processJob(job) {
-    // Debug và kiểm tra biến môi trường & tham số
+    // Log debug các tham số và biến môi trường
     console.log("📌 Debug: job.outputName =", job.outputName);
     console.log("📌 Debug: job.videoUrl =", job.videoUrl);
     console.log("📌 Debug: job.audioUrl =", job.audioUrl);
