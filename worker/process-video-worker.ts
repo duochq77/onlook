@@ -18,7 +18,6 @@ const supabase = createClient(
 
 const TMP = '/tmp'
 
-// Hàm tải file từ URL về đĩa, chuyển ReadableStream web sang Node.js stream
 async function download(url: string, dest: string) {
     const res = await fetch(url)
     if (!res.ok || !res.body) throw new Error(`❌ Không tải được: ${url}`)
@@ -63,7 +62,7 @@ async function processJob(job: {
 
         console.log('🚀 Upload file merged lên Supabase...')
         const uploadRes = await supabase.storage
-            .from('stream-files')
+            .from(process.env.SUPABASE_STORAGE_BUCKET!)
             .upload(`outputs/${job.outputName}`, fs.createReadStream(outputFile), {
                 contentType: 'video/mp4',
                 upsert: true,
@@ -74,9 +73,9 @@ async function processJob(job: {
         }
 
         // Xoá file nguyên liệu cũ
-        const extractPath = (url: string) => url.split('/object/public/stream-files/')[1]
-        await supabase.storage.from('stream-files').remove([extractPath(job.videoUrl)])
-        await supabase.storage.from('stream-files').remove([extractPath(job.audioUrl)])
+        const extractPath = (url: string) => url.split(`/object/public/${process.env.SUPABASE_STORAGE_BUCKET}/`)[1]
+        await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET!).remove([extractPath(job.videoUrl)])
+        await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET!).remove([extractPath(job.audioUrl)])
 
         console.log(`✅ Hoàn tất job ${job.jobId}: outputs/${job.outputName}`)
     } catch (err) {

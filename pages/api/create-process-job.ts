@@ -1,5 +1,3 @@
-// pages/api/create-process-job.ts
-
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { Redis } from '@upstash/redis'
 
