@@ -199,35 +199,35 @@ async function processJob(job: {
 async function runWorker() {
     console.log('⏳ Worker Onlook đang chạy...')
 
-    while (true) {
-        try {
-            const jobJson = await redis.rpop('onlook:process-video-queue')
-            if (!jobJson) {
-                await new Promise((r) => setTimeout(r, 3000))
-                continue
-            }
-
-            let job
-            try {
-                job = JSON.parse(jobJson)
-                if (typeof job === 'string') {
-                    job = JSON.parse(job)
-                }
-            } catch (parseErr) {
-                console.error('❌ Job nhận từ Redis không hợp lệ:', jobJson)
-                continue
-            }
-
-            if (!job || typeof job !== 'object') {
-                console.error('❌ Job nhận từ Redis bị lỗi hoặc không hợp lệ:', job)
-                continue
-            }
-
-            await processJob(job)
-        } catch (err) {
-            console.error('❌ Lỗi worker:', err)
-            await new Promise((r) => setTimeout(r, 5000))
+    try {
+        const jobJson = await redis.rpop('onlook:process-video-queue')
+        if (!jobJson) {
+            console.log('🟡 Không có job nào để xử lý, worker kết thúc.')
+            process.exit(0)
         }
+
+        let job
+        try {
+            job = JSON.parse(jobJson)
+            if (typeof job === 'string') {
+                job = JSON.parse(job)
+            }
+        } catch (parseErr) {
+            console.error('❌ Job nhận từ Redis không hợp lệ:', jobJson)
+            process.exit(1)
+        }
+
+        if (!job || typeof job !== 'object') {
+            console.error('❌ Job nhận từ Redis bị lỗi hoặc không hợp lệ:', job)
+            process.exit(1)
+        }
+
+        await processJob(job)
+        console.log('✅ Worker hoàn thành job, thoát...')
+        process.exit(0)
+    } catch (err) {
+        console.error('❌ Lỗi worker:', err)
+        process.exit(1)
     }
 }
 

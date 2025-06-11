@@ -1,22 +1,30 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { Redis } from '@upstash/redis'
-import { execSync } from 'child_process'
+import { getGoogleAccessToken } from '@/utils/getGoogleToken'
+import fetch from 'node-fetch'
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
     token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 })
 
-// Hàm gọi Cloud Run Job để worker chạy batch (bạn sửa theo tên và region job của bạn)
-async function triggerCloudRunJob() {
-    try {
-        // Gọi command gcloud deploy job (phải cài sẵn gcloud CLI trên môi trường backend)
-        // Nếu backend không có shell access, cần chuyển sang API call Google Cloud Run
-        execSync(`gcloud beta run jobs execute process-video-worker --region asia-southeast1 --project onlook-main`)
-        console.log('✅ Đã gọi Cloud Run Job process-video-worker')
-    } catch (err) {
-        console.error('❌ Lỗi gọi Cloud Run Job:', err)
+async function triggerCloudRunJob(token: string) {
+    const res = await fetch(
+        'https://asia-southeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/onlook-main/jobs/process-video-worker:run',
+        {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}), // body có thể để rỗng
+        }
+    )
+    if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`Lỗi gọi Cloud Run Job: ${res.status} ${text}`)
     }
+    return await res.json()
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -25,31 +33,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const { videoUrl, audioUrl, outputName } = req.body
-
     if (!videoUrl || !audioUrl || !outputName) {
         return res.status(400).json({ error: 'Thiếu tham số videoUrl, audioUrl hoặc outputName' })
     }
 
     const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2)}`
-
-    const jobPayload = {
-        jobId,
-        videoUrl,
-        audioUrl,
-        outputName,
-        createdAt: Date.now(),
-    }
+    const jobPayload = { jobId, videoUrl, audioUrl, outputName, createdAt: Date.now() }
 
     try {
         await redis.lpush('onlook:process-video-queue', JSON.stringify(jobPayload))
         console.log(`🟢 Đã đẩy job vào queue: ${jobId}`)
 
-        // Gọi Cloud Run Job worker chạy xử lý batch (không chờ kết quả, không block API)
-        triggerCloudRunJob()
+        const token = await getGoogleAccessToken()
+        await triggerCloudRunJob(token)
 
         return res.status(200).json({ message: 'Job đã được tạo và Cloud Run Job đang chạy', jobId })
     } catch (error) {
-        console.error('❌ Lỗi đẩy job vào queue hoặc gọi Cloud Run Job:', error)
+        console.error('❌ Lỗi đẩy job hoặc gọi worker:', error)
         return res.status(500).json({ error: 'Không thể tạo job hoặc gọi worker' })
     }
 }
