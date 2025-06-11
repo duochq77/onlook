@@ -6,7 +6,6 @@ import { createClient } from '@supabase/supabase-js'
 import { Redis } from '@upstash/redis'
 import { Readable } from 'stream'
 
-// ==== Bước 1: Log biến môi trường để debug ====
 console.log('--- DEBUG ENV VARIABLES ---')
 console.log('NEXT_PUBLIC_SUPABASE_URL =', process.env.NEXT_PUBLIC_SUPABASE_URL)
 console.log('NEXT_PUBLIC_SUPABASE_ANON_KEY =', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'OK' : 'MISSING')
@@ -46,7 +45,6 @@ async function download(url: string, dest: string) {
     })
 }
 
-// Kiểm tra dung lượng file có lớn hơn 0 không
 const checkFileSize = (filePath: string) => {
     try {
         const stats = fs.statSync(filePath)
@@ -56,7 +54,6 @@ const checkFileSize = (filePath: string) => {
     }
 }
 
-// Hàm trích xuất đường dẫn file chuẩn để xóa file trên Supabase Storage
 const extractPath = (url: string) => {
     try {
         const parts = url.split(`/storage/v1/object/public/${process.env.SUPABASE_STORAGE_BUCKET}/`)
@@ -81,8 +78,13 @@ async function processJob(job: {
 }) {
     console.log('📌 Debug: job nhận từ Redis =', job)
 
-    console.log('🔍 Kiểu dữ liệu job:', typeof job)
-    console.log('🔍 Kiểm tra outputName:', job.outputName, typeof job.outputName)
+    if (typeof job === 'string') {
+        try {
+            job = JSON.parse(job)
+        } catch {
+            // bỏ qua lỗi parse, giữ nguyên job
+        }
+    }
 
     if (!job.outputName || typeof job.outputName !== 'string') {
         console.error('❌ outputName không hợp lệ hoặc thiếu:', job.outputName)
@@ -149,6 +151,20 @@ async function processJob(job: {
             console.log('✅ File uploaded thành công:', data)
         }
 
+        // Xoá file tạm sau khi hoàn thành job
+        const cleanUpFiles = [inputVideo, inputAudio, cleanVideo, outputFile]
+        for (const f of cleanUpFiles) {
+            try {
+                if (fs.existsSync(f)) {
+                    fs.unlinkSync(f)
+                    console.log(`✅ Đã xóa file tạm: ${f}`)
+                }
+            } catch (err) {
+                console.warn(`⚠️ Lỗi khi xóa file tạm ${f}:`, err)
+            }
+        }
+
+        // Xóa file nguyên liệu trên Supabase Storage
         const videoPath = extractPath(job.videoUrl)
         const audioPath = extractPath(job.audioUrl)
 
@@ -164,6 +180,19 @@ async function processJob(job: {
         console.log(`✅ Hoàn tất job ${job.jobId}: outputs/${job.outputName}`)
     } catch (err) {
         console.error(`❌ Lỗi xử lý job ${job.jobId}:`, err)
+
+        // Dù lỗi vẫn xoá file tạm
+        const cleanUpFiles = [inputVideo, inputAudio, cleanVideo, outputFile]
+        for (const f of cleanUpFiles) {
+            try {
+                if (fs.existsSync(f)) {
+                    fs.unlinkSync(f)
+                    console.log(`✅ Đã xóa file tạm: ${f}`)
+                }
+            } catch (err) {
+                console.warn(`⚠️ Lỗi khi xóa file tạm ${f}:`, err)
+            }
+        }
     }
 }
 
@@ -181,6 +210,9 @@ async function runWorker() {
             let job
             try {
                 job = JSON.parse(jobJson)
+                if (typeof job === 'string') {
+                    job = JSON.parse(job)
+                }
             } catch (parseErr) {
                 console.error('❌ Job nhận từ Redis không hợp lệ:', jobJson)
                 continue

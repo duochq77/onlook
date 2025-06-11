@@ -28,6 +28,7 @@ if (!fs_1.default.existsSync(TMP)) {
     process.exit(1);
 }
 async function download(url, dest) {
+    console.log('Downloading:', url);
     const res = await fetch(url);
     if (!res.ok || !res.body)
         throw new Error(`❌ Không tải được: ${url}`);
@@ -48,9 +49,25 @@ const checkFileSize = (filePath) => {
         return false;
     }
 };
+const extractPath = (url) => {
+    try {
+        const parts = url.split(`/storage/v1/object/public/${process.env.SUPABASE_STORAGE_BUCKET}/`);
+        if (parts.length === 2) {
+            console.log('extractPath:', parts[1]);
+            return parts[1];
+        }
+        else {
+            console.warn('⚠️ Không thể trích xuất đường dẫn đúng từ URL:', url);
+            return '';
+        }
+    }
+    catch (e) {
+        console.error('❌ Lỗi trích xuất đường dẫn xóa file:', e);
+        return '';
+    }
+};
 async function processJob(job) {
     console.log('📌 Debug: job nhận từ Redis =', job);
-    // Kiểm tra kiểu dữ liệu job và outputName
     console.log('🔍 Kiểu dữ liệu job:', typeof job);
     console.log('🔍 Kiểm tra outputName:', job.outputName, typeof job.outputName);
     if (!job.outputName || typeof job.outputName !== 'string') {
@@ -63,7 +80,6 @@ async function processJob(job) {
         console.error('❌ Thiếu giá trị job hoặc biến môi trường! Dừng Worker.');
         process.exit(1);
     }
-    // ==== Bước 2: Kiểm tra TMP luôn phải là string hợp lệ ====
     if (typeof TMP !== 'string' || TMP.length === 0) {
         console.error('❌ Biến TMP không hợp lệ:', TMP);
         process.exit(1);
@@ -106,9 +122,16 @@ async function processJob(job) {
         else {
             console.log('✅ File uploaded thành công:', data);
         }
-        const extractPath = (url) => url.split(`/object/public/${process.env.SUPABASE_STORAGE_BUCKET}/`)[1];
-        await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET).remove([extractPath(job.videoUrl)]);
-        await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET).remove([extractPath(job.audioUrl)]);
+        const videoPath = extractPath(job.videoUrl);
+        const audioPath = extractPath(job.audioUrl);
+        if (videoPath) {
+            await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET).remove([videoPath]);
+            console.log(`✅ Đã xóa file video nguyên liệu: ${videoPath}`);
+        }
+        if (audioPath) {
+            await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET).remove([audioPath]);
+            console.log(`✅ Đã xóa file audio nguyên liệu: ${audioPath}`);
+        }
         console.log(`✅ Hoàn tất job ${job.jobId}: outputs/${job.outputName}`);
     }
     catch (err) {
@@ -127,6 +150,10 @@ async function runWorker() {
             let job;
             try {
                 job = JSON.parse(jobJson);
+                if (typeof job === 'string') {
+                    // Nếu JSON decode 1 lần vẫn là chuỗi, decode tiếp
+                    job = JSON.parse(job);
+                }
             }
             catch (parseErr) {
                 console.error('❌ Job nhận từ Redis không hợp lệ:', jobJson);
