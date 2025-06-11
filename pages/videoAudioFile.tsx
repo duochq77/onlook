@@ -18,7 +18,10 @@ export default function VideoAudioFile() {
     const STORAGE_PATH = 'stream-files'
 
     const handleUpload = async () => {
-        if (!videoFile || !audioFile) return alert('❗ Vui lòng chọn đủ 2 file!')
+        if (!videoFile || !audioFile) {
+            alert('❗ Vui lòng chọn đủ 2 file!')
+            return
+        }
 
         const sid = `${Date.now()}-${Math.random().toString(36).slice(2)}`
         setSessionId(sid)
@@ -93,10 +96,7 @@ export default function VideoAudioFile() {
                 onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
             />
 
-            <button
-                onClick={handleUpload}
-                className="bg-blue-600 text-white px-4 py-2 rounded"
-            >
+            <button onClick={handleUpload} className="bg-blue-600 text-white px-4 py-2 rounded">
                 Tải lên & xử lý
             </button>
 

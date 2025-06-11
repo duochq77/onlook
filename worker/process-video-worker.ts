@@ -50,20 +50,22 @@ async function processJob(job: {
     jobId: string
     videoUrl: string
     audioUrl: string
-    outputName: string
+    outputName?: string
 }) {
-    console.log("📌 Debug: job.outputName =", job.outputName, "typeof =", typeof job.outputName)
-    console.log("📌 Debug: job.videoUrl =", job.videoUrl, "typeof =", typeof job.videoUrl)
-    console.log("📌 Debug: job.audioUrl =", job.audioUrl, "typeof =", typeof job.audioUrl)
-    console.log("📌 Debug: SUPABASE_STORAGE_BUCKET =", process.env.SUPABASE_STORAGE_BUCKET)
+    console.log('📌 Debug: job nhận từ Redis =', job)
+
+    if (!job.outputName || typeof job.outputName !== 'string') {
+        console.error('❌ outputName không hợp lệ hoặc thiếu:', job.outputName)
+        // Bỏ qua job lỗi, không làm crash worker
+        return
+    }
 
     if (
-        typeof job.outputName !== 'string' || job.outputName.length === 0 ||
-        typeof job.videoUrl !== 'string' || job.videoUrl.length === 0 ||
-        typeof job.audioUrl !== 'string' || job.audioUrl.length === 0 ||
+        !job.videoUrl ||
+        !job.audioUrl ||
         !process.env.SUPABASE_STORAGE_BUCKET
     ) {
-        console.error('❌ Thiếu biến môi trường hoặc tham số job không hợp lệ!')
+        console.error('❌ Thiếu giá trị job hoặc biến môi trường! Dừng Worker.')
         process.exit(1)
     }
 
@@ -72,20 +74,18 @@ async function processJob(job: {
     const cleanVideo = path.join(TMP, 'clean.mp4')
     const outputFile = path.join(TMP, job.outputName)
 
-    console.log(`🟢 Bắt đầu xử lý job ${job.jobId}`)
-
     try {
         console.log('📥 Đang tải video + audio từ Supabase...')
         await download(job.videoUrl, inputVideo)
         await download(job.audioUrl, inputAudio)
 
-        console.log("📌 Kiểm tra file tải về:")
-        console.log("📌 inputVideo tồn tại:", fs.existsSync(inputVideo))
-        console.log("📌 inputAudio tồn tại:", fs.existsSync(inputAudio))
+        console.log('📌 Kiểm tra file tồn tại trên Worker:')
+        console.log('📌 inputVideo:', fs.existsSync(inputVideo))
+        console.log('📌 inputAudio:', fs.existsSync(inputAudio))
 
-        console.log("📌 Kiểm tra dung lượng file:")
-        console.log("📌 inputVideo kích thước:", checkFileSize(inputVideo) ? "OK" : "Không hợp lệ")
-        console.log("📌 inputAudio kích thước:", checkFileSize(inputAudio) ? "OK" : "Không hợp lệ")
+        console.log('📌 Kiểm tra dung lượng file:')
+        console.log('📌 inputVideo kích thước:', checkFileSize(inputVideo) ? 'OK' : 'Không hợp lệ')
+        console.log('📌 inputAudio kích thước:', checkFileSize(inputAudio) ? 'OK' : 'Không hợp lệ')
 
         if (!fs.existsSync(inputVideo) || !fs.existsSync(inputAudio)) {
             throw new Error('❌ File tải về không tồn tại!')
@@ -94,21 +94,11 @@ async function processJob(job: {
             throw new Error('❌ File tải về có dung lượng 0, không hợp lệ!')
         }
 
-        try {
-            console.log('✂️ Đang tách audio khỏi video...')
-            execSync(`ffmpeg -i ${inputVideo} -an -c:v copy ${cleanVideo} -y`)
-        } catch (ffmpegErr) {
-            console.error('❌ Lỗi FFmpeg tách audio:', ffmpegErr)
-            throw ffmpegErr
-        }
+        console.log('✂️ Đang tách audio khỏi video...')
+        execSync(`ffmpeg -i ${inputVideo} -an -c:v copy ${cleanVideo} -y`)
 
-        try {
-            console.log('🎧 Đang ghép audio gốc vào video sạch...')
-            execSync(`ffmpeg -i ${cleanVideo} -i ${inputAudio} -c:v copy -c:a aac -shortest ${outputFile} -y`)
-        } catch (ffmpegErr) {
-            console.error('❌ Lỗi FFmpeg ghép audio:', ffmpegErr)
-            throw ffmpegErr
-        }
+        console.log('🎧 Đang ghép audio gốc vào video sạch...')
+        execSync(`ffmpeg -i ${cleanVideo} -i ${inputAudio} -c:v copy -c:a aac -shortest ${outputFile} -y`)
 
         console.log('📌 Upload lên Supabase...')
         const { data, error } = await supabase.storage
@@ -119,14 +109,16 @@ async function processJob(job: {
             })
 
         if (error) {
-            console.error(`❌ Lỗi upload file merged:`, error.message)
+            console.error('❌ Lỗi upload file merged:', error.message)
             throw error
         } else {
-            console.log(`✅ File uploaded thành công:`, data)
+            console.log('✅ File uploaded thành công:', data)
         }
 
         // Xóa file nguyên liệu cũ
-        const extractPath = (url: string) => url.split(`/object/public/${process.env.SUPABASE_STORAGE_BUCKET}/`)[1]
+        const extractPath = (url: string) =>
+            url.split(`/object/public/${process.env.SUPABASE_STORAGE_BUCKET}/`)[1]
+
         await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET!).remove([extractPath(job.videoUrl)])
         await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET!).remove([extractPath(job.audioUrl)])
 

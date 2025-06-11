@@ -1,4 +1,3 @@
-// pages/api/create-process-job.ts
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { Redis } from '@upstash/redis'
 
@@ -30,7 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     try {
         await redis.lpush('onlook:process-video-queue', JSON.stringify(jobPayload))
-        console.log('🟢 Đã đẩy job vào queue:', jobId)
+        console.log(`🟢 Đã đẩy job vào queue: ${jobId}`)
         return res.status(200).json({ message: 'Job đã được tạo', jobId })
     } catch (error) {
         console.error('❌ Lỗi đẩy job vào queue:', error)
