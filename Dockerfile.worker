@@ -2,9 +2,14 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Copy package.json & package-lock.json
 COPY package*.json ./
+
+# Cài production dependencies
 RUN npm install --production
 
+# Copy toàn bộ source code (đã build sẵn hoặc chưa)
 COPY . .
 
+# Khởi chạy worker đã build
 CMD ["node", "dist/worker/process-video-worker.js"]

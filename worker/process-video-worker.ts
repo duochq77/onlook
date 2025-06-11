@@ -32,6 +32,7 @@ if (!fs.existsSync(TMP)) {
 }
 
 async function download(url: string, dest: string) {
+    console.log('Downloading:', url)
     const res = await fetch(url)
     if (!res.ok || !res.body) throw new Error(`❌ Không tải được: ${url}`)
 
@@ -45,12 +46,30 @@ async function download(url: string, dest: string) {
     })
 }
 
+// Kiểm tra dung lượng file có lớn hơn 0 không
 const checkFileSize = (filePath: string) => {
     try {
         const stats = fs.statSync(filePath)
         return stats.size > 0
     } catch {
         return false
+    }
+}
+
+// Hàm trích xuất đường dẫn file chuẩn để xóa file trên Supabase Storage
+const extractPath = (url: string) => {
+    try {
+        const parts = url.split(`/storage/v1/object/public/${process.env.SUPABASE_STORAGE_BUCKET}/`)
+        if (parts.length === 2) {
+            console.log('extractPath:', parts[1])
+            return parts[1]
+        } else {
+            console.warn('⚠️ Không thể trích xuất đường dẫn đúng từ URL:', url)
+            return ''
+        }
+    } catch (e) {
+        console.error('❌ Lỗi trích xuất đường dẫn xóa file:', e)
+        return ''
     }
 }
 
@@ -61,6 +80,9 @@ async function processJob(job: {
     outputName?: string
 }) {
     console.log('📌 Debug: job nhận từ Redis =', job)
+
+    console.log('🔍 Kiểu dữ liệu job:', typeof job)
+    console.log('🔍 Kiểm tra outputName:', job.outputName, typeof job.outputName)
 
     if (!job.outputName || typeof job.outputName !== 'string') {
         console.error('❌ outputName không hợp lệ hoặc thiếu:', job.outputName)
@@ -76,7 +98,6 @@ async function processJob(job: {
         process.exit(1)
     }
 
-    // ==== Bước 2: Kiểm tra TMP luôn phải là string hợp lệ ====
     if (typeof TMP !== 'string' || TMP.length === 0) {
         console.error('❌ Biến TMP không hợp lệ:', TMP)
         process.exit(1)
@@ -128,11 +149,17 @@ async function processJob(job: {
             console.log('✅ File uploaded thành công:', data)
         }
 
-        const extractPath = (url: string) =>
-            url.split(`/object/public/${process.env.SUPABASE_STORAGE_BUCKET}/`)[1]
+        const videoPath = extractPath(job.videoUrl)
+        const audioPath = extractPath(job.audioUrl)
 
-        await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET!).remove([extractPath(job.videoUrl)])
-        await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET!).remove([extractPath(job.audioUrl)])
+        if (videoPath) {
+            await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET!).remove([videoPath])
+            console.log(`✅ Đã xóa file video nguyên liệu: ${videoPath}`)
+        }
+        if (audioPath) {
+            await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET!).remove([audioPath])
+            console.log(`✅ Đã xóa file audio nguyên liệu: ${audioPath}`)
+        }
 
         console.log(`✅ Hoàn tất job ${job.jobId}: outputs/${job.outputName}`)
     } catch (err) {
