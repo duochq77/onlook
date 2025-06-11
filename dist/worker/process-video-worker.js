@@ -42,16 +42,16 @@ const checkFileSize = (filePath) => {
     }
 };
 async function processJob(job) {
-    console.log("📌 Debug: job nhận từ Redis =", job);
-    console.log("📌 Debug: job.outputName =", job.outputName);
-    console.log("📌 Debug: job.videoUrl =", job.videoUrl);
-    console.log("📌 Debug: job.audioUrl =", job.audioUrl);
-    console.log("📌 Debug: SUPABASE_STORAGE_BUCKET =", process.env.SUPABASE_STORAGE_BUCKET);
-    if (!job.outputName ||
-        !job.videoUrl ||
+    console.log('📌 Debug: job nhận từ Redis =', job);
+    if (!job.outputName || typeof job.outputName !== 'string') {
+        console.error('❌ outputName không hợp lệ hoặc thiếu:', job.outputName);
+        // Bỏ qua job lỗi, không làm crash worker
+        return;
+    }
+    if (!job.videoUrl ||
         !job.audioUrl ||
         !process.env.SUPABASE_STORAGE_BUCKET) {
-        console.error("❌ Thiếu giá trị job hoặc biến môi trường! Dừng Worker.");
+        console.error('❌ Thiếu giá trị job hoặc biến môi trường! Dừng Worker.');
         process.exit(1);
     }
     const inputVideo = path_1.default.join(TMP, 'input.mp4');
@@ -62,12 +62,12 @@ async function processJob(job) {
         console.log('📥 Đang tải video + audio từ Supabase...');
         await download(job.videoUrl, inputVideo);
         await download(job.audioUrl, inputAudio);
-        console.log("📌 Kiểm tra file tồn tại trên Worker:");
-        console.log("📌 inputVideo:", fs_1.default.existsSync(inputVideo));
-        console.log("📌 inputAudio:", fs_1.default.existsSync(inputAudio));
-        console.log("📌 Kiểm tra dung lượng file:");
-        console.log("📌 inputVideo kích thước:", checkFileSize(inputVideo) ? "OK" : "Không hợp lệ");
-        console.log("📌 inputAudio kích thước:", checkFileSize(inputAudio) ? "OK" : "Không hợp lệ");
+        console.log('📌 Kiểm tra file tồn tại trên Worker:');
+        console.log('📌 inputVideo:', fs_1.default.existsSync(inputVideo));
+        console.log('📌 inputAudio:', fs_1.default.existsSync(inputAudio));
+        console.log('📌 Kiểm tra dung lượng file:');
+        console.log('📌 inputVideo kích thước:', checkFileSize(inputVideo) ? 'OK' : 'Không hợp lệ');
+        console.log('📌 inputAudio kích thước:', checkFileSize(inputAudio) ? 'OK' : 'Không hợp lệ');
         if (!fs_1.default.existsSync(inputVideo) || !fs_1.default.existsSync(inputAudio)) {
             throw new Error('❌ File tải về không tồn tại!');
         }
@@ -86,11 +86,11 @@ async function processJob(job) {
             upsert: true,
         });
         if (error) {
-            console.error(`❌ Lỗi upload file merged:`, error.message);
+            console.error('❌ Lỗi upload file merged:', error.message);
             throw error;
         }
         else {
-            console.log(`✅ File uploaded thành công:`, data);
+            console.log('✅ File uploaded thành công:', data);
         }
         // Xóa file nguyên liệu cũ
         const extractPath = (url) => url.split(`/object/public/${process.env.SUPABASE_STORAGE_BUCKET}/`)[1];

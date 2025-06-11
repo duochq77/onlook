@@ -6,6 +6,14 @@ import { createClient } from '@supabase/supabase-js'
 import { Redis } from '@upstash/redis'
 import { Readable } from 'stream'
 
+// ==== Bước 1: Log biến môi trường để debug ====
+console.log('--- DEBUG ENV VARIABLES ---')
+console.log('NEXT_PUBLIC_SUPABASE_URL =', process.env.NEXT_PUBLIC_SUPABASE_URL)
+console.log('NEXT_PUBLIC_SUPABASE_ANON_KEY =', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'OK' : 'MISSING')
+console.log('SUPABASE_STORAGE_BUCKET =', process.env.SUPABASE_STORAGE_BUCKET)
+console.log('UPSTASH_REDIS_REST_URL =', process.env.UPSTASH_REDIS_REST_URL)
+console.log('UPSTASH_REDIS_REST_TOKEN =', process.env.UPSTASH_REDIS_REST_TOKEN ? 'OK' : 'MISSING')
+
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
     token: process.env.UPSTASH_REDIS_REST_TOKEN!,
@@ -56,7 +64,6 @@ async function processJob(job: {
 
     if (!job.outputName || typeof job.outputName !== 'string') {
         console.error('❌ outputName không hợp lệ hoặc thiếu:', job.outputName)
-        // Bỏ qua job lỗi, không làm crash worker
         return
     }
 
@@ -66,6 +73,12 @@ async function processJob(job: {
         !process.env.SUPABASE_STORAGE_BUCKET
     ) {
         console.error('❌ Thiếu giá trị job hoặc biến môi trường! Dừng Worker.')
+        process.exit(1)
+    }
+
+    // ==== Bước 2: Kiểm tra TMP luôn phải là string hợp lệ ====
+    if (typeof TMP !== 'string' || TMP.length === 0) {
+        console.error('❌ Biến TMP không hợp lệ:', TMP)
         process.exit(1)
     }
 
@@ -115,7 +128,6 @@ async function processJob(job: {
             console.log('✅ File uploaded thành công:', data)
         }
 
-        // Xóa file nguyên liệu cũ
         const extractPath = (url: string) =>
             url.split(`/object/public/${process.env.SUPABASE_STORAGE_BUCKET}/`)[1]
 
