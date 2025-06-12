@@ -4,7 +4,7 @@ import { getGoogleAccessToken } from '@/utils/getGoogleToken'
 import fetch from 'node-fetch'
 
 const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL!,   // https://clean-humpback-36746.upstash.io
+    url: process.env.UPSTASH_REDIS_REST_URL!,
     token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 })
 
@@ -41,8 +41,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const jobPayload = { jobId, videoUrl, audioUrl, outputName, createdAt: Date.now() }
 
     try {
-        console.log('🔑 Redis URL:', process.env.UPSTASH_REDIS_REST_URL)
-        console.log('🔑 Redis Token:', process.env.UPSTASH_REDIS_REST_TOKEN ? 'OK' : 'MISSING')
+        // Thêm log kiểm tra biến môi trường
+        console.log('Process.env UPSTASH_REDIS_REST_URL:', process.env.UPSTASH_REDIS_REST_URL)
+        console.log('Process.env UPSTASH_REDIS_REST_TOKEN:', process.env.UPSTASH_REDIS_REST_TOKEN ? 'OK' : 'MISSING')
+
+        // Log jobPayload để chắc chắn dữ liệu trước khi push lên Redis
+        console.log('Job payload:', jobPayload)
 
         await redis.lpush('onlook:process-video-queue', JSON.stringify(jobPayload))
         console.log(`🟢 Đã đẩy job vào queue: ${jobId}`)
