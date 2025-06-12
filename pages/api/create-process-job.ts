@@ -4,8 +4,8 @@ import { getGoogleAccessToken } from '@/utils/getGoogleToken'
 import fetch from 'node-fetch'
 
 const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL!,   // Ví dụ: rediss://default@clean-humpback-36746.upstash.io:6379
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!, // Ví dụ: AY-KAAIncDExY2E1YWI2...
+    url: process.env.UPSTASH_REDIS_REST_URL!,   // https://clean-humpback-36746.upstash.io
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 })
 
 async function triggerCloudRunJob(token: string) {
@@ -17,7 +17,7 @@ async function triggerCloudRunJob(token: string) {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({}), // body có thể để rỗng
+            body: JSON.stringify({}), // có thể để rỗng
         }
     )
     if (!res.ok) {
