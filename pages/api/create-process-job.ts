@@ -29,11 +29,14 @@ async function triggerCloudRunJob(token: string) {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    console.log('--- API create-process-job bắt đầu ---')
+
     if (req.method !== 'POST') {
         console.error('⚠️ API chỉ chấp nhận phương thức POST')
         return res.status(405).json({ error: 'Method Not Allowed' })
     }
 
+    console.log('Request body:', req.body)
     const { videoUrl, audioUrl, outputName } = req.body
     if (!videoUrl || !audioUrl || !outputName) {
         console.error('❌ Thiếu tham số bắt buộc:', { videoUrl, audioUrl, outputName })
@@ -55,7 +58,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const token = await getGoogleAccessToken()
         console.log('🔑 Google Access Token:', token.slice(0, 10) + '...')
 
-        await triggerCloudRunJob(token)
+        const cloudRunResult = await triggerCloudRunJob(token)
+        console.log('☁️ Cloud Run Job trigger result:', cloudRunResult)
 
         return res.status(200).json({ message: 'Job đã được tạo và Cloud Run Job đang chạy', jobId })
     } catch (error: any) {

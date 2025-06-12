@@ -136,12 +136,22 @@ async function processJob(job) {
         const videoPath = extractPath(job.videoUrl);
         const audioPath = extractPath(job.audioUrl);
         if (videoPath) {
-            await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET).remove([videoPath]);
-            console.log(`✅ Đã xóa file video nguyên liệu: ${videoPath}`);
+            try {
+                await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET).remove([videoPath]);
+                console.log(`✅ Đã xóa file video nguyên liệu: ${videoPath}`);
+            }
+            catch (err) {
+                console.error(`❌ Lỗi xóa file video nguyên liệu ${videoPath}:`, err);
+            }
         }
         if (audioPath) {
-            await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET).remove([audioPath]);
-            console.log(`✅ Đã xóa file audio nguyên liệu: ${audioPath}`);
+            try {
+                await supabase.storage.from(process.env.SUPABASE_STORAGE_BUCKET).remove([audioPath]);
+                console.log(`✅ Đã xóa file audio nguyên liệu: ${audioPath}`);
+            }
+            catch (err) {
+                console.error(`❌ Lỗi xóa file audio nguyên liệu ${audioPath}:`, err);
+            }
         }
         console.log(`✅ Hoàn tất job ${job.jobId}: outputs/${job.outputName}`);
     }
