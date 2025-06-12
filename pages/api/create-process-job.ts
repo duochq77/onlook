@@ -48,8 +48,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Log jobPayload để chắc chắn dữ liệu trước khi push lên Redis
         console.log('Job payload:', jobPayload)
 
-        await redis.lpush('onlook:process-video-queue', JSON.stringify(jobPayload))
-        console.log(`🟢 Đã đẩy job vào queue: ${jobId}`)
+        try {
+            const redisResult = await redis.lpush('onlook:process-video-queue', JSON.stringify(jobPayload))
+            console.log(`🟢 Đã đẩy job vào queue: ${jobId}, redis.lpush result:`, redisResult)
+        } catch (redisError) {
+            console.error('❌ Lỗi khi đẩy job vào Redis:', redisError)
+            throw redisError
+        }
 
         const token = await getGoogleAccessToken()
         console.log('🔑 Google Access Token:', token.slice(0, 10) + '...')
