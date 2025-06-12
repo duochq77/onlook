@@ -67,14 +67,6 @@ const extractPath = (url) => {
 };
 async function processJob(job) {
     console.log('📌 Debug: job nhận từ Redis =', job);
-    if (typeof job === 'string') {
-        try {
-            job = JSON.parse(job);
-        }
-        catch {
-            // bỏ qua lỗi parse, giữ nguyên job
-        }
-    }
     if (!job.outputName || typeof job.outputName !== 'string') {
         console.error('❌ outputName không hợp lệ hoặc thiếu:', job.outputName);
         return;
@@ -181,9 +173,6 @@ async function runWorker() {
         let job;
         try {
             job = JSON.parse(jobJson);
-            if (typeof job === 'string') {
-                job = JSON.parse(job);
-            }
         }
         catch (parseErr) {
             console.error('❌ Job nhận từ Redis không hợp lệ:', jobJson);

@@ -14,7 +14,7 @@ console.log('UPSTASH_REDIS_REST_URL =', process.env.UPSTASH_REDIS_REST_URL)
 console.log('UPSTASH_REDIS_REST_TOKEN =', process.env.UPSTASH_REDIS_REST_TOKEN ? 'OK' : 'MISSING')
 
 const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL!,  // PHẢI LÀ HTTPS URL, ví dụ https://clean-humpback-36746.upstash.io
+    url: process.env.UPSTASH_REDIS_REST_URL!,
     token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 })
 
@@ -77,14 +77,6 @@ async function processJob(job: {
     outputName?: string
 }) {
     console.log('📌 Debug: job nhận từ Redis =', job)
-
-    if (typeof job === 'string') {
-        try {
-            job = JSON.parse(job)
-        } catch {
-            // bỏ qua lỗi parse, giữ nguyên job
-        }
-    }
 
     if (!job.outputName || typeof job.outputName !== 'string') {
         console.error('❌ outputName không hợp lệ hoặc thiếu:', job.outputName)
@@ -209,9 +201,6 @@ async function runWorker() {
         let job
         try {
             job = JSON.parse(jobJson)
-            if (typeof job === 'string') {
-                job = JSON.parse(job)
-            }
         } catch (parseErr) {
             console.error('❌ Job nhận từ Redis không hợp lệ:', jobJson)
             process.exit(1)
