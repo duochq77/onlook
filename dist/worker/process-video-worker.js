@@ -182,9 +182,20 @@ async function runWorker() {
             console.error('❌ Job nhận từ Redis bị lỗi hoặc không hợp lệ:', job);
             process.exit(1);
         }
-        // Kiểm tra trường bắt buộc trước khi xử lý
-        if (!job.jobId || !job.videoUrl || !job.audioUrl || !job.outputName) {
-            console.error('❌ Job thiếu trường bắt buộc:', job);
+        if (!job.jobId || typeof job.jobId !== 'string') {
+            console.error('❌ jobId không hợp lệ:', job.jobId);
+            process.exit(1);
+        }
+        if (!job.videoUrl || typeof job.videoUrl !== 'string') {
+            console.error('❌ videoUrl không hợp lệ:', job.videoUrl);
+            process.exit(1);
+        }
+        if (!job.audioUrl || typeof job.audioUrl !== 'string') {
+            console.error('❌ audioUrl không hợp lệ:', job.audioUrl);
+            process.exit(1);
+        }
+        if (!job.outputName || typeof job.outputName !== 'string') {
+            console.error('❌ outputName không hợp lệ:', job.outputName);
             process.exit(1);
         }
         await processJob(job);

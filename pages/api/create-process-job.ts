@@ -30,11 +30,13 @@ async function triggerCloudRunJob(token: string) {
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {
+        console.error('⚠️ API chỉ chấp nhận phương thức POST')
         return res.status(405).json({ error: 'Method Not Allowed' })
     }
 
     const { videoUrl, audioUrl, outputName } = req.body
     if (!videoUrl || !audioUrl || !outputName) {
+        console.error('❌ Thiếu tham số bắt buộc:', { videoUrl, audioUrl, outputName })
         return res.status(400).json({ error: 'Thiếu tham số videoUrl, audioUrl hoặc outputName' })
     }
 
