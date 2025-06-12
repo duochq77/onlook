@@ -22,6 +22,7 @@ async function triggerCloudRunJob(token: string) {
     )
     if (!res.ok) {
         const text = await res.text()
+        console.error(`❌ Lỗi gọi Cloud Run Job: ${res.status} ${text}`)
         throw new Error(`Lỗi gọi Cloud Run Job: ${res.status} ${text}`)
     }
     return await res.json()
@@ -41,20 +42,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const jobPayload = { jobId, videoUrl, audioUrl, outputName, createdAt: Date.now() }
 
     try {
-        // Thêm log kiểm tra biến môi trường
         console.log('Process.env UPSTASH_REDIS_REST_URL:', process.env.UPSTASH_REDIS_REST_URL)
         console.log('Process.env UPSTASH_REDIS_REST_TOKEN:', process.env.UPSTASH_REDIS_REST_TOKEN ? 'OK' : 'MISSING')
 
-        // Log jobPayload để chắc chắn dữ liệu trước khi push lên Redis
         console.log('Job payload:', jobPayload)
 
-        try {
-            const redisResult = await redis.lpush('onlook:process-video-queue', JSON.stringify(jobPayload))
-            console.log(`🟢 Đã đẩy job vào queue: ${jobId}, redis.lpush result:`, redisResult)
-        } catch (redisError) {
-            console.error('❌ Lỗi khi đẩy job vào Redis:', redisError)
-            throw redisError
-        }
+        const redisResult = await redis.lpush('onlook:process-video-queue', JSON.stringify(jobPayload))
+        console.log(`🟢 Đã đẩy job vào queue: ${jobId}, redis.lpush result:`, redisResult)
 
         const token = await getGoogleAccessToken()
         console.log('🔑 Google Access Token:', token.slice(0, 10) + '...')

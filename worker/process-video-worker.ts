@@ -79,7 +79,7 @@ async function processJob(job: {
     console.log('📌 Debug: job nhận từ Redis =', job)
 
     if (!job.outputName || typeof job.outputName !== 'string') {
-        console.error('❌ outputName không hợp lệ hoặc thiếu:', job.outputName)
+        console.error('❌ outputName không hợp lệ hoặc thiếu:', job.outputName, `Kiểu dữ liệu:`, typeof job.outputName)
         return
     }
 
@@ -208,6 +208,26 @@ async function runWorker() {
 
         if (!job || typeof job !== 'object') {
             console.error('❌ Job nhận từ Redis bị lỗi hoặc không hợp lệ:', job)
+            process.exit(1)
+        }
+
+        if (!job.jobId || typeof job.jobId !== 'string') {
+            console.error('❌ jobId không hợp lệ:', job.jobId)
+            process.exit(1)
+        }
+
+        if (!job.videoUrl || typeof job.videoUrl !== 'string') {
+            console.error('❌ videoUrl không hợp lệ:', job.videoUrl)
+            process.exit(1)
+        }
+
+        if (!job.audioUrl || typeof job.audioUrl !== 'string') {
+            console.error('❌ audioUrl không hợp lệ:', job.audioUrl)
+            process.exit(1)
+        }
+
+        if (!job.outputName || typeof job.outputName !== 'string') {
+            console.error('❌ outputName không hợp lệ:', job.outputName)
             process.exit(1)
         }
 

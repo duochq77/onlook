@@ -68,7 +68,7 @@ const extractPath = (url) => {
 async function processJob(job) {
     console.log('📌 Debug: job nhận từ Redis =', job);
     if (!job.outputName || typeof job.outputName !== 'string') {
-        console.error('❌ outputName không hợp lệ hoặc thiếu:', job.outputName);
+        console.error('❌ outputName không hợp lệ hoặc thiếu:', job.outputName, `Kiểu dữ liệu:`, typeof job.outputName);
         return;
     }
     if (!job.videoUrl ||
@@ -180,6 +180,11 @@ async function runWorker() {
         }
         if (!job || typeof job !== 'object') {
             console.error('❌ Job nhận từ Redis bị lỗi hoặc không hợp lệ:', job);
+            process.exit(1);
+        }
+        // Kiểm tra trường bắt buộc trước khi xử lý
+        if (!job.jobId || !job.videoUrl || !job.audioUrl || !job.outputName) {
+            console.error('❌ Job thiếu trường bắt buộc:', job);
             process.exit(1);
         }
         await processJob(job);
