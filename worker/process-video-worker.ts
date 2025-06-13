@@ -20,7 +20,7 @@ const supabase = createClient(
 const TMP = '/tmp'
 const QUEUE_KEY = 'onlook:job-queue'
 
-// Tải file từ url về đường dẫn dest
+// Hàm tải file từ url về dest
 async function download(url: string, dest: string) {
     const res = await fetch(url)
     if (!res.ok || !res.body) throw new Error(`❌ Không tải được file: ${url}`)
@@ -45,7 +45,7 @@ const checkFileSize = (filePath: string) => {
     }
 }
 
-// Lấy path file gốc trong Supabase từ url
+// Lấy path file gốc trên Supabase từ url
 const extractPath = (url: string) => {
     try {
         const parts = url.split(`/storage/v1/object/public/${process.env.SUPABASE_STORAGE_BUCKET}/`)
@@ -102,7 +102,7 @@ async function processJob(job: any) {
             } catch { }
         }
 
-        // Xóa file gốc
+        // Xóa file gốc trên Supabase
         const videoPath = extractPath(job.videoUrl)
         const audioPath = extractPath(job.audioUrl)
         if (videoPath) {
@@ -117,39 +117,47 @@ async function processJob(job: any) {
         }
 
         console.log(`✅ Hoàn thành job ${job.jobId}`)
-
     } catch (err) {
         console.error(`❌ Lỗi xử lý job ${job.jobId}:`, err)
     }
 }
 
+// Hàm sleep delay
+function sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+// Phần chạy worker lấy job theo kiểu polling bằng rpop
 async function runWorker() {
     console.log('⏳ Worker Onlook đang chạy, chờ job...')
 
     while (true) {
         try {
-            // Lấy job từ queue, chờ tối đa 10s nếu queue rỗng
-            const jobJson = await redis.brpop(QUEUE_KEY, 10)
-            if (!jobJson) {
-                // Queue rỗng, tiếp tục lặp
+            // Lấy job dùng rpop (không chờ blocking)
+            const jobStr = await redis.rpop(QUEUE_KEY)
+            if (!jobStr) {
+                // Queue rỗng, delay 1s rồi tiếp tục lặp
+                await sleep(1000)
                 continue
             }
-            const [, jobStr] = jobJson
+
             const job = JSON.parse(jobStr)
             await processJob(job)
         } catch (error) {
             console.error('❌ Lỗi worker khi lấy hoặc xử lý job:', error)
+            // Delay 1s để tránh loop quá nhanh khi lỗi
+            await sleep(1000)
         }
     }
 }
 
 // Tạo HTTP server để Cloud Run giữ Worker sống
-import http from 'http'
 const port = process.env.PORT || 8080
 const server = http.createServer((req, res) => {
     res.writeHead(200)
     res.end('Worker is alive')
 })
+
 server.listen(port, () => {
     console.log(`HTTP server listening on port ${port}`)
     runWorker()

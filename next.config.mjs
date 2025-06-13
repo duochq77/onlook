@@ -1,4 +1,3 @@
-/** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
     env: {
@@ -13,9 +12,9 @@ const nextConfig = {
         domains: ['lh3.googleusercontent.com', 'cdn.livekit.io'],
     },
     experimental: {
-        serverActions: true // Nếu bạn sử dụng Server Actions
+        serverActions: {} // object chứ không phải boolean
     },
-    swcMinify: false, // Bỏ swcMinify nếu không cần
-};
+    // bỏ swcMinify vì version NextJS bạn dùng không nhận
+}
 
-export default nextConfig;
+export default nextConfig
