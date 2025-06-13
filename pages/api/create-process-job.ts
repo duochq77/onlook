@@ -5,13 +5,23 @@ import fetch from 'node-fetch'
 const CLOUD_RUN_URL = process.env.CLOUD_RUN_URL!
 
 async function triggerCloudRunJob(token: string, jobPayload: any) {
+    // Chuyển jobPayload thành JSON string để truyền qua biến môi trường JOB_PAYLOAD
+    const jobPayloadStr = JSON.stringify(jobPayload)
+
     const res = await fetch(CLOUD_RUN_URL, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify(jobPayload),
+        body: JSON.stringify({
+            env: [
+                {
+                    name: 'JOB_PAYLOAD',
+                    value: jobPayloadStr,
+                }
+            ]
+        }),
     })
 
     if (!res.ok) {
