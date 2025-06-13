@@ -2,14 +2,17 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package.json & package-lock.json
+# Cài ffmpeg
+RUN apk add --no-cache ffmpeg
+
+# Copy package.json và package-lock.json
 COPY package*.json ./
 
 # Cài production dependencies
 RUN npm install --production
 
-# Copy toàn bộ source code (đã build sẵn hoặc chưa)
+# Copy toàn bộ source code
 COPY . .
 
-# Khởi chạy worker đã build
+# Khởi chạy worker đã build (đảm bảo bạn đã build TS ra dist trước)
 CMD ["node", "dist/worker/process-video-worker.js"]

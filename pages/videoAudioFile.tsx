@@ -13,7 +13,7 @@ export default function VideoAudioFile() {
     const [videoFile, setVideoFile] = useState<File | null>(null)
     const [audioFile, setAudioFile] = useState<File | null>(null)
     const [status, setStatus] = useState('')
-    const [sessionId, setSessionId] = useState('')
+    const [jobId, setJobId] = useState('')
 
     const STORAGE_PATH = 'stream-files'
 
@@ -23,20 +23,24 @@ export default function VideoAudioFile() {
             return
         }
 
-        const sid = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-        setSessionId(sid)
+        // Tạo jobId duy nhất xuyên suốt luồng
+        const newJobId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        setJobId(newJobId)
 
-        const videoName = `input-${sid}.mp4`
-        const audioName = `input-${sid}.mp3`
-        const outputName = `merged-${sid}.mp4`
+        // Tên file theo quy tắc có jobId
+        const videoName = `input-${newJobId}.mp4`
+        const audioName = `input-${newJobId}.mp3`
+        const outputName = `merged-${newJobId}.mp4`
 
         const videoPath = `${STORAGE_PATH}/input-videos/${videoName}`
         const audioPath = `${STORAGE_PATH}/input-audios/${audioName}`
+
         const videoUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${videoPath}`
         const audioUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${audioPath}`
 
         setStatus('📤 Đang tải lên Supabase...')
 
+        // Upload video và audio lên Supabase Storage
         const { error: videoErr } = await supabase.storage
             .from(STORAGE_PATH)
             .upload(`input-videos/${videoName}`, videoFile, { upsert: true })
@@ -51,7 +55,7 @@ export default function VideoAudioFile() {
             return
         }
 
-        // Kiểm tra file đã public có thể truy cập được không
+        // Kiểm tra file public có thể truy cập được
         const videoCheck = await fetch(videoUrl)
         const audioCheck = await fetch(audioUrl)
         if (!videoCheck.ok || !audioCheck.ok) {
@@ -61,15 +65,15 @@ export default function VideoAudioFile() {
 
         setStatus('🚀 Đã upload. Đang gửi job xử lý...')
 
-        // Sửa phần gửi API: thêm jobId = sid
+        // Gửi API tạo job
         const runRes = await fetch('/api/create-process-job', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                jobId: newJobId,
                 videoUrl,
                 audioUrl,
                 outputName,
-                jobId: sid,
             }),
         })
 
