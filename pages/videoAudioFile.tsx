@@ -61,6 +61,7 @@ export default function VideoAudioFile() {
 
         setStatus('🚀 Đã upload. Đang gửi job xử lý...')
 
+        // Sửa phần gửi API: thêm jobId = sid
         const runRes = await fetch('/api/create-process-job', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -68,6 +69,7 @@ export default function VideoAudioFile() {
                 videoUrl,
                 audioUrl,
                 outputName,
+                jobId: sid,
             }),
         })
 
