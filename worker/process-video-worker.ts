@@ -199,8 +199,8 @@ async function runWorker() {
 
     try {
         const jobJson = await redis.hget('onlook:jobs', jobId)
-        if (!jobJson) {
-            console.error(`❌ Không tìm thấy job ${jobId} trong Redis!`)
+        if (!jobJson || typeof jobJson !== 'string') {
+            console.error(`❌ Không tìm thấy job ${jobId} trong Redis hoặc dữ liệu không hợp lệ!`)
             process.exit(1)
         }
 
