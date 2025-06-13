@@ -107,7 +107,6 @@ async function processJob(job: { jobId: string; videoUrl: string; audioUrl: stri
                     fs.unlinkSync(f)
                 }
             } catch { }
-
         }
 
         // Xóa file nguồn gốc trong Supabase
@@ -136,6 +135,7 @@ async function processJob(job: { jobId: string; videoUrl: string; audioUrl: stri
                 }
             } catch { }
         }
+        process.exit(1)
     }
 }
 
@@ -150,11 +150,12 @@ async function runWorker() {
     console.log('🟢 Worker nhận JOB_ID:', jobId)
 
     try {
-        const jobJson = await redis.hget('onlook:jobs', jobId)
-        if (!jobJson) {
-            console.error(`❌ Không tìm thấy job ${jobId} trong Redis!`)
+        const jobJsonRaw = await redis.hget('onlook:jobs', jobId)
+        if (!jobJsonRaw || typeof jobJsonRaw !== 'string') {
+            console.error(`❌ Không tìm thấy job ${jobId} trong Redis hoặc dữ liệu không hợp lệ!`)
             process.exit(1)
         }
+        const jobJson = jobJsonRaw as string
 
         const job = JSON.parse(jobJson)
         await processJob(job)
