@@ -10,15 +10,14 @@ const redis = new Redis({
 const CLOUD_RUN_URL = process.env.CLOUD_RUN_URL!
 
 async function triggerCloudRunJob(token: string, jobId: string) {
-    // Gọi Google Cloud Run job với biến môi trường JOB_ID = jobId
+    // Gọi Google Cloud Run Job API với biến môi trường JOB_ID = jobId trong Cloud Run Job config
     const res = await fetch(CLOUD_RUN_URL, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
         },
-        // Google Cloud Run Jobs API không cho override biến env trực tiếp khi gọi jobs.run,
-        // nên ta để body rỗng, dữ liệu job lưu trên Redis và Worker lấy dựa trên JOB_ID env
+        // Body rỗng vì job data lưu trong Redis, worker lấy dựa trên JOB_ID
         body: JSON.stringify({}),
     })
 
@@ -44,14 +43,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const jobPayload = { jobId, videoUrl, audioUrl, outputName, createdAt: Date.now() }
 
     try {
-        // Lưu jobPayload dưới Redis Hash với key là jobId
+        // Lưu jobPayload dưới Redis hash với key là jobId
         await redis.hset('onlook:jobs', jobId, JSON.stringify(jobPayload))
         console.log(`🟢 Đã lưu job ${jobId} vào Redis`)
 
         const token = await getGoogleAccessToken()
         console.log('🔑 Google Access Token:', token.slice(0, 10) + '...')
 
-        // Gọi Cloud Run Job (body rỗng vì không truyền jobPayload qua)
+        // Gọi Cloud Run Job (body rỗng)
         await triggerCloudRunJob(token, jobId)
 
         return res.status(200).json({ message: 'Job đã được tạo và Cloud Run Job đang chạy', jobId })
