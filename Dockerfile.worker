@@ -14,5 +14,8 @@ RUN npm install --production
 # Copy toàn bộ source code
 COPY . .
 
-# Khởi chạy worker đã build (đảm bảo bạn đã build TS ra dist trước)
+# Chỉ định port ứng dụng sẽ listen
+EXPOSE 8080
+
+# Khởi chạy worker đã build
 CMD ["node", "dist/worker/process-video-worker.js"]
