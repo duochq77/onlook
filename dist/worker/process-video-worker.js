@@ -20,7 +20,7 @@ const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabaseStorageBucket = process.env.SUPABASE_STORAGE_BUCKET;
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-// ✅ Kiểm tra môi trường
+// ✅ Kiểm tra biến môi trường
 if (!supabaseUrl || !supabaseServiceRole || !supabaseStorageBucket) {
     throw new Error('❌ Thiếu biến Supabase – kiểm tra SUPABASE_URL / SERVICE_ROLE_KEY / STORAGE_BUCKET');
 }
@@ -70,8 +70,9 @@ async function processJob(job) {
         console.log('📥 Tải file...');
         await download(job.videoUrl, inputVideo);
         await download(job.audioUrl, inputAudio);
-        if (!checkFileSize(inputVideo) || !checkFileSize(inputAudio))
+        if (!checkFileSize(inputVideo) || !checkFileSize(inputAudio)) {
             throw new Error('❌ File tải về dung lượng 0');
+        }
         console.log('✂️ Tách audio gốc...');
         (0, child_process_1.execSync)(`ffmpeg -i ${inputVideo} -an -c:v copy ${cleanVideo} -y`);
         console.log('🎧 Ghép audio mới...');
@@ -107,7 +108,7 @@ async function runWorker() {
         try {
             const jobStr = await redis.rpop(QUEUE_KEY);
             if (!jobStr) {
-                await new Promise(r => setTimeout(r, 1000));
+                await new Promise((r) => setTimeout(r, 1000));
                 continue;
             }
             const job = JSON.parse(jobStr);
@@ -115,7 +116,7 @@ async function runWorker() {
         }
         catch (err) {
             console.error('❌ Lỗi worker:', err);
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise((r) => setTimeout(r, 1000));
         }
     }
 }
@@ -124,7 +125,7 @@ app.get('/', (_, res) => {
     res.send('✅ Worker is alive');
 });
 app.post('/', (_, res) => {
-    console.log('⚡ Nhận POST từ Cloud Run');
+    console.log('⚡ Nhận POST từ Cloud Run (kiểm tra sống)');
     res.json({ message: 'Worker OK, đang chạy job loop...' });
 });
 // ---------- Start server ----------
