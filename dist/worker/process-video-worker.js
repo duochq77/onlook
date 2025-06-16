@@ -11,34 +11,36 @@ const child_process_1 = require("child_process");
 const supabase_js_1 = require("@supabase/supabase-js");
 const redis_1 = require("@upstash/redis");
 const stream_1 = require("stream");
-// 🚀 Khởi tạo Express app
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
-// 📦 Biến môi trường
+// 📦 Đọc biến môi trường an toàn
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabaseStorageBucket = process.env.SUPABASE_STORAGE_BUCKET;
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-// ✅ Log kiểm tra biến môi trường (rất quan trọng để debug)
+// ✅ Log kiểm tra biến môi trường
 console.log('📡 SUPABASE_URL:', supabaseUrl);
 console.log('🔑 SUPABASE_SERVICE_ROLE_KEY:', !!supabaseServiceRole);
 console.log('📦 SUPABASE_STORAGE_BUCKET:', supabaseStorageBucket);
 console.log('🔐 Redis URL:', redisUrl);
-console.log('🔐 Redis Token:', redisToken);
-// ✅ Kiểm tra biến môi trường
+console.log('🔐 Redis Token:', !!redisToken);
+// ❌ Báo lỗi chi tiết nếu thiếu
 if (!supabaseUrl || !supabaseServiceRole || !supabaseStorageBucket) {
-    throw new Error('❌ Thiếu biến Supabase – kiểm tra SUPABASE_URL / SERVICE_ROLE_KEY / STORAGE_BUCKET');
+    throw new Error(`❌ ENV Supabase thiếu:
+    - SUPABASE_URL = ${supabaseUrl}
+    - SUPABASE_SERVICE_ROLE_KEY = ${supabaseServiceRole}
+    - SUPABASE_STORAGE_BUCKET = ${supabaseStorageBucket}`);
 }
 if (!redisUrl || !redisToken) {
-    throw new Error('❌ Thiếu biến Redis – kiểm tra UPSTASH_REDIS_REST_URL / ...TOKEN');
+    throw new Error(`❌ ENV Redis thiếu:
+    - UPSTASH_REDIS_REST_URL = ${redisUrl}
+    - UPSTASH_REDIS_REST_TOKEN = ${redisToken}`);
 }
-// 🎯 Khởi tạo client
 const redis = new redis_1.Redis({ url: redisUrl, token: redisToken });
 const supabase = (0, supabase_js_1.createClient)(supabaseUrl, supabaseServiceRole);
 const TMP = '/tmp';
 const QUEUE_KEY = 'onlook:job-queue';
-// ---------- Helpers ----------
 async function download(url, dest) {
     const res = await fetch(url);
     console.log(`🌐 Tải: ${url} → status: ${res.status}`);
@@ -64,7 +66,6 @@ function extractPath(url) {
     const parts = url.split(`/storage/v1/object/public/${supabaseStorageBucket}/`);
     return parts[1] || '';
 }
-// ---------- Xử lý job ----------
 async function processJob(job) {
     console.log('📌 Xử lý job:', job.jobId);
     const basePath = path_1.default.join(TMP, job.jobId);
@@ -86,7 +87,7 @@ async function processJob(job) {
         (0, child_process_1.execSync)(`ffmpeg -i ${cleanVideo} -i ${inputAudio} -c:v copy -c:a aac -shortest ${outputFile} -y`);
         console.log('📤 Upload kết quả...');
         const { error } = await supabase.storage
-            .from(supabaseStorageBucket)
+            .from(supabaseStorageBucket) // ✅ thêm dấu ! để tránh lỗi undefined
             .upload(`${job.jobId}/outputs/${job.outputName}`, fs_1.default.createReadStream(outputFile), {
             contentType: 'video/mp4',
             upsert: true,
@@ -108,7 +109,6 @@ async function processJob(job) {
         console.error(`❌ Lỗi job ${job.jobId}:`, err);
     }
 }
-// ---------- Worker loop ----------
 async function runWorker() {
     console.log('⏳ Worker Onlook đang chạy, chờ job...');
     while (true) {
@@ -127,7 +127,6 @@ async function runWorker() {
         }
     }
 }
-// ---------- HTTP endpoints ----------
 app.get('/', (_, res) => {
     res.send('✅ Worker is alive');
 });
@@ -135,7 +134,6 @@ app.post('/', (_, res) => {
     console.log('⚡ Nhận POST từ Cloud Run (kiểm tra sống)');
     res.json({ message: 'Worker OK, đang chạy job loop...' });
 });
-// ---------- Start server ----------
 const PORT = parseInt(process.env.PORT || '8080', 10);
 app.listen(PORT, () => {
     console.log(`🚀 Worker lắng nghe tại cổng ${PORT}`);

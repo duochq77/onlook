@@ -10,21 +10,18 @@ import { Readable } from 'stream'
 const app = express()
 app.use(express.json())
 
-// 📦 Đọc biến môi trường an toàn
 const supabaseUrl = process.env.SUPABASE_URL
 const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY
 const supabaseStorageBucket = process.env.SUPABASE_STORAGE_BUCKET
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN
 
-// ✅ Log kiểm tra biến môi trường
 console.log('📡 SUPABASE_URL:', supabaseUrl)
 console.log('🔑 SUPABASE_SERVICE_ROLE_KEY:', !!supabaseServiceRole)
 console.log('📦 SUPABASE_STORAGE_BUCKET:', supabaseStorageBucket)
 console.log('🔐 Redis URL:', redisUrl)
 console.log('🔐 Redis Token:', !!redisToken)
 
-// ❌ Báo lỗi chi tiết nếu thiếu
 if (!supabaseUrl || !supabaseServiceRole || !supabaseStorageBucket) {
     throw new Error(`❌ ENV Supabase thiếu:
     - SUPABASE_URL = ${supabaseUrl}
@@ -99,7 +96,7 @@ async function processJob(job: any) {
 
         console.log('📤 Upload kết quả...')
         const { error } = await supabase.storage
-            .from(supabaseStorageBucket)
+            .from(supabaseStorageBucket!) // ✅ dùng `!` để TypeScript không lỗi
             .upload(`${job.jobId}/outputs/${job.outputName}`, fs.createReadStream(outputFile), {
                 contentType: 'video/mp4',
                 upsert: true,
@@ -112,8 +109,8 @@ async function processJob(job: any) {
         console.log('🧼 Xoá file gốc Supabase...')
         const vPath = extractPath(job.videoUrl)
         const aPath = extractPath(job.audioUrl)
-        if (vPath) await supabase.storage.from(supabaseStorageBucket).remove([vPath])
-        if (aPath) await supabase.storage.from(supabaseStorageBucket).remove([aPath])
+        if (vPath) await supabase.storage.from(supabaseStorageBucket!).remove([vPath])
+        if (aPath) await supabase.storage.from(supabaseStorageBucket!).remove([aPath])
 
         console.log(`✅ Xong job ${job.jobId}`)
     } catch (err) {
