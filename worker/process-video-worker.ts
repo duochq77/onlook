@@ -7,40 +7,42 @@ import { createClient } from '@supabase/supabase-js'
 import { Redis } from '@upstash/redis'
 import { Readable } from 'stream'
 
-// 🚀 Khởi tạo Express app
 const app = express()
 app.use(express.json())
 
-// 📦 Biến môi trường
-const supabaseUrl = process.env.SUPABASE_URL!
-const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const supabaseStorageBucket = process.env.SUPABASE_STORAGE_BUCKET!
-const redisUrl = process.env.UPSTASH_REDIS_REST_URL!
-const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN!
+// 📦 Đọc biến môi trường an toàn
+const supabaseUrl = process.env.SUPABASE_URL
+const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY
+const supabaseStorageBucket = process.env.SUPABASE_STORAGE_BUCKET
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN
 
-// ✅ Log kiểm tra biến môi trường (rất quan trọng để debug)
+// ✅ Log kiểm tra biến môi trường
 console.log('📡 SUPABASE_URL:', supabaseUrl)
 console.log('🔑 SUPABASE_SERVICE_ROLE_KEY:', !!supabaseServiceRole)
 console.log('📦 SUPABASE_STORAGE_BUCKET:', supabaseStorageBucket)
 console.log('🔐 Redis URL:', redisUrl)
-console.log('🔐 Redis Token:', redisToken)
+console.log('🔐 Redis Token:', !!redisToken)
 
-// ✅ Kiểm tra biến môi trường
+// ❌ Báo lỗi chi tiết nếu thiếu
 if (!supabaseUrl || !supabaseServiceRole || !supabaseStorageBucket) {
-    throw new Error('❌ Thiếu biến Supabase – kiểm tra SUPABASE_URL / SERVICE_ROLE_KEY / STORAGE_BUCKET')
+    throw new Error(`❌ ENV Supabase thiếu:
+    - SUPABASE_URL = ${supabaseUrl}
+    - SUPABASE_SERVICE_ROLE_KEY = ${supabaseServiceRole}
+    - SUPABASE_STORAGE_BUCKET = ${supabaseStorageBucket}`)
 }
 if (!redisUrl || !redisToken) {
-    throw new Error('❌ Thiếu biến Redis – kiểm tra UPSTASH_REDIS_REST_URL / ...TOKEN')
+    throw new Error(`❌ ENV Redis thiếu:
+    - UPSTASH_REDIS_REST_URL = ${redisUrl}
+    - UPSTASH_REDIS_REST_TOKEN = ${redisToken}`)
 }
 
-// 🎯 Khởi tạo client
 const redis = new Redis({ url: redisUrl, token: redisToken })
 const supabase = createClient(supabaseUrl, supabaseServiceRole)
 
 const TMP = '/tmp'
 const QUEUE_KEY = 'onlook:job-queue'
 
-// ---------- Helpers ----------
 async function download(url: string, dest: string) {
     const res = await fetch(url)
     console.log(`🌐 Tải: ${url} → status: ${res.status}`)
@@ -69,7 +71,6 @@ function extractPath(url: string) {
     return parts[1] || ''
 }
 
-// ---------- Xử lý job ----------
 async function processJob(job: any) {
     console.log('📌 Xử lý job:', job.jobId)
 
@@ -120,7 +121,6 @@ async function processJob(job: any) {
     }
 }
 
-// ---------- Worker loop ----------
 async function runWorker() {
     console.log('⏳ Worker Onlook đang chạy, chờ job...')
     while (true) {
@@ -140,7 +140,6 @@ async function runWorker() {
     }
 }
 
-// ---------- HTTP endpoints ----------
 app.get('/', (_: Request, res: Response) => {
     res.send('✅ Worker is alive')
 })
@@ -150,7 +149,6 @@ app.post('/', (_: Request, res: Response) => {
     res.json({ message: 'Worker OK, đang chạy job loop...' })
 })
 
-// ---------- Start server ----------
 const PORT = parseInt(process.env.PORT || '8080', 10)
 app.listen(PORT, () => {
     console.log(`🚀 Worker lắng nghe tại cổng ${PORT}`)
