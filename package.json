@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
     "build:worker": "tsc -p tsconfig.worker.json",
     "start:clean-video-worker": "node dist/worker/clean-video-worker.js",
     "start:merge-worker": "node dist/worker/merge-video-worker.js",
@@ -23,6 +22,7 @@
     "axios": "^1.9.0",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "fluent-ffmpeg": "^2.1.3",
     "formidable": "^3.5.4",
     "google-auth-library": "^9.15.1",
     "ioredis": "^5.6.1",
@@ -38,6 +38,7 @@
   "devDependencies": {
     "@types/axios": "^0.14.0",
     "@types/express": "^5.0.3",
+    "@types/fluent-ffmpeg": "^2.1.27",
     "@types/formidable": "^3.4.5",
     "@types/node": "^20.17.47",
     "@types/react": "^18.3.21",

@@ -13,11 +13,12 @@ if (!CLOUD_RUN_URL) {
     throw new Error('❌ Thiếu biến môi trường CLOUD_RUN_URL trong .env hoặc Vercel')
 }
 
-async function triggerCloudRunWorker() {
+// ✅ Gửi payload đầy đủ vào Cloud Run Worker
+async function triggerCloudRunWorker(payload: any) {
     const res = await fetch(CLOUD_RUN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify(payload),
     })
 
     if (!res.ok) {
@@ -52,7 +53,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         await redis.lpush('onlook:job-queue', JSON.stringify(jobPayload))
 
         console.log('🚀 Gọi Cloud Run worker:', CLOUD_RUN_URL)
-        await triggerCloudRunWorker()
+        await triggerCloudRunWorker(jobPayload)
 
         return res.status(200).json({ message: '✅ Job đã được đẩy vào hàng đợi', jobId })
     } catch (err: any) {

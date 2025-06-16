@@ -1,23 +1,17 @@
-# ✅ 1. Base image nhẹ, có node 20
 FROM node:20-alpine
 
-# ✅ 2. Làm việc trong /app
 WORKDIR /app
 
-# ✅ 3. Cài ffmpeg cho xử lý video/audio
+# Cài ffmpeg
 RUN apk add --no-cache ffmpeg
 
-# ✅ 4. Copy package.json và lock file
+# Copy package và cài production dependencies
 COPY package*.json ./
-
-# ✅ 5. Cài dependencies (production only)
 RUN npm install --production
 
-# ✅ 6. Copy toàn bộ source code vào container
+# Copy toàn bộ source (bao gồm dist/)
 COPY . .
 
-# ✅ 7. Mở cổng 8080 để Cloud Run nhận diện
-EXPOSE 8080
-
-# ✅ 8. Chạy worker đã biên dịch sẵn
+# Chạy file worker Node.js
+ENV PORT=8080
 CMD ["node", "dist/worker/process-video-worker.js"]
