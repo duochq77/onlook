@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 8080
 // 🔐 Kiểm tra biến môi trường
 const supabaseUrl = process.env.SUPABASE_URL
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-const supabaseStorageBucket = process.env.SUPABASE_STORAGE_BUCKET
+const supabaseStorageBucket = process.env.SUPABASE_STORAGE_BUCKET as string // ✅ ép kiểu để tránh lỗi build
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN
 
@@ -104,7 +104,7 @@ async function processJob(job: JobPayload) {
     if (publicError) throw new Error('Lỗi đặt quyền public: ' + publicError.message)
     console.log('✅ Public URL:', publicData.publicUrl)
 
-    // 🧹 Dọn dẹp file gốc
+    // 🧹 Dọn dẹp file gốc trên Supabase
     console.log('🧹 Dọn dẹp file gốc trên Supabase...')
     const videoKey = `input-videos/input-${job.jobId}.mp4`
     const audioKey = `input-audios/input-${job.jobId}.mp3`
