@@ -1,2 +1,2 @@
-env_vars:
-  SUPABASE_URL: https://hlfhsozgnjxzwzqgjpbk.supabase.co
+# Không có dòng "env_vars:" bao quanh
+SUPABASE_URL: "https://hlfhsozgnjxzwzqgjpbk.supabase.co"
