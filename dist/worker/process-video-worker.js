@@ -20,6 +20,12 @@ const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabaseStorageBucket = process.env.SUPABASE_STORAGE_BUCKET;
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+// ✅ Log kiểm tra biến môi trường (rất quan trọng để debug)
+console.log('📡 SUPABASE_URL:', supabaseUrl);
+console.log('🔑 SUPABASE_SERVICE_ROLE_KEY:', !!supabaseServiceRole);
+console.log('📦 SUPABASE_STORAGE_BUCKET:', supabaseStorageBucket);
+console.log('🔐 Redis URL:', redisUrl);
+console.log('🔐 Redis Token:', redisToken);
 // ✅ Kiểm tra biến môi trường
 if (!supabaseUrl || !supabaseServiceRole || !supabaseStorageBucket) {
     throw new Error('❌ Thiếu biến Supabase – kiểm tra SUPABASE_URL / SERVICE_ROLE_KEY / STORAGE_BUCKET');
@@ -35,6 +41,7 @@ const QUEUE_KEY = 'onlook:job-queue';
 // ---------- Helpers ----------
 async function download(url, dest) {
     const res = await fetch(url);
+    console.log(`🌐 Tải: ${url} → status: ${res.status}`);
     if (!res.ok || !res.body)
         throw new Error(`❌ Không tải được file: ${url}`);
     const fileStream = fs_1.default.createWriteStream(dest);
@@ -111,7 +118,7 @@ async function runWorker() {
                 await new Promise((r) => setTimeout(r, 1000));
                 continue;
             }
-            const job = JSON.parse(jobStr);
+            const job = typeof jobStr === 'string' ? JSON.parse(jobStr) : jobStr;
             await processJob(job);
         }
         catch (err) {
