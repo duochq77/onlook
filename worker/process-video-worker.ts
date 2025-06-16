@@ -18,6 +18,13 @@ const supabaseStorageBucket = process.env.SUPABASE_STORAGE_BUCKET
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN
 
+// 🪵 Log biến môi trường
+console.log('📥 SUPABASE_URL:', supabaseUrl)
+console.log('📥 SUPABASE_SERVICE_ROLE_KEY:', !!supabaseServiceRoleKey)
+console.log('📥 SUPABASE_STORAGE_BUCKET:', supabaseStorageBucket)
+console.log('📥 UPSTASH_REDIS_REST_URL:', redisUrl)
+console.log('📥 UPSTASH_REDIS_REST_TOKEN:', !!redisToken)
+
 if (!supabaseUrl || !supabaseServiceRoleKey || !supabaseStorageBucket || !redisUrl || !redisToken) {
     console.error('❌ Thiếu biến môi trường bắt buộc.')
     process.exit(1)
@@ -41,7 +48,7 @@ async function downloadFile(url: string, dest: string): Promise<void> {
         if (!res.body) return reject(new Error('❌ Không có body khi tải file.'))
         res.body.pipe(fileStream)
         res.body.on('error', reject)
-        fileStream.on('finish', () => resolve(undefined))
+        fileStream.on('finish', () => resolve())
     })
 }
 
@@ -75,21 +82,35 @@ async function processJob(job: JobPayload) {
     if (!fs.existsSync(outputPath)) throw new Error('❌ Ghép audio thất bại: Không có file output.')
 
     console.log('📤 Upload kết quả...')
+    const filePath = `outputs/${job.outputName}`
     const buffer = fs.readFileSync(outputPath)
-    const { error } = await supabase.storage
-        .from(supabaseStorageBucket as string)
-        .upload(`outputs/${job.outputName}`, buffer, {
+
+    const { error: uploadError } = await supabase.storage
+        .from(supabaseStorageBucket)
+        .upload(filePath, buffer, {
             contentType: 'video/mp4',
             upsert: true,
         })
 
-    if (error) throw new Error('Lỗi upload: ' + error.message)
+    if (uploadError) throw new Error('Lỗi upload: ' + uploadError.message)
 
+    // ✅ Đặt quyền public cho file
+    console.log('🌐 Đặt quyền public cho file...')
+    const { data: publicData, error: publicError } = await supabase
+        .storage
+        .from(supabaseStorageBucket)
+        .getPublicUrl(filePath)
+
+    if (publicError) throw new Error('Lỗi đặt quyền public: ' + publicError.message)
+    console.log('✅ Public URL:', publicData.publicUrl)
+
+    // 🧹 Dọn dẹp file gốc
     console.log('🧹 Dọn dẹp file gốc trên Supabase...')
     const videoKey = `input-videos/input-${job.jobId}.mp4`
     const audioKey = `input-audios/input-${job.jobId}.mp3`
-    await supabase.storage.from(supabaseStorageBucket as string).remove([videoKey, audioKey])
+    await supabase.storage.from(supabaseStorageBucket).remove([videoKey, audioKey])
 
+    // 🧹 Dọn local
     fs.rmSync(tmpDir, { recursive: true, force: true })
     console.log(`✅ Hoàn tất job ${job.jobId}`)
 }
