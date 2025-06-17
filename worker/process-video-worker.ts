@@ -1,134 +1,159 @@
 import { createClient } from '@supabase/supabase-js'
 import { Redis } from '@upstash/redis'
 import ffmpeg from 'fluent-ffmpeg'
+import ffprobePath from 'ffprobe-static'
+import ffmpegPath from 'ffmpeg-static'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import express from 'express'
 import fetch from 'node-fetch'
+import { exec } from 'child_process'
+
+ffmpeg.setFfmpegPath(ffmpegPath!)
+ffmpeg.setFfprobePath(ffprobePath.path)
 
 const app = express()
 app.use(express.json())
 const PORT = process.env.PORT || 8080
 
-// 🔐 Kiểm tra biến môi trường
-const supabaseUrl = process.env.SUPABASE_URL
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-const supabaseStorageBucket = process.env.SUPABASE_STORAGE_BUCKET as string
-const redisUrl = process.env.UPSTASH_REDIS_REST_URL
-const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN
-
-// 🪵 Log biến môi trường
-console.log('📥 SUPABASE_URL:', supabaseUrl)
-console.log('📥 SUPABASE_SERVICE_ROLE_KEY:', !!supabaseServiceRoleKey)
-console.log('📥 SUPABASE_STORAGE_BUCKET:', supabaseStorageBucket)
-console.log('📥 UPSTASH_REDIS_REST_URL:', redisUrl)
-console.log('📥 UPSTASH_REDIS_REST_TOKEN:', !!redisToken)
-
-if (!supabaseUrl || !supabaseServiceRoleKey || !supabaseStorageBucket || !redisUrl || !redisToken) {
-    console.error('❌ Thiếu biến môi trường bắt buộc.')
-    process.exit(1)
-}
+// 🔐 ENV
+const supabaseUrl = process.env.SUPABASE_URL!
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const supabaseStorageBucket = process.env.SUPABASE_STORAGE_BUCKET!
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL!
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN!
 
 const supabase = createClient(supabaseUrl, supabaseServiceRoleKey)
 const redis = new Redis({ url: redisUrl, token: redisToken })
 
-interface JobPayload {
-    jobId: string
-    videoUrl: string
-    audioUrl: string
-    outputName: string
+const getDuration = (filePath: string): Promise<number> => {
+    return new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(filePath, (err, metadata) => {
+            if (err) return reject(err)
+            resolve(metadata.format.duration || 0)
+        })
+    })
 }
 
-async function downloadFile(url: string, dest: string): Promise<void> {
+const downloadFile = async (url: string, dest: string) => {
     const res = await fetch(url)
-    if (!res.ok) throw new Error(`Tải file lỗi: ${url}`)
+    if (!res.ok) throw new Error('Download failed: ' + url)
     const fileStream = fs.createWriteStream(dest)
     await new Promise<void>((resolve, reject) => {
-        if (!res.body) return reject(new Error('❌ Không có body khi tải file.'))
+        if (!res.body) return reject('No body')
         res.body.pipe(fileStream)
         res.body.on('error', reject)
         fileStream.on('finish', () => resolve())
     })
 }
 
-async function processJob(job: JobPayload) {
-    if (!job?.jobId || !job?.videoUrl || !job?.audioUrl || !job?.outputName) {
-        throw new Error(`❌ Job không hợp lệ: ${JSON.stringify(job)}`)
-    }
+const loopMedia = (input: string, output: string, minDuration: number): Promise<void> => {
+    return new Promise(async (resolve, reject) => {
+        const inputDuration = await getDuration(input)
+        const loopCount = Math.ceil(minDuration / inputDuration)
+        const inputs = Array(loopCount).fill(`-i ${input}`).join(' ')
+        const filter = Array(loopCount).fill('[0:v:0]').join('') + `concat=n=${loopCount}:v=1:a=0[outv]`
 
-    console.log(`📌 Xử lý job: ${job.jobId}`)
-
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'job-'))
-    const videoPath = path.join(tmpDir, 'input.mp4')
-    const audioPath = path.join(tmpDir, 'input.mp3')
-    const outputPath = path.join(tmpDir, job.outputName)
-
-    console.log('📥 Tải file...')
-    await downloadFile(job.videoUrl, videoPath)
-    await downloadFile(job.audioUrl, audioPath)
-
-    console.log('🎬 Ghép audio...')
-    await new Promise((resolve, reject) => {
-        ffmpeg()
-            .input(videoPath)
-            .input(audioPath)
-            .outputOptions('-c:v copy', '-c:a aac', '-shortest')
-            .on('end', resolve)
-            .on('error', reject)
-            .save(outputPath)
-    })
-
-    if (!fs.existsSync(outputPath)) throw new Error('❌ Ghép audio thất bại: Không có file output.')
-
-    console.log('📤 Upload kết quả...')
-    const filePath = `outputs/${job.outputName}`
-    const buffer = fs.readFileSync(outputPath)
-
-    const { error: uploadError } = await supabase.storage
-        .from(supabaseStorageBucket)
-        .upload(filePath, buffer, {
-            contentType: 'video/mp4',
-            upsert: true,
+        const cmd = `ffmpeg ${inputs} -filter_complex "${filter}" -map "[outv]" -y ${output}`
+        exec(cmd, (err) => {
+            if (err) return reject(err)
+            resolve()
         })
+    })
+}
 
-    if (uploadError) throw new Error('Lỗi upload: ' + uploadError.message)
-
-    // ✅ Đặt quyền public cho file (KHÔNG dùng await!)
-    console.log('🌐 Đặt quyền public cho file...')
-    const { publicUrl } = supabase
-        .storage
-        .from(supabaseStorageBucket)
-        .getPublicUrl(filePath)
-
-    console.log('✅ Public URL:', publicUrl)
-
-    // 🧹 Dọn dẹp file gốc trên Supabase
-    console.log('🧹 Dọn dẹp file gốc trên Supabase...')
-    const videoKey = `input-videos/input-${job.jobId}.mp4`
-    const audioKey = `input-audios/input-${job.jobId}.mp3`
-    await supabase.storage.from(supabaseStorageBucket).remove([videoKey, audioKey])
-
-    // 🧹 Dọn local
-    fs.rmSync(tmpDir, { recursive: true, force: true })
-    console.log(`✅ Hoàn tất job ${job.jobId}`)
+const cutMedia = (input: string, output: string, duration: number): Promise<void> => {
+    return new Promise((resolve, reject) => {
+        ffmpeg()
+            .input(input)
+            .outputOptions(['-t', duration.toFixed(2)])
+            .save(output)
+            .on('end', () => resolve())
+            .on('error', reject)
+    })
 }
 
 app.post('/', async (req, res) => {
-    console.log('⚡ Nhận POST từ Cloud Run')
-    console.log('📦 Payload nhận được:', req.body)
-
     res.status(200).json({ ok: true })
+    const job = req.body
+
+    const tmpDir = path.join(os.tmpdir(), `onlook-job-${job.jobId}`)
+    fs.rmSync(tmpDir, { force: true, recursive: true })
+    fs.mkdirSync(tmpDir)
+
+    const inputVideo = path.join(tmpDir, 'input.mp4')
+    const inputAudio = path.join(tmpDir, 'input.mp3')
+    const cleanVideo = path.join(tmpDir, 'clean.mp4')
+    const finalVideo = path.join(tmpDir, 'final.mp4')
+    const finalAudio = path.join(tmpDir, 'final.mp3')
+    const mergedOutput = path.join(tmpDir, 'output.mp4')
 
     try {
-        const job: JobPayload = req.body
-        await processJob(job)
-    } catch (err: any) {
-        console.error(`❌ Lỗi job ${req.body?.jobId || 'unknown'}:`, err)
+        await downloadFile(job.videoUrl, inputVideo)
+        await downloadFile(job.audioUrl, inputAudio)
+
+        // Tách video sạch không audio
+        await new Promise<void>((resolve, reject) => {
+            ffmpeg()
+                .input(inputVideo)
+                .noAudio()
+                .save(cleanVideo)
+                .on('end', () => resolve())
+                .on('error', reject)
+        })
+
+        const videoDur = await getDuration(cleanVideo)
+        const audioDur = await getDuration(inputAudio)
+
+        // Cân bằng độ dài
+        if (Math.abs(videoDur - audioDur) < 1) {
+            fs.copyFileSync(cleanVideo, finalVideo)
+            fs.copyFileSync(inputAudio, finalAudio)
+        } else if (videoDur < audioDur) {
+            await loopMedia(cleanVideo, finalVideo, audioDur)
+            await cutMedia(finalVideo, finalVideo, audioDur)
+            fs.copyFileSync(inputAudio, finalAudio)
+        } else if (videoDur > audioDur && videoDur / audioDur < 1.2) {
+            await cutMedia(cleanVideo, finalVideo, audioDur)
+            fs.copyFileSync(inputAudio, finalAudio)
+        } else {
+            fs.copyFileSync(cleanVideo, finalVideo)
+            await loopMedia(inputAudio, finalAudio, videoDur)
+            await cutMedia(finalAudio, finalAudio, videoDur)
+        }
+
+        if (fs.existsSync(mergedOutput)) fs.unlinkSync(mergedOutput)
+
+        await new Promise<void>((resolve, reject) => {
+            ffmpeg()
+                .input(finalVideo)
+                .input(finalAudio)
+                .outputOptions('-c:v copy', '-c:a aac', '-shortest')
+                .save(mergedOutput)
+                .on('end', () => resolve())
+                .on('error', reject)
+        })
+
+        const buffer = fs.readFileSync(mergedOutput)
+        await supabase.storage
+            .from(supabaseStorageBucket)
+            .upload(`outputs/${job.outputName}`, buffer, {
+                upsert: true,
+                contentType: 'video/mp4',
+            })
+
+        await supabase.storage.from(supabaseStorageBucket).remove([
+            `input-videos/input-${job.jobId}.mp4`,
+            `input-audios/input-${job.jobId}.mp3`,
+        ])
+    } catch (err) {
+        console.error('❌ Worker lỗi:', err)
+    } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true })
     }
 })
 
 app.listen(PORT, () => {
-    console.log(`🚀 Worker lắng nghe tại cổng ${PORT}`)
-    console.log('⏳ Worker Onlook đang chạy, chờ job...')
+    console.log(`🚀 Worker chạy tại cổng ${PORT}`)
 })

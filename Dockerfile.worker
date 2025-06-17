@@ -2,16 +2,13 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Cài ffmpeg
-RUN apk add --no-cache ffmpeg
+RUN apk add --no-cache ffmpeg bash
 
-# Copy package và cài production dependencies
 COPY package*.json ./
 RUN npm install --production
 
-# Copy toàn bộ source (bao gồm dist/)
 COPY . .
 
-# Chạy file worker Node.js
 ENV PORT=8080
-CMD ["node", "dist/worker/process-video-worker.js"]
+
+CMD sh -c 'echo "🧪 Kiểm tra quyền ghi /tmp:" && ls -ld /tmp && touch /tmp/testfile && echo "✅ OK" && node dist/worker/process-video-worker.js'
