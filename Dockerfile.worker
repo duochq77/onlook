@@ -2,20 +2,21 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Cài ffmpeg đầy đủ + bash
+# Cài ffmpeg và bash
 RUN apk add --no-cache ffmpeg bash
 
-# Copy package.json và package-lock.json để cài đúng dependencies
-COPY package*.json ./
-
-# ❗ Quan trọng: Cài full cả dependencies và devDependencies (để có @types + ffprobe-static)
+# Copy file cấu hình trước để tối ưu cache
+COPY package.json package-lock.json ./
 RUN npm install
 
-# Copy toàn bộ mã nguồn vào container
+# Copy toàn bộ mã nguồn
 COPY . .
 
-# Đặt biến môi trường PORT cho Express
+# Build mã TypeScript
+RUN npx tsc -p tsconfig.worker.json
+
+# Cấu hình cổng (nếu cần chạy HTTP)
 ENV PORT=8080
 
-# Kiểm tra quyền ghi /tmp và chạy worker
-CMD sh -c 'echo "🧪 Kiểm tra quyền ghi /tmp:" && ls -ld /tmp && touch /tmp/testfile && echo "✅ OK" && node dist/worker/process-video-worker.js'
+# Lệnh khởi động worker
+CMD node dist/worker/process-video-worker.js
