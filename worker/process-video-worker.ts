@@ -1,17 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
 import { Redis } from '@upstash/redis'
 import ffmpeg from 'fluent-ffmpeg'
-import ffprobePath from 'ffprobe-static'
-import ffmpegPath from 'ffmpeg-static'
 import fs from 'fs'
-import path from 'path'
 import os from 'os'
+import path from 'path'
+import express from 'express'
 import fetch from 'node-fetch'
 
-ffmpeg.setFfmpegPath(ffmpegPath!)
-ffmpeg.setFfprobePath(ffprobePath.path)
+console.log('🚀 Worker process-video-worker.ts khởi động')
 
-// 🔐 ENV
+// 🔐 Biến môi trường
 const supabaseUrl = process.env.SUPABASE_URL!
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabaseStorageBucket = process.env.SUPABASE_STORAGE_BUCKET!
@@ -21,7 +19,18 @@ const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN!
 const supabase = createClient(supabaseUrl, supabaseServiceRoleKey)
 const redis = new Redis({ url: redisUrl, token: redisToken })
 
-const getDuration = (filePath: string): Promise<number> => {
+const downloadFile = async (url: string, filePath: string) => {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`Không thể tải file từ: ${url}`)
+    const fileStream = fs.createWriteStream(filePath)
+    await new Promise<void>((resolve, reject) => {
+        res.body?.pipe(fileStream)
+        res.body?.on('error', reject)
+        fileStream.on('finish', () => resolve())
+    })
+}
+
+const getDuration = async (filePath: string): Promise<number> => {
     return new Promise((resolve, reject) => {
         ffmpeg.ffprobe(filePath, (err, metadata) => {
             if (err) return reject(err)
@@ -30,37 +39,23 @@ const getDuration = (filePath: string): Promise<number> => {
     })
 }
 
-const downloadFile = async (url: string, dest: string) => {
-    const res = await fetch(url)
-    if (!res.ok) throw new Error('Download failed: ' + url)
-    const fileStream = fs.createWriteStream(dest)
-    await new Promise((resolve, reject) => {
-        if (!res.body) return reject('No body')
-        res.body.pipe(fileStream)
-        res.body.on('error', reject)
-        fileStream.on('finish', resolve)
-    })
-}
-
-const loopMedia = (input: string, output: string, minDuration: number): Promise<void> => {
-    return new Promise(async (resolve, reject) => {
-        const inputDuration = await getDuration(input)
-        const loopCount = Math.ceil(minDuration / inputDuration)
-        const inputs = Array(loopCount).fill(`-i ${input}`).join(' ')
-        const filter = Array(loopCount).fill('[0:v:0]').join('') + `concat=n=${loopCount}:v=1:a=0[outv]`
-        const cmd = `ffmpeg ${inputs} -filter_complex "${filter}" -map "[outv]" -y ${output}`
-        require('child_process').exec(cmd, (err: any) => {
-            if (err) return reject(err)
-            resolve()
-        })
-    })
-}
-
-const cutMedia = (input: string, output: string, duration: number): Promise<void> => {
-    return new Promise((resolve, reject) => {
+const loopMedia = async (input: string, output: string, duration: number) => {
+    return new Promise<void>((resolve, reject) => {
         ffmpeg()
             .input(input)
-            .outputOptions(['-t', duration.toFixed(2)])
+            .inputOptions('-stream_loop', '-1')
+            .outputOptions('-t', `${duration}`)
+            .save(output)
+            .on('end', () => resolve())
+            .on('error', reject)
+    })
+}
+
+const cutMedia = async (input: string, output: string, duration: number) => {
+    return new Promise<void>((resolve, reject) => {
+        ffmpeg()
+            .input(input)
+            .setDuration(duration)
             .save(output)
             .on('end', () => resolve())
             .on('error', reject)
@@ -68,6 +63,8 @@ const cutMedia = (input: string, output: string, duration: number): Promise<void
 }
 
 const processJob = async (job: any) => {
+    console.log('📦 Job nhận được:', job)
+
     const tmpDir = path.join(os.tmpdir(), `onlook-job-${job.jobId}`)
     fs.rmSync(tmpDir, { recursive: true, force: true })
     fs.mkdirSync(tmpDir)
@@ -80,19 +77,25 @@ const processJob = async (job: any) => {
     const mergedOutput = path.join(tmpDir, 'output.mp4')
 
     try {
-        console.log('📥 Đang tải video và audio về RAM...')
+        console.log('📥 Tải video...')
         await downloadFile(job.videoUrl, inputVideo)
+
+        console.log('📥 Tải audio...')
         await downloadFile(job.audioUrl, inputAudio)
 
-        console.log('✂️ Tách audio khỏi video gốc...')
-        await new Promise((resolve, reject) => {
-            ffmpeg().input(inputVideo).noAudio().save(cleanVideo).on('end', resolve).on('error', reject)
+        console.log('✂️ Tách audio khỏi video...')
+        await new Promise<void>((resolve, reject) => {
+            ffmpeg()
+                .input(inputVideo)
+                .noAudio()
+                .save(cleanVideo)
+                .on('end', () => resolve())
+                .on('error', reject)
         })
 
         const videoDur = await getDuration(cleanVideo)
         const audioDur = await getDuration(inputAudio)
-
-        console.log(`📊 Durations: video = ${videoDur}s, audio = ${audioDur}s`)
+        console.log(`🎯 Độ dài: video = ${videoDur}, audio = ${audioDur}`)
 
         if (Math.abs(videoDur - audioDur) < 1) {
             fs.copyFileSync(cleanVideo, finalVideo)
@@ -110,14 +113,14 @@ const processJob = async (job: any) => {
             await cutMedia(finalAudio, finalAudio, videoDur)
         }
 
-        console.log('🎞 Ghép video và audio lại...')
-        await new Promise((resolve, reject) => {
+        console.log('🔀 Ghép video và audio...')
+        await new Promise<void>((resolve, reject) => {
             ffmpeg()
                 .input(finalVideo)
                 .input(finalAudio)
                 .outputOptions('-c:v copy', '-c:a aac', '-shortest')
                 .save(mergedOutput)
-                .on('end', resolve)
+                .on('end', () => resolve())
                 .on('error', reject)
         })
 
@@ -130,36 +133,45 @@ const processJob = async (job: any) => {
             contentType: 'video/mp4',
         })
 
-        console.log('🧹 Xoá nguyên liệu đầu vào...')
+        console.log('🧹 Xóa file gốc trên Supabase...')
         await supabase.storage.from(supabaseStorageBucket).remove([
             `input-videos/input-${job.jobId}.mp4`,
             `input-audios/input-${job.jobId}.mp3`,
         ])
     } catch (err) {
-        console.error('❌ Worker lỗi:', err)
+        console.error('❌ Lỗi xử lý job:', err)
     } finally {
         fs.rmSync(tmpDir, { recursive: true, force: true })
+        console.log('🧹 Dọn RAM xong')
     }
 }
 
-// 🔁 Worker nền – rút job từ Redis tự động
 const startWorker = async () => {
-    console.log('🚀 Worker nền đang chạy...')
+    console.log('👷 Worker nền đang chạy...')
 
     while (true) {
         try {
             const jobStr = await redis.lpop('onlook:job-queue')
-            if (jobStr) {
+            if (typeof jobStr === 'string') {
                 const job = JSON.parse(jobStr)
-                console.log('📦 Nhận job:', job.jobId)
                 await processJob(job)
             } else {
-                await new Promise(r => setTimeout(r, 3000))
+                await new Promise(resolve => setTimeout(resolve, 3000))
             }
         } catch (err) {
-            console.error('❌ Lỗi khi xử lý job:', err)
+            console.error('❌ Lỗi vòng lặp chính:', err)
         }
     }
 }
 
 startWorker()
+
+// Server để check health trên Cloud Run
+const app = express()
+const PORT = process.env.PORT || 8080
+app.get('/', function (_req, res) {
+    res.send('🟢 Worker đang hoạt động')
+})
+app.listen(PORT, () => {
+    console.log(`🌐 Listening on port ${PORT}`)
+})
