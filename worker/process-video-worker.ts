@@ -54,7 +54,6 @@ const loopMedia = (input: string, output: string, minDuration: number): Promise<
         const loopCount = Math.ceil(minDuration / inputDuration)
         const inputs = Array(loopCount).fill(`-i ${input}`).join(' ')
         const filter = Array(loopCount).fill('[0:v:0]').join('') + `concat=n=${loopCount}:v=1:a=0[outv]`
-
         const cmd = `ffmpeg ${inputs} -filter_complex "${filter}" -map "[outv]" -y ${output}`
         exec(cmd, (err) => {
             if (err) return reject(err)
@@ -123,8 +122,15 @@ app.post('/', async (req, res) => {
             await cutMedia(finalAudio, finalAudio, videoDur)
         }
 
+        // 🔧 Fix lỗi: Tạo thư mục nếu chưa tồn tại
+        const outputDir = path.dirname(mergedOutput)
+        if (!fs.existsSync(outputDir)) {
+            fs.mkdirSync(outputDir, { recursive: true })
+        }
+
         if (fs.existsSync(mergedOutput)) fs.unlinkSync(mergedOutput)
 
+        // Ghép video và audio
         await new Promise<void>((resolve, reject) => {
             ffmpeg()
                 .input(finalVideo)

@@ -118,8 +118,14 @@ app.post('/', async (req, res) => {
             await loopMedia(inputAudio, finalAudio, videoDur);
             await cutMedia(finalAudio, finalAudio, videoDur);
         }
+        // 🔧 Fix lỗi: Tạo thư mục nếu chưa tồn tại
+        const outputDir = path_1.default.dirname(mergedOutput);
+        if (!fs_1.default.existsSync(outputDir)) {
+            fs_1.default.mkdirSync(outputDir, { recursive: true });
+        }
         if (fs_1.default.existsSync(mergedOutput))
             fs_1.default.unlinkSync(mergedOutput);
+        // Ghép video và audio
         await new Promise((resolve, reject) => {
             (0, fluent_ffmpeg_1.default)()
                 .input(finalVideo)
