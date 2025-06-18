@@ -1,7 +1,7 @@
 {
     "compilerOptions": {
         "target": "ES2020",
-        "module": "commonjs",
+        "module": "CommonJS",
         "moduleResolution": "node",
         "outDir": "dist/worker",
         "rootDir": "worker",
@@ -9,7 +9,12 @@
         "resolveJsonModule": true,
         "forceConsistentCasingInFileNames": true,
         "strict": true,
-        "skipLibCheck": true
+        "skipLibCheck": true,
+        "typeRoots": [
+            "./node_modules/@types",
+            "./types"
+        ],
+        "types": []
     },
     "include": [
         "worker/**/*.ts"

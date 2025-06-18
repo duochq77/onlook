@@ -1,22 +1,24 @@
+# Dùng Node.js nhẹ + ổn định
 FROM node:20-alpine
 
+# Đặt thư mục làm việc
 WORKDIR /app
 
 # Cài ffmpeg và bash
 RUN apk add --no-cache ffmpeg bash
 
-# Copy file cấu hình trước để tối ưu cache
+# Copy file cấu hình để cache npm install
 COPY package.json package-lock.json ./
 RUN npm install
 
 # Copy toàn bộ mã nguồn
 COPY . .
 
-# Build mã TypeScript
+# Biên dịch TypeScript riêng cho worker
 RUN npx tsc -p tsconfig.worker.json
 
-# Cấu hình cổng (nếu cần chạy HTTP)
+# Đặt biến môi trường (dù worker không dùng PORT, vẫn giữ để Cloud Run không báo lỗi)
 ENV PORT=8080
 
-# Lệnh khởi động worker
-CMD node dist/worker/process-video-worker.js
+# Lệnh khởi động worker nền
+CMD ["node", "dist/worker/process-video-worker.js"]

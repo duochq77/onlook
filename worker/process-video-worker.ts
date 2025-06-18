@@ -6,16 +6,9 @@ import ffmpegPath from 'ffmpeg-static'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import express from 'express'
-import fetch from 'node-fetch'
-import { exec } from 'child_process'
 
 ffmpeg.setFfmpegPath(ffmpegPath!)
 ffmpeg.setFfprobePath(ffprobePath.path)
-
-const app = express()
-app.use(express.json())
-const PORT = process.env.PORT || 8080
 
 // 🔐 ENV
 const supabaseUrl = process.env.SUPABASE_URL!
@@ -55,7 +48,7 @@ const loopMedia = (input: string, output: string, minDuration: number): Promise<
         const inputs = Array(loopCount).fill(`-i ${input}`).join(' ')
         const filter = Array(loopCount).fill('[0:v:0]').join('') + `concat=n=${loopCount}:v=1:a=0[outv]`
         const cmd = `ffmpeg ${inputs} -filter_complex "${filter}" -map "[outv]" -y ${output}`
-        exec(cmd, (err) => {
+        require('child_process').exec(cmd, (err) => {
             if (err) return reject(err)
             resolve()
         })
@@ -73,93 +66,88 @@ const cutMedia = (input: string, output: string, duration: number): Promise<void
     })
 }
 
-app.post('/', async (req, res) => {
-    res.status(200).json({ ok: true })
-    const job = req.body
-
-    const tmpDir = path.join(os.tmpdir(), `onlook-job-${job.jobId}`)
-    fs.rmSync(tmpDir, { force: true, recursive: true })
-    fs.mkdirSync(tmpDir)
-
-    const inputVideo = path.join(tmpDir, 'input.mp4')
-    const inputAudio = path.join(tmpDir, 'input.mp3')
-    const cleanVideo = path.join(tmpDir, 'clean.mp4')
-    const finalVideo = path.join(tmpDir, 'final.mp4')
-    const finalAudio = path.join(tmpDir, 'final.mp3')
-    const mergedOutput = path.join(tmpDir, 'output.mp4')
-
-    try {
-        await downloadFile(job.videoUrl, inputVideo)
-        await downloadFile(job.audioUrl, inputAudio)
-
-        // Tách video sạch không audio
-        await new Promise<void>((resolve, reject) => {
-            ffmpeg()
-                .input(inputVideo)
-                .noAudio()
-                .save(cleanVideo)
-                .on('end', () => resolve())
-                .on('error', reject)
-        })
-
-        const videoDur = await getDuration(cleanVideo)
-        const audioDur = await getDuration(inputAudio)
-
-        // Cân bằng độ dài
-        if (Math.abs(videoDur - audioDur) < 1) {
-            fs.copyFileSync(cleanVideo, finalVideo)
-            fs.copyFileSync(inputAudio, finalAudio)
-        } else if (videoDur < audioDur) {
-            await loopMedia(cleanVideo, finalVideo, audioDur)
-            await cutMedia(finalVideo, finalVideo, audioDur)
-            fs.copyFileSync(inputAudio, finalAudio)
-        } else if (videoDur > audioDur && videoDur / audioDur < 1.2) {
-            await cutMedia(cleanVideo, finalVideo, audioDur)
-            fs.copyFileSync(inputAudio, finalAudio)
-        } else {
-            fs.copyFileSync(cleanVideo, finalVideo)
-            await loopMedia(inputAudio, finalAudio, videoDur)
-            await cutMedia(finalAudio, finalAudio, videoDur)
+const main = async () => {
+    console.log('📡 Đang chờ job từ Redis...')
+    while (true) {
+        const job = await redis.lpop('video-process-jobs')
+        if (!job) {
+            await new Promise(r => setTimeout(r, 3000))
+            continue
         }
 
-        // 🔧 Fix lỗi: Tạo thư mục nếu chưa tồn tại
-        const outputDir = path.dirname(mergedOutput)
-        if (!fs.existsSync(outputDir)) {
-            fs.mkdirSync(outputDir, { recursive: true })
-        }
+        console.log('🛠 Nhận job:', job)
 
-        if (fs.existsSync(mergedOutput)) fs.unlinkSync(mergedOutput)
+        const tmpDir = path.join(os.tmpdir(), `onlook-job-${job.jobId}`)
+        fs.rmSync(tmpDir, { force: true, recursive: true })
+        fs.mkdirSync(tmpDir)
 
-        // Ghép video và audio
-        await new Promise<void>((resolve, reject) => {
-            ffmpeg()
-                .input(finalVideo)
-                .input(finalAudio)
-                .outputOptions('-c:v copy', '-c:a aac', '-shortest')
-                .save(mergedOutput)
-                .on('end', () => resolve())
-                .on('error', reject)
-        })
+        const inputVideo = path.join(tmpDir, 'input.mp4')
+        const inputAudio = path.join(tmpDir, 'input.mp3')
+        const cleanVideo = path.join(tmpDir, 'clean.mp4')
+        const finalVideo = path.join(tmpDir, 'final.mp4')
+        const finalAudio = path.join(tmpDir, 'final.mp3')
+        const mergedOutput = path.join(tmpDir, 'output.mp4')
 
-        const buffer = fs.readFileSync(mergedOutput)
-        await supabase.storage
-            .from(supabaseStorageBucket)
-            .upload(`outputs/${job.outputName}`, buffer, {
-                upsert: true,
-                contentType: 'video/mp4',
+        try {
+            await downloadFile(job.videoUrl, inputVideo)
+            await downloadFile(job.audioUrl, inputAudio)
+
+            await new Promise<void>((resolve, reject) => {
+                ffmpeg()
+                    .input(inputVideo)
+                    .noAudio()
+                    .save(cleanVideo)
+                    .on('end', () => resolve())
+                    .on('error', reject)
             })
 
-        await supabase.storage.from(supabaseStorageBucket).remove([
-            `input-videos/input-${job.jobId}.mp4`,
-            `input-audios/input-${job.jobId}.mp3`,
-        ])
-    } catch (err) {
-        console.error('❌ Worker lỗi:', err)
-    } finally {
-        fs.rmSync(tmpDir, { recursive: true, force: true })
-    }
-})
+            const videoDur = await getDuration(cleanVideo)
+            const audioDur = await getDuration(inputAudio)
 
-app.listen(PORT, () => {
-    console.log(`🚀 Worker chạy tại cổng ${PORT}`)
-})
+            if (Math.abs(videoDur - audioDur) < 1) {
+                fs.copyFileSync(cleanVideo, finalVideo)
+                fs.copyFileSync(inputAudio, finalAudio)
+            } else if (videoDur < audioDur) {
+                await loopMedia(cleanVideo, finalVideo, audioDur)
+                await cutMedia(finalVideo, finalVideo, audioDur)
+                fs.copyFileSync(inputAudio, finalAudio)
+            } else if (videoDur > audioDur && videoDur / audioDur < 1.2) {
+                await cutMedia(cleanVideo, finalVideo, audioDur)
+                fs.copyFileSync(inputAudio, finalAudio)
+            } else {
+                fs.copyFileSync(cleanVideo, finalVideo)
+                await loopMedia(inputAudio, finalAudio, videoDur)
+                await cutMedia(finalAudio, finalAudio, videoDur)
+            }
+
+            await new Promise<void>((resolve, reject) => {
+                ffmpeg()
+                    .input(finalVideo)
+                    .input(finalAudio)
+                    .outputOptions('-c:v copy', '-c:a aac', '-shortest')
+                    .save(mergedOutput)
+                    .on('end', () => resolve())
+                    .on('error', reject)
+            })
+
+            const buffer = fs.readFileSync(mergedOutput)
+            await supabase.storage
+                .from(supabaseStorageBucket)
+                .upload(`outputs/${job.outputName}`, buffer, {
+                    upsert: true,
+                    contentType: 'video/mp4',
+                })
+
+            await supabase.storage.from(supabaseStorageBucket).remove([
+                `input-videos/input-${job.jobId}.mp4`,
+                `input-audios/input-${job.jobId}.mp3`,
+            ])
+        } catch (err) {
+            console.error('❌ Worker lỗi:', err)
+        } finally {
+            fs.rmSync(tmpDir, { recursive: true, force: true })
+        }
+    }
+}
+
+main()
