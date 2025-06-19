@@ -4,7 +4,7 @@ import ffmpeg from 'fluent-ffmpeg'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import express from 'express'
+import express, { Request, Response, Express } from 'express'
 import fetch from 'node-fetch'
 
 console.log('🚀 process-video-worker.ts khởi động...')
@@ -20,7 +20,22 @@ const {
     PORT = 8080
 } = process.env
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_STORAGE_BUCKET || !REDIS_HOST || !REDIS_PORT || !REDIS_PASSWORD) {
+// 🧪 Kiểm tra biến môi trường
+console.log('🔍 SUPABASE_URL =', SUPABASE_URL)
+console.log('🔍 SUPABASE_SERVICE_ROLE_KEY =', !!SUPABASE_SERVICE_ROLE_KEY)
+console.log('🔍 SUPABASE_STORAGE_BUCKET =', SUPABASE_STORAGE_BUCKET)
+console.log('🔍 REDIS_HOST =', REDIS_HOST)
+console.log('🔍 REDIS_PORT =', REDIS_PORT)
+console.log('🔍 REDIS_PASSWORD =', !!REDIS_PASSWORD)
+
+if (
+    !SUPABASE_URL ||
+    !SUPABASE_SERVICE_ROLE_KEY ||
+    !SUPABASE_STORAGE_BUCKET ||
+    !REDIS_HOST ||
+    !REDIS_PORT ||
+    !REDIS_PASSWORD
+) {
     throw new Error('❌ Thiếu biến môi trường bắt buộc.')
 }
 
@@ -177,10 +192,13 @@ const startWorker = async () => {
 }
 
 // 🌐 Health check
-const app = express()
-app.get('/', (_req, res) => res.send('🟢 Worker hoạt động'))
+const app: Express = express()
+app.get('/', (req: Request, res: Response) => {
+    res.send('🟢 Worker hoạt động')
+})
 app.listen(Number(PORT), () => {
     console.log(`🌐 Listening on port ${PORT}`)
 })
 
+// 🚀 Khởi chạy worker
 startWorker()

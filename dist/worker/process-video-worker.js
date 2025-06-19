@@ -12,17 +12,30 @@ const path_1 = __importDefault(require("path"));
 const express_1 = __importDefault(require("express"));
 const node_fetch_1 = __importDefault(require("node-fetch"));
 console.log('🚀 process-video-worker.ts khởi động...');
-// 🔐 Kiểm tra biến môi trường
+// 🔐 Biến môi trường
 const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET, REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, PORT = 8080 } = process.env;
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_STORAGE_BUCKET || !REDIS_HOST || !REDIS_PORT || !REDIS_PASSWORD) {
+// 🧪 Kiểm tra biến môi trường
+console.log('🔍 SUPABASE_URL =', SUPABASE_URL);
+console.log('🔍 SUPABASE_SERVICE_ROLE_KEY =', !!SUPABASE_SERVICE_ROLE_KEY);
+console.log('🔍 SUPABASE_STORAGE_BUCKET =', SUPABASE_STORAGE_BUCKET);
+console.log('🔍 REDIS_HOST =', REDIS_HOST);
+console.log('🔍 REDIS_PORT =', REDIS_PORT);
+console.log('🔍 REDIS_PASSWORD =', !!REDIS_PASSWORD);
+if (!SUPABASE_URL ||
+    !SUPABASE_SERVICE_ROLE_KEY ||
+    !SUPABASE_STORAGE_BUCKET ||
+    !REDIS_HOST ||
+    !REDIS_PORT ||
+    !REDIS_PASSWORD) {
     throw new Error('❌ Thiếu biến môi trường bắt buộc.');
 }
+// 🔌 Supabase + Redis TCP
 const supabase = (0, supabase_js_1.createClient)(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const redis = new ioredis_1.default({
     host: REDIS_HOST,
     port: parseInt(REDIS_PORT),
     password: REDIS_PASSWORD,
-    tls: {}
+    tls: {} // Bắt buộc cho Upstash TCP
 });
 // 📥 Tải file từ URL
 const downloadFile = async (url, dest) => {
@@ -36,7 +49,7 @@ const downloadFile = async (url, dest) => {
         fileStream.on('finish', () => resolve());
     });
 };
-// ⏱ Lấy thời lượng file
+// ⏱ Thời lượng media
 const getDuration = (filePath) => {
     return new Promise((resolve, reject) => {
         fluent_ffmpeg_1.default.ffprobe(filePath, (err, metadata) => {
@@ -138,10 +151,10 @@ const processJob = async (job) => {
     }
     finally {
         fs_1.default.rmSync(tmpDir, { recursive: true, force: true });
-        console.log(`🧽 Đã dọn RAM cho job ${job.jobId}`);
+        console.log(`🧽 Dọn RAM job ${job.jobId}`);
     }
 };
-// 🔄 Worker chính
+// 🔄 Vòng lặp worker
 const startWorker = async () => {
     console.log('👷 Worker nền đang chạy...');
     while (true) {
@@ -152,6 +165,7 @@ const startWorker = async () => {
                 await processJob(job);
             }
             else {
+                console.log('⏳ Không có job trong hàng đợi...');
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
@@ -162,8 +176,11 @@ const startWorker = async () => {
 };
 // 🌐 Health check
 const app = (0, express_1.default)();
-app.get('/', ((_, res) => res.send('🟢 Worker hoạt động')));
-app.listen(PORT, () => {
+app.get('/', (req, res) => {
+    res.send('🟢 Worker hoạt động');
+});
+app.listen(Number(PORT), () => {
     console.log(`🌐 Listening on port ${PORT}`);
 });
+// 🚀 Khởi chạy worker
 startWorker();
