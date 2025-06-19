@@ -23,11 +23,9 @@ export default function VideoAudioFile() {
             return
         }
 
-        // Tạo jobId duy nhất xuyên suốt luồng
         const newJobId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
         setJobId(newJobId)
 
-        // Tên file theo quy tắc có jobId
         const videoName = `input-${newJobId}.mp4`
         const audioName = `input-${newJobId}.mp3`
         const outputName = `merged-${newJobId}.mp4`
@@ -40,11 +38,9 @@ export default function VideoAudioFile() {
 
         setStatus('📤 Đang tải lên Supabase...')
 
-        // Upload video và audio lên Supabase Storage
         const { error: videoErr } = await supabase.storage
             .from(STORAGE_PATH)
             .upload(`input-videos/${videoName}`, videoFile, { upsert: true })
-
         const { error: audioErr } = await supabase.storage
             .from(STORAGE_PATH)
             .upload(`input-audios/${audioName}`, audioFile, { upsert: true })
@@ -55,7 +51,6 @@ export default function VideoAudioFile() {
             return
         }
 
-        // Kiểm tra file public có thể truy cập được
         const videoCheck = await fetch(videoUrl)
         const audioCheck = await fetch(audioUrl)
         if (!videoCheck.ok || !audioCheck.ok) {
@@ -65,7 +60,6 @@ export default function VideoAudioFile() {
 
         setStatus('🚀 Đã upload. Đang gửi job xử lý...')
 
-        // Gửi API tạo job
         const runRes = await fetch('/api/create-process-job', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -91,16 +85,8 @@ export default function VideoAudioFile() {
         <main className="p-4 space-y-4">
             <h1 className="text-xl font-bold">🎬 Phương thức 3 – Giai đoạn 1</h1>
 
-            <input
-                type="file"
-                accept="video/mp4"
-                onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
-            />
-            <input
-                type="file"
-                accept="audio/mpeg"
-                onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
-            />
+            <input type="file" accept="video/mp4" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
+            <input type="file" accept="audio/mpeg" onChange={(e) => setAudioFile(e.target.files?.[0] || null)} />
 
             <button onClick={handleUpload} className="bg-blue-600 text-white px-4 py-2 rounded">
                 Tải lên & xử lý

@@ -21,7 +21,21 @@ const {
 } = process.env
 
 // 🧪 Kiểm tra biến môi trường
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_STORAGE_BUCKET || !REDIS_HOST || !REDIS_PORT || !REDIS_PASSWORD) {
+console.log('🔍 SUPABASE_URL =', SUPABASE_URL)
+console.log('🔍 SUPABASE_SERVICE_ROLE_KEY =', !!SUPABASE_SERVICE_ROLE_KEY)
+console.log('🔍 SUPABASE_STORAGE_BUCKET =', SUPABASE_STORAGE_BUCKET)
+console.log('🔍 REDIS_HOST =', REDIS_HOST)
+console.log('🔍 REDIS_PORT =', REDIS_PORT)
+console.log('🔍 REDIS_PASSWORD =', !!REDIS_PASSWORD)
+
+if (
+    !SUPABASE_URL ||
+    !SUPABASE_SERVICE_ROLE_KEY ||
+    !SUPABASE_STORAGE_BUCKET ||
+    !REDIS_HOST ||
+    !REDIS_PORT ||
+    !REDIS_PASSWORD
+) {
     throw new Error('❌ Thiếu biến môi trường bắt buộc.')
 }
 
@@ -31,7 +45,7 @@ const redis = new Redis({
     host: REDIS_HOST,
     port: parseInt(REDIS_PORT),
     password: REDIS_PASSWORD,
-    tls: {} // Bắt buộc với Upstash TCP
+    tls: {} // Bắt buộc cho Upstash TCP
 })
 
 // 📥 Tải file từ URL
@@ -42,11 +56,11 @@ const downloadFile = async (url: string, dest: string) => {
     await new Promise<void>((resolve, reject) => {
         res.body?.pipe(fileStream)
         res.body?.on('error', reject)
-        fileStream.on('finish', resolve)
+        fileStream.on('finish', () => resolve())
     })
 }
 
-// ⏱ Lấy thời lượng media
+// ⏱ Thời lượng media
 const getDuration = (filePath: string): Promise<number> => {
     return new Promise((resolve, reject) => {
         ffmpeg.ffprobe(filePath, (err, metadata) => {
@@ -56,7 +70,7 @@ const getDuration = (filePath: string): Promise<number> => {
     })
 }
 
-// 🔁 Lặp media đến thời lượng nhất định
+// 🔁 Lặp media
 const loopMedia = (input: string, output: string, duration: number) => {
     return new Promise<void>((resolve, reject) => {
         ffmpeg()
@@ -64,24 +78,24 @@ const loopMedia = (input: string, output: string, duration: number) => {
             .inputOptions('-stream_loop', '-1')
             .outputOptions('-t', `${duration}`)
             .save(output)
-            .on('end', resolve)
+            .on('end', () => resolve())
             .on('error', reject)
     })
 }
 
-// ✂️ Cắt media theo thời lượng
+// ✂️ Cắt media
 const cutMedia = (input: string, output: string, duration: number) => {
     return new Promise<void>((resolve, reject) => {
         ffmpeg()
             .input(input)
             .setDuration(duration)
             .save(output)
-            .on('end', resolve)
+            .on('end', () => resolve())
             .on('error', reject)
     })
 }
 
-// 🧠 Xử lý từng job
+// 🧠 Xử lý job
 const processJob = async (job: any) => {
     console.log(`📦 Bắt đầu xử lý job ${job.jobId}`)
 
@@ -100,13 +114,13 @@ const processJob = async (job: any) => {
         await downloadFile(job.videoUrl, inputVideo)
         await downloadFile(job.audioUrl, inputAudio)
 
-        // ✂️ Tách audio khỏi video
+        // Tách video sạch
         await new Promise<void>((resolve, reject) => {
             ffmpeg()
                 .input(inputVideo)
                 .noAudio()
                 .save(cleanVideo)
-                .on('end', resolve)
+                .on('end', () => resolve())
                 .on('error', reject)
         })
 
@@ -114,7 +128,7 @@ const processJob = async (job: any) => {
         const audioDur = await getDuration(inputAudio)
         console.log(`⏱ Duration: video = ${videoDur}, audio = ${audioDur}`)
 
-        // ⚙️ Cân chỉnh độ dài giữa video/audio
+        // Đồng bộ thời lượng
         if (Math.abs(videoDur - audioDur) < 1) {
             fs.copyFileSync(cleanVideo, finalVideo)
             fs.copyFileSync(inputAudio, finalAudio)
@@ -131,18 +145,17 @@ const processJob = async (job: any) => {
             await cutMedia(finalAudio, finalAudio, videoDur)
         }
 
-        // 🔗 Ghép lại finalVideo + finalAudio → output.mp4
+        // Ghép video + audio
         await new Promise<void>((resolve, reject) => {
             ffmpeg()
                 .input(finalVideo)
                 .input(finalAudio)
                 .outputOptions('-c:v copy', '-c:a aac', '-shortest')
                 .save(mergedOutput)
-                .on('end', resolve)
+                .on('end', () => resolve())
                 .on('error', reject)
         })
 
-        // ⬆️ Upload kết quả
         const buffer = fs.readFileSync(mergedOutput)
         const outputPath = `outputs/${job.outputName}`
         await supabase.storage.from(SUPABASE_STORAGE_BUCKET).upload(outputPath, buffer, {
@@ -150,7 +163,7 @@ const processJob = async (job: any) => {
             contentType: 'video/mp4'
         })
 
-        // 🧹 Xoá nguyên liệu gốc trên Supabase
+        // Dọn nguyên liệu
         await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([
             `input-videos/input-${job.jobId}.mp4`,
             `input-audios/input-${job.jobId}.mp3`
@@ -163,7 +176,7 @@ const processJob = async (job: any) => {
     }
 }
 
-// 🔄 Worker nền
+// 🔄 Vòng lặp worker
 const startWorker = async () => {
     console.log('👷 Worker nền đang chạy...')
     while (true) {
@@ -191,5 +204,5 @@ app.listen(Number(PORT), () => {
     console.log(`🌐 Listening on port ${PORT}`)
 })
 
-// 🚀 Khởi chạy worker nền
+// 🚀 Khởi chạy worker
 startWorker()

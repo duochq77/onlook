@@ -97,6 +97,7 @@ const processJob = async (job) => {
     try {
         await downloadFile(job.videoUrl, inputVideo);
         await downloadFile(job.audioUrl, inputAudio);
+        // Tách video sạch
         await new Promise((resolve, reject) => {
             (0, fluent_ffmpeg_1.default)()
                 .input(inputVideo)
@@ -108,6 +109,7 @@ const processJob = async (job) => {
         const videoDur = await getDuration(cleanVideo);
         const audioDur = await getDuration(inputAudio);
         console.log(`⏱ Duration: video = ${videoDur}, audio = ${audioDur}`);
+        // Đồng bộ thời lượng
         if (Math.abs(videoDur - audioDur) < 1) {
             fs_1.default.copyFileSync(cleanVideo, finalVideo);
             fs_1.default.copyFileSync(inputAudio, finalAudio);
@@ -126,6 +128,7 @@ const processJob = async (job) => {
             await loopMedia(inputAudio, finalAudio, videoDur);
             await cutMedia(finalAudio, finalAudio, videoDur);
         }
+        // Ghép video + audio
         await new Promise((resolve, reject) => {
             (0, fluent_ffmpeg_1.default)()
                 .input(finalVideo)
@@ -141,6 +144,7 @@ const processJob = async (job) => {
             upsert: true,
             contentType: 'video/mp4'
         });
+        // Dọn nguyên liệu
         await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([
             `input-videos/input-${job.jobId}.mp4`,
             `input-audios/input-${job.jobId}.mp3`
