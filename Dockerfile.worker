@@ -1,23 +1,19 @@
-FROM node:20-alpine
+FROM node:20
 
 WORKDIR /app
 
-# Cài đặt ffmpeg và bash
-RUN apk add --no-cache ffmpeg bash
+# Cài ffmpeg (bản Debian)
+RUN apt-get update && apt-get install -y ffmpeg
 
-# Cài đặt các thư viện Node.js
+# Cài thư viện Node.js
 COPY package.json package-lock.json ./
 RUN npm install
 
-# Copy toàn bộ mã nguồn và biên dịch TypeScript
+# Copy mã nguồn và build TypeScript
 COPY . .
 RUN npx tsc -p tsconfig.worker.json
 
-# ✅ Khai báo cổng Cloud Run sẽ kiểm tra
 EXPOSE 8080
-
-# ✅ Biến môi trường PORT
 ENV PORT=8080
 
-# ✅ Lệnh khởi chạy container
 CMD ["node", "dist/worker/process-video-worker.js"]
