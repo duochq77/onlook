@@ -4,7 +4,7 @@ import ffmpeg from 'fluent-ffmpeg'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import express from 'express'
+import express, { Request, Response } from 'express'
 import fetch from 'node-fetch'
 
 const {
@@ -14,7 +14,7 @@ const {
     REDIS_HOST,
     REDIS_PORT,
     REDIS_PASSWORD,
-    PORT = '8080',
+    PORT = '8080'
 } = process.env
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_STORAGE_BUCKET || !REDIS_HOST || !REDIS_PORT || !REDIS_PASSWORD) {
@@ -29,7 +29,12 @@ const redis = new Redis({
     tls: {}
 })
 
+redis.on('error', err => console.error('Redis error:', err))
+
 const downloadFile = async (url: string): Promise<Buffer> => {
+    if (!url || !url.startsWith('http')) {
+        throw new Error(`❌ URL không hợp lệ: ${url}`)
+    }
     const res = await fetch(url)
     if (!res.ok) throw new Error(`Không tải được: ${url}`)
     return Buffer.from(await res.arrayBuffer())
@@ -87,6 +92,15 @@ const mergeMedia = (video: string, audio: string, output: string): Promise<void>
 }
 
 const processJob = async (job: any) => {
+    console.log('📦 Job nhận được:', job)
+    console.log('🎬 videoUrl:', job.videoUrl)
+    console.log('🎵 audioUrl:', job.audioUrl)
+
+    if (!job?.videoUrl?.startsWith('http') || !job?.audioUrl?.startsWith('http')) {
+        console.error('❌ Job bị thiếu hoặc sai URL tuyệt đối, bỏ qua:', job)
+        return
+    }
+
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `job-${job.jobId}-`))
     const inputVideo = path.join(tmp, 'video.mp4')
     const inputAudio = path.join(tmp, 'audio.mp3')
@@ -129,17 +143,18 @@ const processJob = async (job: any) => {
         await mergeMedia(finalVideo, finalAudio, outputFile)
 
         const outputPath = `outputs/${job.outputName}`
-        const uploadRes = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).upload(outputPath, fs.readFileSync(outputFile), {
-            contentType: 'video/mp4',
-            upsert: true,
-        })
+        const uploadRes = await supabase.storage
+            .from(SUPABASE_STORAGE_BUCKET)
+            .upload(outputPath, fs.readFileSync(outputFile), {
+                contentType: 'video/mp4',
+                upsert: true,
+            })
 
         if (uploadRes.error) throw uploadRes.error
 
-        // ✅ Xoá file gốc trên Supabase theo URL thực tế
         await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([
-            job.videoUrl.split('/').slice(-1)[0].replace(/^input-/, 'input-videos/input-'),
-            job.audioUrl.split('/').slice(-1)[0].replace(/^input-/, 'input-audios/input-'),
+            `input-videos/input-${job.jobId}.mp4`,
+            `input-audios/input-${job.jobId}.mp3`
         ])
     } catch (err) {
         console.error(`❌ Lỗi xử lý job ${job.jobId}:`, err)
@@ -176,8 +191,17 @@ const startWorker = async () => {
 
 const app = express()
 app.use(express.json())
-app.get('/', (_req, res) => res.send('🟢 Worker hoạt động'))
-app.post('/', (_req, res) => res.status(200).send('OK'))
-app.listen(Number(PORT), () => console.log(`🌐 Server lắng nghe tại PORT ${PORT}`))
+
+app.get('/', (_req: Request, res: Response) => {
+    res.send('🟢 Worker hoạt động')
+})
+
+app.post('/', (_req: Request, res: Response) => {
+    res.status(200).send('OK')
+})
+
+app.listen(Number(PORT), () => {
+    console.log(`🌐 Server lắng nghe tại PORT ${PORT}`)
+})
 
 startWorker()

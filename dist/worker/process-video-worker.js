@@ -148,12 +148,7 @@ const startWorker = async () => {
                 job = JSON.parse(jobStr);
             }
             catch (err) {
-                if (err instanceof Error) {
-                    console.error('❌ Lỗi JSON.parse:', err.message);
-                }
-                else {
-                    console.error('❌ Lỗi JSON.parse:', err);
-                }
+                console.error('❌ Lỗi JSON.parse:', err);
                 console.error('🪵 Dữ liệu lỗi:', jobStr);
                 continue;
             }
@@ -166,10 +161,10 @@ const startWorker = async () => {
 };
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
-app.get('/', (_req, res) => {
+app.get('/', (req, res) => {
     res.send('🟢 Worker hoạt động');
 });
-app.post('/', (_req, res) => {
+app.post('/', (req, res) => {
     res.status(200).send('OK');
 });
 app.listen(Number(PORT), () => {
