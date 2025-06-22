@@ -27,7 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     try {
         console.log('📦 Đẩy job vào Redis:', jobPayload)
-        await redis.lpush('onlook:job-queue', JSON.stringify(jobPayload))
+        await redis.lpush('video-process-jobs', JSON.stringify(jobPayload))
         return res.status(200).json({ message: '✅ Job đã được đẩy vào hàng đợi', jobId })
     } catch (err: any) {
         console.error('❌ Lỗi gửi job:', err)

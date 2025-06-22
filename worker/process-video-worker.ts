@@ -8,7 +8,6 @@ import express, { Request, Response } from 'express'
 import fetch from 'node-fetch'
 import { Readable } from 'stream'
 
-// 📥 Biến môi trường
 const {
     SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY,
@@ -23,7 +22,6 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_STORAGE_BUCKET || !
     throw new Error('❌ Thiếu biến môi trường bắt buộc.')
 }
 
-// ✅ Kết nối Supabase & Redis
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 const redis = new Redis({
     host: REDIS_HOST,
@@ -34,7 +32,6 @@ const redis = new Redis({
 
 redis.on('error', err => console.error('Redis error:', err))
 
-// 🎞 Tải file về buffer
 const downloadFile = async (url: string): Promise<Buffer> => {
     const res = await fetch(url)
     if (!res.ok) throw new Error(`Không tải được: ${url}`)
@@ -92,7 +89,6 @@ const mergeMedia = (video: string, audio: string, output: string): Promise<void>
     })
 }
 
-// 🛠 Xử lý 1 job
 const processJob = async (job: any) => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `job-${job.jobId}-`))
     const inputVideo = path.join(tmp, 'video.mp4')
@@ -108,7 +104,6 @@ const processJob = async (job: any) => {
         await saveBufferToFile(videoBuffer, inputVideo)
         await saveBufferToFile(audioBuffer, inputAudio)
 
-        // Tách audio khỏi video gốc
         await new Promise<void>((resolve, reject) => {
             ffmpeg()
                 .input(inputVideo)
@@ -141,6 +136,7 @@ const processJob = async (job: any) => {
             contentType: 'video/mp4',
             upsert: true
         })
+
         if (uploadRes.error) throw uploadRes.error
 
         await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([
@@ -154,12 +150,11 @@ const processJob = async (job: any) => {
     }
 }
 
-// 🔁 Worker loop
 const startWorker = async () => {
     console.log('👷 Worker nền đang chạy...')
     while (true) {
         try {
-            const jobStr = await redis.lpop('onlook:job-queue')
+            const jobStr = await redis.lpop('video-process-jobs') // 🔧 Đã đổi key
             if (jobStr) {
                 const job = JSON.parse(jobStr)
                 await processJob(job)
@@ -172,7 +167,6 @@ const startWorker = async () => {
     }
 }
 
-// 🌐 Express server để Cloud Run healthcheck
 const app = express()
 app.use(express.json())
 
@@ -188,5 +182,4 @@ app.listen(Number(PORT), () => {
     console.log(`🌐 Server lắng nghe tại PORT ${PORT}`)
 })
 
-// ▶️ Bắt đầu worker
 startWorker()
