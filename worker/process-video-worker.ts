@@ -4,9 +4,8 @@ import ffmpeg from 'fluent-ffmpeg'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import express, { Request, Response } from 'express'
+import express from 'express'
 import fetch from 'node-fetch'
-import { Readable } from 'stream'
 
 const {
     SUPABASE_URL,
@@ -15,7 +14,7 @@ const {
     REDIS_HOST,
     REDIS_PORT,
     REDIS_PASSWORD,
-    PORT = '8080'
+    PORT = '8080',
 } = process.env
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_STORAGE_BUCKET || !REDIS_HOST || !REDIS_PORT || !REDIS_PASSWORD) {
@@ -29,8 +28,6 @@ const redis = new Redis({
     password: REDIS_PASSWORD,
     tls: {}
 })
-
-redis.on('error', err => console.error('Redis error:', err))
 
 const downloadFile = async (url: string): Promise<Buffer> => {
     const res = await fetch(url)
@@ -134,14 +131,15 @@ const processJob = async (job: any) => {
         const outputPath = `outputs/${job.outputName}`
         const uploadRes = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).upload(outputPath, fs.readFileSync(outputFile), {
             contentType: 'video/mp4',
-            upsert: true
+            upsert: true,
         })
 
         if (uploadRes.error) throw uploadRes.error
 
+        // ✅ Xoá file gốc trên Supabase theo URL thực tế
         await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([
-            `input-videos/input-${job.jobId}.mp4`,
-            `input-audios/input-${job.jobId}.mp3`
+            job.videoUrl.split('/').slice(-1)[0].replace(/^input-/, 'input-videos/input-'),
+            job.audioUrl.split('/').slice(-1)[0].replace(/^input-/, 'input-audios/input-'),
         ])
     } catch (err) {
         console.error(`❌ Lỗi xử lý job ${job.jobId}:`, err)
@@ -154,13 +152,22 @@ const startWorker = async () => {
     console.log('👷 Worker nền đang chạy...')
     while (true) {
         try {
-            const jobStr = await redis.lpop('video-process-jobs') // 🔧 Đã đổi key
-            if (jobStr) {
-                const job = JSON.parse(jobStr)
-                await processJob(job)
-            } else {
+            const jobStr = await redis.lpop('video-process-jobs')
+            if (!jobStr) {
                 await new Promise(r => setTimeout(r, 2000))
+                continue
             }
+
+            let job
+            try {
+                job = JSON.parse(jobStr)
+            } catch (err) {
+                console.error('❌ Lỗi JSON.parse:', err)
+                console.error('🪵 Dữ liệu lỗi:', jobStr)
+                continue
+            }
+
+            await processJob(job)
         } catch (err) {
             console.error('❌ Lỗi trong worker:', err)
         }
@@ -169,17 +176,8 @@ const startWorker = async () => {
 
 const app = express()
 app.use(express.json())
-
-app.get('/', (_req: Request, res: Response) => {
-    res.send('🟢 Worker hoạt động')
-})
-
-app.post('/', (_req: Request, res: Response) => {
-    res.status(200).send('OK')
-})
-
-app.listen(Number(PORT), () => {
-    console.log(`🌐 Server lắng nghe tại PORT ${PORT}`)
-})
+app.get('/', (_req, res) => res.send('🟢 Worker hoạt động'))
+app.post('/', (_req, res) => res.status(200).send('OK'))
+app.listen(Number(PORT), () => console.log(`🌐 Server lắng nghe tại PORT ${PORT}`))
 
 startWorker()
