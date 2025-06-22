@@ -4,7 +4,7 @@ import ffmpeg from 'fluent-ffmpeg'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import express from 'express'
+import express, { Request, Response } from 'express'
 import fetch from 'node-fetch'
 import { Readable } from 'stream'
 
@@ -176,12 +176,12 @@ const startWorker = async () => {
 const app = express()
 app.use(express.json())
 
-app.post('/', (_req, res) => {
-    res.status(200).send('OK')
+app.get('/', (_req: Request, res: Response) => {
+    res.send('🟢 Worker hoạt động')
 })
 
-app.get('/', (_req, res) => {
-    res.send('🟢 Worker hoạt động')
+app.post('/', (_req: Request, res: Response) => {
+    res.status(200).send('OK')
 })
 
 app.listen(Number(PORT), () => {
