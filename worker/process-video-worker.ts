@@ -59,7 +59,7 @@ const loopMedia = (input: string, output: string, duration: number): Promise<voi
             .inputOptions('-stream_loop', '-1')
             .outputOptions('-t', `${duration}`)
             .output(output)
-            .on('end', resolve)
+            .on('end', () => resolve())
             .on('error', reject)
             .run()
     })
@@ -71,7 +71,7 @@ const cutMedia = (input: string, output: string, duration: number): Promise<void
             .input(input)
             .setDuration(duration)
             .output(output)
-            .on('end', resolve)
+            .on('end', () => resolve())
             .on('error', reject)
             .run()
     })
@@ -84,7 +84,7 @@ const mergeMedia = (video: string, audio: string, output: string): Promise<void>
             .input(audio)
             .outputOptions('-c:v copy', '-c:a aac', '-shortest')
             .output(output)
-            .on('end', resolve)
+            .on('end', () => resolve())
             .on('error', reject)
             .run()
     })
@@ -119,7 +119,7 @@ const processJob = async (job: any) => {
                 .input(inputVideo)
                 .noAudio()
                 .output(cleanVideo)
-                .on('end', resolve)
+                .on('end', () => resolve())
                 .on('error', reject)
                 .run()
         })
@@ -167,41 +167,10 @@ const processJob = async (job: any) => {
     }
 }
 
-const startWorker = async () => {
-    console.log('👷 Worker nền đang chạy...')
-
-    // Kiểm tra hàng đợi lần đầu
-    redis.lrange('video-process-jobs', 0, -1).then(jobs => {
-        console.log('📦 Hàng đợi Redis hiện tại:', jobs)
-    })
-
-    while (true) {
-        console.log('🔄 Worker kiểm tra hàng đợi...')
-        try {
-            const jobStr = await redis.lpop('video-process-jobs')
-            console.log('📥 Job từ Redis:', jobStr)
-
-            if (!jobStr) {
-                await new Promise(resolve => setTimeout(resolve, 3000))
-                continue
-            }
-
-            let job
-            try {
-                job = JSON.parse(jobStr)
-            } catch (err) {
-                console.error('❌ Lỗi JSON.parse:', err)
-                console.error('🪵 Dữ liệu lỗi:', jobStr)
-                continue
-            }
-
-            await processJob(job)
-        } catch (err) {
-            console.error('❌ Lỗi trong vòng lặp worker:', err)
-            await new Promise(resolve => setTimeout(resolve, 5000))
-        }
-    }
-}
+// ✅ Worker nền đã bị tắt tạm thời để kiểm tra Redis
+// ❌ Không khởi động vòng lặp worker nữa
+// const startWorker = async () => { ... }
+// startWorker()
 
 const app = express()
 app.use(express.json())
@@ -218,4 +187,5 @@ app.listen(Number(PORT), () => {
     console.log(`🌐 Server lắng nghe tại PORT ${PORT}`)
 })
 
-startWorker()
+// ⛔ Worker đang được tạm tắt để kiểm tra Redis
+// startWorker()
