@@ -22,7 +22,6 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_STORAGE_BUCKET || !
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-
 const redis = new Redis({
     host: REDIS_HOST,
     port: parseInt(REDIS_PORT),
@@ -33,9 +32,8 @@ const redis = new Redis({
 redis.on('error', err => console.error('❌ Redis error:', err))
 
 const downloadFile = async (url: string): Promise<Buffer> => {
-    if (!url || !url.startsWith('http')) throw new Error(`❌ URL không hợp lệ: ${url}`)
     const res = await fetch(url)
-    if (!res.ok) throw new Error(`Không tải được file từ: ${url}`)
+    if (!res.ok) throw new Error(`Không tải được file: ${url}`)
     return Buffer.from(await res.arrayBuffer())
 }
 
@@ -59,7 +57,7 @@ const loopMedia = (input: string, output: string, duration: number): Promise<voi
             .inputOptions('-stream_loop', '-1')
             .outputOptions('-t', `${duration}`)
             .output(output)
-            .on('end', () => resolve())
+            .on('end', resolve)
             .on('error', reject)
             .run()
     })
@@ -71,7 +69,7 @@ const cutMedia = (input: string, output: string, duration: number): Promise<void
             .input(input)
             .setDuration(duration)
             .output(output)
-            .on('end', () => resolve())
+            .on('end', resolve)
             .on('error', reject)
             .run()
     })
@@ -84,7 +82,7 @@ const mergeMedia = (video: string, audio: string, output: string): Promise<void>
             .input(audio)
             .outputOptions('-c:v copy', '-c:a aac', '-shortest')
             .output(output)
-            .on('end', () => resolve())
+            .on('end', resolve)
             .on('error', reject)
             .run()
     })
@@ -92,10 +90,6 @@ const mergeMedia = (video: string, audio: string, output: string): Promise<void>
 
 const processJob = async (job: any) => {
     console.log('📦 Đã nhận job:', job.jobId)
-    if (!job?.videoUrl?.startsWith('http') || !job?.audioUrl?.startsWith('http')) {
-        console.error('❌ Job thiếu URL tuyệt đối:', job)
-        return
-    }
 
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `job-${job.jobId}-`))
     const inputVideo = path.join(tmp, 'video.mp4')
@@ -119,7 +113,7 @@ const processJob = async (job: any) => {
                 .input(inputVideo)
                 .noAudio()
                 .output(cleanVideo)
-                .on('end', () => resolve())
+                .on('end', resolve)
                 .on('error', reject)
                 .run()
         })
@@ -159,7 +153,6 @@ const processJob = async (job: any) => {
             `input-audios/input-${job.jobId}.mp3`
         ])
         console.log('🧹 Đã xoá 2 file nguyên liệu')
-
     } catch (err) {
         console.error(`❌ Lỗi khi xử lý job ${job.jobId}:`, err)
     } finally {
@@ -167,10 +160,31 @@ const processJob = async (job: any) => {
     }
 }
 
-// ✅ Worker nền đã bị tắt tạm thời để kiểm tra Redis
-// ❌ Không khởi động vòng lặp worker nữa
-// const startWorker = async () => { ... }
-// startWorker()
+const startWorker = async () => {
+    console.log('🔁 Worker bắt đầu lắng nghe job từ Redis...')
+    while (true) {
+        try {
+            const jobRaw = await redis.rpop('video-process-jobs')
+            if (!jobRaw) {
+                await new Promise(resolve => setTimeout(resolve, 3000))
+                continue
+            }
+
+            let job
+            try {
+                job = JSON.parse(jobRaw)
+            } catch (e) {
+                console.error('❌ Không thể parse job JSON:', jobRaw)
+                continue
+            }
+
+            await processJob(job)
+        } catch (err) {
+            console.error('❌ Lỗi trong worker loop:', err)
+            await new Promise(resolve => setTimeout(resolve, 3000))
+        }
+    }
+}
 
 const app = express()
 app.use(express.json())
@@ -187,5 +201,4 @@ app.listen(Number(PORT), () => {
     console.log(`🌐 Server lắng nghe tại PORT ${PORT}`)
 })
 
-// ⛔ Worker đang được tạm tắt để kiểm tra Redis
-// startWorker()
+startWorker()

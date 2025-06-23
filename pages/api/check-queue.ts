@@ -5,17 +5,32 @@ const redis = new Redis({
     host: process.env.REDIS_HOST,
     port: Number(process.env.REDIS_PORT),
     password: process.env.REDIS_PASSWORD,
-    tls: {}, // Bắt buộc với Upstash Redis
+    tls: {},
 })
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    if (req.method !== 'GET') {
+        return res.status(405).json({ error: 'Method Not Allowed' })
+    }
+
     try {
-        const jobs = await redis.lrange('video-process-jobs', 0, -1)
-        res.status(200).json({ count: jobs.length, jobs })
-    } catch (error: any) {
-        console.error('❌ Lỗi kiểm tra queue:', error)
-        res.status(500).json({ error: 'Redis check failed', message: error.message })
-    } finally {
-        redis.disconnect()
+        const jobsRaw = await redis.lrange('video-process-jobs', 0, -1)
+
+        // ✅ Parse từng job trước khi trả về
+        const jobs = jobsRaw.map((j) => {
+            try {
+                return JSON.parse(j)
+            } catch {
+                return { raw: j, error: 'Invalid JSON' }
+            }
+        })
+
+        return res.status(200).json({
+            count: jobs.length,
+            jobs,
+        })
+    } catch (err: any) {
+        console.error('❌ Lỗi khi đọc Redis:', err)
+        return res.status(500).json({ error: 'Lỗi khi đọc Redis', message: err.message })
     }
 }
