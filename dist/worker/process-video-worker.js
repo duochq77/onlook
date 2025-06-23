@@ -24,6 +24,9 @@ const redis = new ioredis_1.default({
 });
 redis.on('error', err => console.error('Redis error:', err));
 const downloadFile = async (url) => {
+    if (!url || !url.startsWith('http')) {
+        throw new Error(`❌ URL không hợp lệ: ${url}`);
+    }
     const res = await (0, node_fetch_1.default)(url);
     if (!res.ok)
         throw new Error(`Không tải được: ${url}`);
@@ -78,6 +81,13 @@ const mergeMedia = (video, audio, output) => {
     });
 };
 const processJob = async (job) => {
+    console.log('📦 Job nhận được:', job);
+    console.log('🎬 videoUrl:', job.videoUrl);
+    console.log('🎵 audioUrl:', job.audioUrl);
+    if (!job?.videoUrl?.startsWith('http') || !job?.audioUrl?.startsWith('http')) {
+        console.error('❌ Job bị thiếu hoặc sai URL tuyệt đối, bỏ qua:', job);
+        return;
+    }
     const tmp = fs_1.default.mkdtempSync(path_1.default.join(os_1.default.tmpdir(), `job-${job.jobId}-`));
     const inputVideo = path_1.default.join(tmp, 'video.mp4');
     const inputAudio = path_1.default.join(tmp, 'audio.mp3');
@@ -116,9 +126,11 @@ const processJob = async (job) => {
         }
         await mergeMedia(finalVideo, finalAudio, outputFile);
         const outputPath = `outputs/${job.outputName}`;
-        const uploadRes = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).upload(outputPath, fs_1.default.readFileSync(outputFile), {
+        const uploadRes = await supabase.storage
+            .from(SUPABASE_STORAGE_BUCKET)
+            .upload(outputPath, fs_1.default.readFileSync(outputFile), {
             contentType: 'video/mp4',
-            upsert: true
+            upsert: true,
         });
         if (uploadRes.error)
             throw uploadRes.error;
@@ -161,10 +173,10 @@ const startWorker = async () => {
 };
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
     res.send('🟢 Worker hoạt động');
 });
-app.post('/', (req, res) => {
+app.post('/', (_req, res) => {
     res.status(200).send('OK');
 });
 app.listen(Number(PORT), () => {
