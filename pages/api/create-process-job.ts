@@ -6,10 +6,6 @@ const redis = new Redis({
     token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 })
 
-/**
- * Hàm chuyển URL tương đối thành tuyệt đối.
- * Ví dụ: /videos/a.mp4 → https://onlook.vn/videos/a.mp4
- */
 const makeAbsoluteUrl = (url: string): string => {
     if (/^https?:\/\//i.test(url)) return url
     const base = process.env.BASE_MEDIA_URL || 'https://onlook.vn'
@@ -22,8 +18,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const { videoUrl, audioUrl, outputName } = req.body
+    console.log('📥 Nhận request:', { videoUrl, audioUrl, outputName })
 
     if (!videoUrl || !audioUrl || !outputName) {
+        console.error('❌ Thiếu tham số trong body:', req.body)
         return res.status(400).json({ error: 'Thiếu tham số videoUrl, audioUrl, outputName' })
     }
 
@@ -40,12 +38,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-        console.log('📦 Đẩy job vào Redis:', jobPayload)
-        await redis.lpush('video-process-jobs', JSON.stringify(jobPayload))
-        console.log(`✅ Job ${jobId} đã được thêm vào hàng đợi`)
+        console.log('📦 Đang đẩy job vào Redis:', jobPayload)
+        const pushResult = await redis.lpush('video-process-jobs', JSON.stringify(jobPayload))
+        console.log('✅ Redis lpush result:', pushResult)
+
         return res.status(200).json({ message: 'Đã tạo job thành công', jobId })
     } catch (err: any) {
-        console.error('❌ Lỗi Redis:', err)
-        return res.status(500).json({ error: 'Lỗi Redis', details: err.message })
+        console.error('❌ Lỗi Redis khi push job:', err)
+        return res.status(500).json({ error: 'Không thể tạo job', details: err.message })
     }
 }

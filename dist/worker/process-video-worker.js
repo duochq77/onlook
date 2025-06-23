@@ -22,14 +22,13 @@ const redis = new ioredis_1.default({
     password: REDIS_PASSWORD,
     tls: {}
 });
-redis.on('error', err => console.error('Redis error:', err));
+redis.on('error', err => console.error('❌ Redis error:', err));
 const downloadFile = async (url) => {
-    if (!url || !url.startsWith('http')) {
+    if (!url || !url.startsWith('http'))
         throw new Error(`❌ URL không hợp lệ: ${url}`);
-    }
     const res = await (0, node_fetch_1.default)(url);
     if (!res.ok)
-        throw new Error(`Không tải được: ${url}`);
+        throw new Error(`Không tải được file từ: ${url}`);
     return Buffer.from(await res.arrayBuffer());
 };
 const saveBufferToFile = async (buffer, filePath) => {
@@ -52,7 +51,7 @@ const loopMedia = (input, output, duration) => {
             .inputOptions('-stream_loop', '-1')
             .outputOptions('-t', `${duration}`)
             .output(output)
-            .on('end', () => resolve())
+            .on('end', resolve)
             .on('error', reject)
             .run();
     });
@@ -63,7 +62,7 @@ const cutMedia = (input, output, duration) => {
             .input(input)
             .setDuration(duration)
             .output(output)
-            .on('end', () => resolve())
+            .on('end', resolve)
             .on('error', reject)
             .run();
     });
@@ -75,17 +74,15 @@ const mergeMedia = (video, audio, output) => {
             .input(audio)
             .outputOptions('-c:v copy', '-c:a aac', '-shortest')
             .output(output)
-            .on('end', () => resolve())
+            .on('end', resolve)
             .on('error', reject)
             .run();
     });
 };
 const processJob = async (job) => {
-    console.log('📦 Job nhận được:', job);
-    console.log('🎬 videoUrl:', job.videoUrl);
-    console.log('🎵 audioUrl:', job.audioUrl);
+    console.log('📦 Đã nhận job:', job.jobId);
     if (!job?.videoUrl?.startsWith('http') || !job?.audioUrl?.startsWith('http')) {
-        console.error('❌ Job bị thiếu hoặc sai URL tuyệt đối, bỏ qua:', job);
+        console.error('❌ Job thiếu URL tuyệt đối:', job);
         return;
     }
     const tmp = fs_1.default.mkdtempSync(path_1.default.join(os_1.default.tmpdir(), `job-${job.jobId}-`));
@@ -96,21 +93,25 @@ const processJob = async (job) => {
     const finalAudio = path_1.default.join(tmp, 'final.mp3');
     const outputFile = path_1.default.join(tmp, 'merged.mp4');
     try {
+        console.log('⬇️ Tải video...');
         const videoBuffer = await downloadFile(job.videoUrl);
+        console.log('⬇️ Tải audio...');
         const audioBuffer = await downloadFile(job.audioUrl);
         await saveBufferToFile(videoBuffer, inputVideo);
         await saveBufferToFile(audioBuffer, inputAudio);
+        console.log('✂️ Tách video sạch...');
         await new Promise((resolve, reject) => {
             (0, fluent_ffmpeg_1.default)()
                 .input(inputVideo)
                 .noAudio()
                 .output(cleanVideo)
-                .on('end', () => resolve())
+                .on('end', resolve)
                 .on('error', reject)
                 .run();
         });
         const videoDur = await getDuration(cleanVideo);
         const audioDur = await getDuration(inputAudio);
+        console.log(`📏 Duration video: ${videoDur}s, audio: ${audioDur}s`);
         if (Math.abs(videoDur - audioDur) < 1) {
             fs_1.default.copyFileSync(cleanVideo, finalVideo);
             fs_1.default.copyFileSync(inputAudio, finalAudio);
@@ -124,23 +125,26 @@ const processJob = async (job) => {
             await cutMedia(cleanVideo, finalVideo, audioDur);
             fs_1.default.copyFileSync(inputAudio, finalAudio);
         }
+        console.log('🎬 Ghép video + audio...');
         await mergeMedia(finalVideo, finalAudio, outputFile);
         const outputPath = `outputs/${job.outputName}`;
-        const uploadRes = await supabase.storage
+        const result = await supabase.storage
             .from(SUPABASE_STORAGE_BUCKET)
             .upload(outputPath, fs_1.default.readFileSync(outputFile), {
             contentType: 'video/mp4',
-            upsert: true,
+            upsert: true
         });
-        if (uploadRes.error)
-            throw uploadRes.error;
+        if (result.error)
+            throw result.error;
+        console.log(`✅ Đã upload kết quả lên Supabase: ${outputPath}`);
         await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([
             `input-videos/input-${job.jobId}.mp4`,
             `input-audios/input-${job.jobId}.mp3`
         ]);
+        console.log('🧹 Đã xoá 2 file nguyên liệu');
     }
     catch (err) {
-        console.error(`❌ Lỗi xử lý job ${job.jobId}:`, err);
+        console.error(`❌ Lỗi khi xử lý job ${job.jobId}:`, err);
     }
     finally {
         fs_1.default.rmSync(tmp, { recursive: true, force: true });
@@ -148,11 +152,17 @@ const processJob = async (job) => {
 };
 const startWorker = async () => {
     console.log('👷 Worker nền đang chạy...');
+    // Kiểm tra hàng đợi lần đầu
+    redis.lrange('video-process-jobs', 0, -1).then(jobs => {
+        console.log('📦 Hàng đợi Redis hiện tại:', jobs);
+    });
     while (true) {
+        console.log('🔄 Worker kiểm tra hàng đợi...');
         try {
             const jobStr = await redis.lpop('video-process-jobs');
+            console.log('📥 Job từ Redis:', jobStr);
             if (!jobStr) {
-                await new Promise(r => setTimeout(r, 2000));
+                await new Promise(resolve => setTimeout(resolve, 3000));
                 continue;
             }
             let job;
@@ -167,14 +177,15 @@ const startWorker = async () => {
             await processJob(job);
         }
         catch (err) {
-            console.error('❌ Lỗi trong worker:', err);
+            console.error('❌ Lỗi trong vòng lặp worker:', err);
+            await new Promise(resolve => setTimeout(resolve, 5000));
         }
     }
 };
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
 app.get('/', (_req, res) => {
-    res.send('🟢 Worker hoạt động');
+    res.send('🟢 process-video-worker hoạt động');
 });
 app.post('/', (_req, res) => {
     res.status(200).send('OK');

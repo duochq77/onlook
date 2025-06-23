@@ -22,6 +22,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_STORAGE_BUCKET || !
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
 const redis = new Redis({
     host: REDIS_HOST,
     port: parseInt(REDIS_PORT),
@@ -29,14 +30,12 @@ const redis = new Redis({
     tls: {}
 })
 
-redis.on('error', err => console.error('Redis error:', err))
+redis.on('error', err => console.error('❌ Redis error:', err))
 
 const downloadFile = async (url: string): Promise<Buffer> => {
-    if (!url || !url.startsWith('http')) {
-        throw new Error(`❌ URL không hợp lệ: ${url}`)
-    }
+    if (!url || !url.startsWith('http')) throw new Error(`❌ URL không hợp lệ: ${url}`)
     const res = await fetch(url)
-    if (!res.ok) throw new Error(`Không tải được: ${url}`)
+    if (!res.ok) throw new Error(`Không tải được file từ: ${url}`)
     return Buffer.from(await res.arrayBuffer())
 }
 
@@ -60,7 +59,7 @@ const loopMedia = (input: string, output: string, duration: number): Promise<voi
             .inputOptions('-stream_loop', '-1')
             .outputOptions('-t', `${duration}`)
             .output(output)
-            .on('end', () => resolve())
+            .on('end', resolve)
             .on('error', reject)
             .run()
     })
@@ -72,7 +71,7 @@ const cutMedia = (input: string, output: string, duration: number): Promise<void
             .input(input)
             .setDuration(duration)
             .output(output)
-            .on('end', () => resolve())
+            .on('end', resolve)
             .on('error', reject)
             .run()
     })
@@ -85,19 +84,16 @@ const mergeMedia = (video: string, audio: string, output: string): Promise<void>
             .input(audio)
             .outputOptions('-c:v copy', '-c:a aac', '-shortest')
             .output(output)
-            .on('end', () => resolve())
+            .on('end', resolve)
             .on('error', reject)
             .run()
     })
 }
 
 const processJob = async (job: any) => {
-    console.log('📦 Job nhận được:', job)
-    console.log('🎬 videoUrl:', job.videoUrl)
-    console.log('🎵 audioUrl:', job.audioUrl)
-
+    console.log('📦 Đã nhận job:', job.jobId)
     if (!job?.videoUrl?.startsWith('http') || !job?.audioUrl?.startsWith('http')) {
-        console.error('❌ Job bị thiếu hoặc sai URL tuyệt đối, bỏ qua:', job)
+        console.error('❌ Job thiếu URL tuyệt đối:', job)
         return
     }
 
@@ -110,23 +106,27 @@ const processJob = async (job: any) => {
     const outputFile = path.join(tmp, 'merged.mp4')
 
     try {
+        console.log('⬇️ Tải video...')
         const videoBuffer = await downloadFile(job.videoUrl)
+        console.log('⬇️ Tải audio...')
         const audioBuffer = await downloadFile(job.audioUrl)
         await saveBufferToFile(videoBuffer, inputVideo)
         await saveBufferToFile(audioBuffer, inputAudio)
 
+        console.log('✂️ Tách video sạch...')
         await new Promise<void>((resolve, reject) => {
             ffmpeg()
                 .input(inputVideo)
                 .noAudio()
                 .output(cleanVideo)
-                .on('end', () => resolve())
+                .on('end', resolve)
                 .on('error', reject)
                 .run()
         })
 
         const videoDur = await getDuration(cleanVideo)
         const audioDur = await getDuration(inputAudio)
+        console.log(`📏 Duration video: ${videoDur}s, audio: ${audioDur}s`)
 
         if (Math.abs(videoDur - audioDur) < 1) {
             fs.copyFileSync(cleanVideo, finalVideo)
@@ -140,24 +140,28 @@ const processJob = async (job: any) => {
             fs.copyFileSync(inputAudio, finalAudio)
         }
 
+        console.log('🎬 Ghép video + audio...')
         await mergeMedia(finalVideo, finalAudio, outputFile)
 
         const outputPath = `outputs/${job.outputName}`
-        const uploadRes = await supabase.storage
+        const result = await supabase.storage
             .from(SUPABASE_STORAGE_BUCKET)
             .upload(outputPath, fs.readFileSync(outputFile), {
                 contentType: 'video/mp4',
-                upsert: true,
+                upsert: true
             })
 
-        if (uploadRes.error) throw uploadRes.error
+        if (result.error) throw result.error
+        console.log(`✅ Đã upload kết quả lên Supabase: ${outputPath}`)
 
         await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([
             `input-videos/input-${job.jobId}.mp4`,
             `input-audios/input-${job.jobId}.mp3`
         ])
+        console.log('🧹 Đã xoá 2 file nguyên liệu')
+
     } catch (err) {
-        console.error(`❌ Lỗi xử lý job ${job.jobId}:`, err)
+        console.error(`❌ Lỗi khi xử lý job ${job.jobId}:`, err)
     } finally {
         fs.rmSync(tmp, { recursive: true, force: true })
     }
@@ -165,11 +169,20 @@ const processJob = async (job: any) => {
 
 const startWorker = async () => {
     console.log('👷 Worker nền đang chạy...')
+
+    // Kiểm tra hàng đợi lần đầu
+    redis.lrange('video-process-jobs', 0, -1).then(jobs => {
+        console.log('📦 Hàng đợi Redis hiện tại:', jobs)
+    })
+
     while (true) {
+        console.log('🔄 Worker kiểm tra hàng đợi...')
         try {
             const jobStr = await redis.lpop('video-process-jobs')
+            console.log('📥 Job từ Redis:', jobStr)
+
             if (!jobStr) {
-                await new Promise(r => setTimeout(r, 2000))
+                await new Promise(resolve => setTimeout(resolve, 3000))
                 continue
             }
 
@@ -184,7 +197,8 @@ const startWorker = async () => {
 
             await processJob(job)
         } catch (err) {
-            console.error('❌ Lỗi trong worker:', err)
+            console.error('❌ Lỗi trong vòng lặp worker:', err)
+            await new Promise(resolve => setTimeout(resolve, 5000))
         }
     }
 }
@@ -193,7 +207,7 @@ const app = express()
 app.use(express.json())
 
 app.get('/', (_req: Request, res: Response) => {
-    res.send('🟢 Worker hoạt động')
+    res.send('🟢 process-video-worker hoạt động')
 })
 
 app.post('/', (_req: Request, res: Response) => {
