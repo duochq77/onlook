@@ -1,10 +1,20 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { Redis } from '@upstash/redis'
+import Redis from 'ioredis'
 
-const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-})
+let redis: Redis | null = null
+
+// ⚙️ Tạo kết nối Redis TCP (Upstash yêu cầu TLS)
+function getRedisClient() {
+    if (!redis) {
+        redis = new Redis({
+            host: process.env.REDIS_HOST,
+            port: Number(process.env.REDIS_PORT),
+            password: process.env.REDIS_PASSWORD,
+            tls: {}, // 🔐 Bắt buộc phải có với Redis TCP qua Upstash
+        })
+    }
+    return redis
+}
 
 const makeAbsoluteUrl = (url: string): string => {
     if (/^https?:\/\//i.test(url)) return url
@@ -38,7 +48,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-        console.log('📦 Đang đẩy job vào Redis:', jobPayload)
+        const redis = getRedisClient()
+        console.log('📦 Đang đẩy job vào Redis TCP:', jobPayload)
         const pushResult = await redis.lpush('video-process-jobs', JSON.stringify(jobPayload))
         console.log('✅ Redis lpush result:', pushResult)
 
