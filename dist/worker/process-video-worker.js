@@ -12,12 +12,10 @@ const express_1 = __importDefault(require("express"));
 const axios_1 = __importDefault(require("axios"));
 const child_process_1 = require("child_process");
 const fluent_ffmpeg_1 = __importDefault(require("fluent-ffmpeg"));
-// 🔐 Biến môi trường
 const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET, REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, PORT = '8080', } = process.env;
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_STORAGE_BUCKET || !REDIS_HOST || !REDIS_PORT || !REDIS_PASSWORD) {
     throw new Error('❌ Thiếu biến môi trường bắt buộc.');
 }
-// 🛠 Khởi tạo Supabase và Redis
 const supabase = (0, supabase_js_1.createClient)(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const redis = new ioredis_1.default({
     host: REDIS_HOST,
@@ -64,22 +62,35 @@ const mergeMedia = (video, audio, output, loopTarget, loopCount, targetDuration)
         else {
             args.push('-i', video, '-i', audio);
         }
-        args.push('-t', `${targetDuration}`, '-c:v', 'copy', '-c:a', 'aac', '-shortest', '-vsync', '2', '-y', output);
+        args.push('-t', `${targetDuration.toFixed(2)}`, '-c:v', 'copy', '-c:a', 'aac', '-preset', 'veryfast', '-b:a', '128k', '-shortest', '-vsync', 'vfr', '-movflags', '+faststart', '-y', output);
         console.log('🔗 FFmpeg merge CMD:', ['ffmpeg', ...args].join(' '));
         const proc = (0, child_process_1.spawn)('ffmpeg', args);
-        proc.stdout.on('data', (data) => {
-            console.log(`📤 FFmpeg stdout: ${data.toString()}`);
-        });
+        const timeoutMs = targetDuration * 1.5 * 1000;
+        const timeout = setTimeout(() => {
+            console.error('⏱ FFmpeg timeout – sẽ kill tiến trình.');
+            proc.kill('SIGKILL');
+            reject(new Error('FFmpeg merge timeout'));
+        }, timeoutMs);
         proc.stderr.on('data', (data) => {
             console.error(`📄 FFmpeg stderr: ${data.toString()}`);
         });
+        proc.stdout.on('data', (data) => {
+            console.log(`📤 FFmpeg stdout: ${data.toString()}`);
+        });
+        proc.on('error', (err) => {
+            clearTimeout(timeout);
+            console.error('❌ FFmpeg không thể chạy:', err);
+            reject(err);
+        });
         proc.on('close', (code) => {
+            clearTimeout(timeout);
+            console.log(`📦 FFmpeg kết thúc với mã: ${code}`);
             if (code === 0) {
                 console.log('✅ Merge thành công');
                 resolve();
             }
             else {
-                reject(new Error(`ffmpeg exited with code ${code}`));
+                reject(new Error(`FFmpeg kết thúc với mã lỗi ${code}`));
             }
         });
     });
@@ -102,11 +113,11 @@ const processJob = async (job) => {
                 .input(inputVideo)
                 .outputOptions(['-an', '-c:v', 'copy', '-y'])
                 .output(cleanVideo)
-                .on('start', (cmd) => console.log('🔇 FFmpeg remove audio:', cmd))
-                .on('progress', (p) => console.log(`📶 Tiến trình tách audio: ${p.percent?.toFixed(2)}%`))
+                .on('start', (cmd) => console.log('🔇 Tách audio khỏi video:', cmd))
+                .on('progress', (p) => console.log(`📶 Tách audio: ${p.percent?.toFixed(2)}%`))
                 .on('stderr', (line) => console.log('📄 FFmpeg stderr:', line))
                 .on('end', () => {
-                console.log('✅ Đã tách video sạch');
+                console.log('✅ Video sạch đã sẵn sàng');
                 resolve();
             })
                 .on('error', reject)
@@ -118,7 +129,7 @@ const processJob = async (job) => {
         console.log(`📏 Duration video: ${videoDur}s, audio: ${audioDur}s`);
         let loopTarget = 'none';
         let loopCount = 0;
-        let targetDuration = Math.max(videoDur, audioDur);
+        const targetDuration = Math.max(videoDur, audioDur);
         if (Math.abs(videoDur - audioDur) < 1) {
             loopTarget = 'none';
         }
@@ -131,32 +142,40 @@ const processJob = async (job) => {
             loopCount = Math.ceil(audioDur / videoDur);
         }
         await mergeMedia(cleanVideo, inputAudio, outputFile, loopTarget, loopCount, targetDuration);
+        try {
+            await fs_1.default.promises.access(outputFile);
+        }
+        catch {
+            console.error(`❌ File merged.mp4 không tồn tại tại đường dẫn: ${outputFile}`);
+            return;
+        }
         const uploadPath = `outputs/${job.outputName}`;
-        console.log(`📤 Đang upload kết quả lên: ${uploadPath}`);
-        const result = await supabase.storage
+        console.log(`📤 Upload kết quả lên Supabase: ${uploadPath}`);
+        const fileBuffer = await fs_1.default.promises.readFile(outputFile);
+        const uploadResult = await supabase.storage
             .from(SUPABASE_STORAGE_BUCKET)
-            .upload(uploadPath, await fs_1.default.promises.readFile(outputFile), {
+            .upload(uploadPath, fileBuffer, {
             contentType: 'video/mp4',
             upsert: true,
         });
-        if (result.error)
-            throw result.error;
-        console.log(`✅ Đã upload kết quả lên Supabase: ${uploadPath}`);
+        if (uploadResult.error)
+            throw uploadResult.error;
+        console.log(`✅ Đã upload file merged lên Supabase: ${uploadPath}`);
         const cleanup = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([
             `input-videos/input-${job.jobId}.mp4`,
             `input-audios/input-${job.jobId}.mp3`,
         ]);
         if (cleanup.error)
-            console.warn('⚠️ Lỗi khi xoá file nguyên liệu:', cleanup.error);
+            console.warn('⚠️ Lỗi khi xoá file gốc:', cleanup.error);
         else
-            console.log('🧼 Đã xoá 2 file nguyên liệu trên Supabase.');
+            console.log('🧼 Đã xoá 2 file nguyên liệu gốc.');
     }
     catch (err) {
         console.error(`❌ Lỗi xử lý job ${job.jobId}:`, err);
     }
     finally {
         fs_1.default.rmSync(tmp, { recursive: true, force: true });
-        console.log('🧹 Đã xoá thư mục RAM tạm:', tmp);
+        console.log('🧹 Đã dọn thư mục RAM tạm:', tmp);
     }
 };
 const startWorker = async () => {
@@ -173,7 +192,7 @@ const startWorker = async () => {
             }
         }
         catch (err) {
-            console.error('❌ Lỗi trong vòng lặp worker:', err);
+            console.error('❌ Lỗi trong worker loop:', err);
         }
     }
 };

@@ -16,6 +16,7 @@ export default function VideoAudioFile() {
     const [jobId, setJobId] = useState('')
 
     const STORAGE_PATH = 'stream-files'
+    const sellerId = 'seller-u123' // ⚠️ Bạn nên lấy từ session đăng nhập thực tế
 
     const handleUpload = async () => {
         if (!videoFile || !audioFile) {
@@ -30,8 +31,8 @@ export default function VideoAudioFile() {
         const audioName = `input-${newJobId}.mp3`
         const outputName = `merged-${newJobId}.mp4`
 
-        const videoPath = `${STORAGE_PATH}/input-videos/${videoName}`
-        const audioPath = `${STORAGE_PATH}/input-audios/${audioName}`
+        const videoPath = `${STORAGE_PATH}/input-videos/${sellerId}/${videoName}`
+        const audioPath = `${STORAGE_PATH}/input-audios/${sellerId}/${audioName}`
 
         const videoUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${videoPath}`
         const audioUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${audioPath}`
@@ -40,21 +41,14 @@ export default function VideoAudioFile() {
 
         const { error: videoErr } = await supabase.storage
             .from(STORAGE_PATH)
-            .upload(`input-videos/${videoName}`, videoFile, { upsert: true })
+            .upload(`input-videos/${sellerId}/${videoName}`, videoFile, { upsert: true })
         const { error: audioErr } = await supabase.storage
             .from(STORAGE_PATH)
-            .upload(`input-audios/${audioName}`, audioFile, { upsert: true })
+            .upload(`input-audios/${sellerId}/${audioName}`, audioFile, { upsert: true })
 
         if (videoErr || audioErr) {
             console.error('❌ Upload lỗi:', videoErr || audioErr)
             setStatus('❌ Upload thất bại.')
-            return
-        }
-
-        const videoCheck = await fetch(videoUrl)
-        const audioCheck = await fetch(audioUrl)
-        if (!videoCheck.ok || !audioCheck.ok) {
-            setStatus('❌ File chưa tồn tại công khai!')
             return
         }
 
@@ -64,6 +58,7 @@ export default function VideoAudioFile() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                sellerId,
                 jobId: newJobId,
                 videoUrl,
                 audioUrl,
