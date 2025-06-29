@@ -12,11 +12,11 @@ const supabase = createClient(
 export default function VideoAudioFile() {
     const [videoFile, setVideoFile] = useState<File | null>(null)
     const [audioFile, setAudioFile] = useState<File | null>(null)
+    const [sellerId, setSellerId] = useState('seller-demo') // 🔒 Tạm thời hardcode
     const [status, setStatus] = useState('')
     const [jobId, setJobId] = useState('')
 
     const STORAGE_PATH = 'stream-files'
-    const sellerId = 'seller-u123' // ⚠️ Bạn nên lấy từ session đăng nhập thực tế
 
     const handleUpload = async () => {
         if (!videoFile || !audioFile) {
@@ -39,16 +39,19 @@ export default function VideoAudioFile() {
 
         setStatus('📤 Đang tải lên Supabase...')
 
-        const { error: videoErr } = await supabase.storage
-            .from(STORAGE_PATH)
-            .upload(`input-videos/${sellerId}/${videoName}`, videoFile, { upsert: true })
-        const { error: audioErr } = await supabase.storage
-            .from(STORAGE_PATH)
-            .upload(`input-audios/${sellerId}/${audioName}`, audioFile, { upsert: true })
+        const { error: videoErr } = await supabase.storage.from(STORAGE_PATH).upload(`input-videos/${sellerId}/${videoName}`, videoFile, { upsert: true })
+        const { error: audioErr } = await supabase.storage.from(STORAGE_PATH).upload(`input-audios/${sellerId}/${audioName}`, audioFile, { upsert: true })
 
         if (videoErr || audioErr) {
             console.error('❌ Upload lỗi:', videoErr || audioErr)
             setStatus('❌ Upload thất bại.')
+            return
+        }
+
+        const videoCheck = await fetch(videoUrl)
+        const audioCheck = await fetch(audioUrl)
+        if (!videoCheck.ok || !audioCheck.ok) {
+            setStatus('❌ File chưa tồn tại công khai!')
             return
         }
 
@@ -57,13 +60,7 @@ export default function VideoAudioFile() {
         const runRes = await fetch('/api/create-process-job', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                sellerId,
-                jobId: newJobId,
-                videoUrl,
-                audioUrl,
-                outputName,
-            }),
+            body: JSON.stringify({ sellerId, videoUrl, audioUrl, outputName }),
         })
 
         if (!runRes.ok) {

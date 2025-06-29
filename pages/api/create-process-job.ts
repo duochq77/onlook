@@ -6,36 +6,35 @@ let redis: Redis | null = null
 function getRedisClient() {
     if (!redis) {
         redis = new Redis({
-            host: process.env.REDIS_HOST,
-            port: Number(process.env.REDIS_PORT),
-            password: process.env.REDIS_PASSWORD,
+            host: process.env.REDIS_HOST!,
+            port: Number(process.env.REDIS_PORT!),
+            password: process.env.REDIS_PASSWORD!,
             tls: {},
         })
     }
     return redis
 }
 
-const makeAbsoluteUrl = (url: string): string => {
-    if (/^https?:\/\//i.test(url)) return url
-    const base = process.env.BASE_MEDIA_URL || 'https://onlook.vn'
-    return `${base.replace(/\/+$/, '')}/${url.replace(/^\/+/, '')}`
-}
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' })
 
-    const { sellerId, jobId, videoUrl, audioUrl, outputName } = req.body
-    if (!sellerId || !jobId || !videoUrl || !audioUrl || !outputName) {
-        return res.status(400).json({ error: 'Thiếu tham số bắt buộc.' })
+    const { sellerId, videoUrl, audioUrl, outputName } = req.body
+
+    if (!sellerId || !videoUrl || !audioUrl || !outputName) {
+        return res.status(400).json({ error: 'Thiếu tham số sellerId, videoUrl, audioUrl, outputName' })
     }
 
+    const timestamp = Date.now()
+    const jobId = `job-${timestamp}-${Math.random().toString(36).substring(2, 8)}`
+    const finalOutputName = outputName.endsWith('.mp4') ? outputName : `${outputName}.mp4`
+
     const jobPayload = {
-        sellerId,
         jobId,
-        videoUrl: makeAbsoluteUrl(videoUrl),
-        audioUrl: makeAbsoluteUrl(audioUrl),
-        outputName,
-        createdAt: Date.now(),
+        sellerId,
+        videoUrl,
+        audioUrl,
+        outputName: finalOutputName,
+        createdAt: timestamp,
     }
 
     try {

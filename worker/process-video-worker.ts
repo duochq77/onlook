@@ -8,6 +8,7 @@ import axios from 'axios'
 import { spawn } from 'child_process'
 import ffmpeg from 'fluent-ffmpeg'
 
+// 🛠 Biến môi trường
 const {
     SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY,
@@ -22,6 +23,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_STORAGE_BUCKET || !
     throw new Error('❌ Thiếu biến môi trường bắt buộc.')
 }
 
+// 🔌 Kết nối Supabase + Redis (TCP)
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 const redis = new Redis({
     host: REDIS_HOST,
@@ -138,7 +140,7 @@ const processJob = async (job: any) => {
                 .output(cleanVideo)
                 .on('start', (cmd) => console.log('🔇 Tách audio khỏi video:', cmd))
                 .on('progress', (p) => console.log(`📶 Tách audio: ${p.percent?.toFixed(2)}%`))
-                .on('end', resolve)
+                .on('end', () => resolve())
                 .on('error', reject)
                 .run()
         })
@@ -171,7 +173,7 @@ const processJob = async (job: any) => {
         if (uploadResult.error) throw uploadResult.error
         console.log(`✅ Đã upload file merged lên Supabase: ${uploadPath}`)
 
-        // Xoá file nguyên liệu gốc
+        // Xoá file nguyên liệu theo sellerId
         const cleanup = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([
             `input-videos/${job.sellerId}/input-${job.jobId}.mp4`,
             `input-audios/${job.sellerId}/input-${job.jobId}.mp3`,
