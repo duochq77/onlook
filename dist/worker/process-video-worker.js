@@ -12,10 +12,12 @@ const express_1 = __importDefault(require("express"));
 const axios_1 = __importDefault(require("axios"));
 const child_process_1 = require("child_process");
 const fluent_ffmpeg_1 = __importDefault(require("fluent-ffmpeg"));
+// 🛠 Biến môi trường
 const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET, REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, PORT = '8080', } = process.env;
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_STORAGE_BUCKET || !REDIS_HOST || !REDIS_PORT || !REDIS_PASSWORD) {
     throw new Error('❌ Thiếu biến môi trường bắt buộc.');
 }
+// 🔌 Kết nối Supabase + Redis (TCP)
 const supabase = (0, supabase_js_1.createClient)(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const redis = new ioredis_1.default({
     host: REDIS_HOST,
@@ -106,7 +108,7 @@ const processJob = async (job) => {
                 .output(cleanVideo)
                 .on('start', (cmd) => console.log('🔇 Tách audio khỏi video:', cmd))
                 .on('progress', (p) => console.log(`📶 Tách audio: ${p.percent?.toFixed(2)}%`))
-                .on('end', () => resolve()) // ✅ Sửa tại đây
+                .on('end', () => resolve())
                 .on('error', reject)
                 .run();
         });
@@ -134,7 +136,7 @@ const processJob = async (job) => {
         if (uploadResult.error)
             throw uploadResult.error;
         console.log(`✅ Đã upload file merged lên Supabase: ${uploadPath}`);
-        // Xoá file nguyên liệu gốc
+        // Xoá file nguyên liệu theo sellerId
         const cleanup = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([
             `input-videos/${job.sellerId}/input-${job.jobId}.mp4`,
             `input-audios/${job.sellerId}/input-${job.jobId}.mp3`,
