@@ -12,7 +12,6 @@ const supabase = createClient(
 export default function VideoAudioFile() {
     const [videoFile, setVideoFile] = useState<File | null>(null)
     const [audioFile, setAudioFile] = useState<File | null>(null)
-    const [sellerId, setSellerId] = useState('seller-demo') // 🔒 Tạm thời hardcode
     const [status, setStatus] = useState('')
     const [jobId, setJobId] = useState('')
 
@@ -31,16 +30,20 @@ export default function VideoAudioFile() {
         const audioName = `input-${newJobId}.mp3`
         const outputName = `merged-${newJobId}.mp4`
 
-        const videoPath = `${STORAGE_PATH}/input-videos/${sellerId}/${videoName}`
-        const audioPath = `${STORAGE_PATH}/input-audios/${sellerId}/${audioName}`
+        const videoPath = `${STORAGE_PATH}/input-videos/${videoName}`
+        const audioPath = `${STORAGE_PATH}/input-audios/${audioName}`
 
         const videoUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${videoPath}`
         const audioUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${audioPath}`
 
         setStatus('📤 Đang tải lên Supabase...')
 
-        const { error: videoErr } = await supabase.storage.from(STORAGE_PATH).upload(`input-videos/${sellerId}/${videoName}`, videoFile, { upsert: true })
-        const { error: audioErr } = await supabase.storage.from(STORAGE_PATH).upload(`input-audios/${sellerId}/${audioName}`, audioFile, { upsert: true })
+        const { error: videoErr } = await supabase.storage
+            .from(STORAGE_PATH)
+            .upload(`input-videos/${videoName}`, videoFile, { upsert: true })
+        const { error: audioErr } = await supabase.storage
+            .from(STORAGE_PATH)
+            .upload(`input-audios/${audioName}`, audioFile, { upsert: true })
 
         if (videoErr || audioErr) {
             console.error('❌ Upload lỗi:', videoErr || audioErr)
@@ -60,7 +63,12 @@ export default function VideoAudioFile() {
         const runRes = await fetch('/api/create-process-job', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sellerId, videoUrl, audioUrl, outputName }),
+            body: JSON.stringify({
+                jobId: newJobId,
+                videoUrl,
+                audioUrl,
+                outputName,
+            }),
         })
 
         if (!runRes.ok) {
