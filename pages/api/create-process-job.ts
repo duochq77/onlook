@@ -27,16 +27,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(405).json({ error: 'Method Not Allowed' })
     }
 
-    const { videoUrl, audioUrl, outputName } = req.body
-    console.log('📥 Nhận request:', { videoUrl, audioUrl, outputName })
+    const { jobId, videoUrl, audioUrl, outputName } = req.body
+    console.log('📥 Nhận request:', { jobId, videoUrl, audioUrl, outputName })
 
-    if (!videoUrl || !audioUrl || !outputName) {
+    if (!jobId || !videoUrl || !audioUrl || !outputName) {
         console.error('❌ Thiếu tham số trong body:', req.body)
-        return res.status(400).json({ error: 'Thiếu tham số videoUrl, audioUrl, outputName' })
+        return res.status(400).json({ error: 'Thiếu tham số jobId, videoUrl, audioUrl, outputName' })
     }
 
     const timestamp = Date.now()
-    const jobId = `job-${timestamp}-${Math.random().toString(36).substring(2, 8)}`
     const finalOutputName = outputName.endsWith('.mp4') ? outputName : `${outputName}.mp4`
 
     const jobPayload = {
