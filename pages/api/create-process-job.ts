@@ -3,23 +3,16 @@ import Redis from 'ioredis'
 
 let redis: Redis | null = null
 
-// ⚙️ Tạo kết nối Redis TCP (Upstash yêu cầu TLS)
 function getRedisClient() {
     if (!redis) {
         redis = new Redis({
             host: process.env.REDIS_HOST,
             port: Number(process.env.REDIS_PORT),
             password: process.env.REDIS_PASSWORD,
-            tls: {}, // 🔐 Bắt buộc phải có với Redis TCP qua Upstash
+            tls: {},
         })
     }
     return redis
-}
-
-const makeAbsoluteUrl = (url: string): string => {
-    if (/^https?:\/\//i.test(url)) return url
-    const base = process.env.BASE_MEDIA_URL || 'https://onlook.vn'
-    return `${base.replace(/\/+$/, '')}/${url.replace(/^\/+/, '')}`
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -40,8 +33,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const jobPayload = {
         jobId,
-        videoUrl: makeAbsoluteUrl(videoUrl),
-        audioUrl: makeAbsoluteUrl(audioUrl),
+        videoUrl,           // ✅ Dùng nguyên bản từ client
+        audioUrl,           // ✅ Dùng nguyên bản từ client
         outputName: finalOutputName,
         createdAt: timestamp,
     }

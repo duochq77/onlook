@@ -185,6 +185,7 @@ const startWorker = async () => {
             const jobRaw = await redis.rpop('video-process-jobs');
             if (jobRaw) {
                 const job = JSON.parse(jobRaw);
+                console.log('📦 Job nhận từ Redis:', job); // ✅ Log mới thêm
                 await processJob(job);
             }
             else {
