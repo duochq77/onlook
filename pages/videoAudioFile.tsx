@@ -34,20 +34,16 @@ export default function VideoAudioFile() {
 
         const videoPath = `${STORAGE_PATH}/input-videos/${videoName}`
         const audioPath = `${STORAGE_PATH}/input-audios/${audioName}`
+        const outputPath = `${STORAGE_PATH}/outputs/${outputName}`
 
         const videoUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${videoPath}`
         const audioUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${audioPath}`
-        const outputPath = `${STORAGE_PATH}/outputs/${outputName}`
         const outputUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${outputPath}`
 
         setStatus('📤 Đang tải lên Supabase...')
 
-        const { error: videoErr } = await supabase.storage
-            .from(STORAGE_PATH)
-            .upload(`input-videos/${videoName}`, videoFile, { upsert: true })
-        const { error: audioErr } = await supabase.storage
-            .from(STORAGE_PATH)
-            .upload(`input-audios/${audioName}`, audioFile, { upsert: true })
+        const { error: videoErr } = await supabase.storage.from(STORAGE_PATH).upload(`input-videos/${videoName}`, videoFile, { upsert: true })
+        const { error: audioErr } = await supabase.storage.from(STORAGE_PATH).upload(`input-audios/${audioName}`, audioFile, { upsert: true })
 
         if (videoErr || audioErr) {
             console.error('❌ Upload lỗi:', videoErr || audioErr)
@@ -67,12 +63,7 @@ export default function VideoAudioFile() {
         const runRes = await fetch('/api/create-process-job', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                jobId: newJobId,
-                videoUrl,
-                audioUrl,
-                outputName,
-            }),
+            body: JSON.stringify({ jobId: newJobId, videoUrl, audioUrl, outputName }),
         })
 
         if (!runRes.ok) {

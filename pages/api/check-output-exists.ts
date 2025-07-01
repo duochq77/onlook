@@ -20,7 +20,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Thiếu hoặc sai định dạng outputName' })
     }
 
-    // 📦 Tạo đường dẫn public URL
     const path = `outputs/${outputName}`
     const publicUrl = supabase.storage.from(BUCKET).getPublicUrl(path).publicUrl
 

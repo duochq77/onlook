@@ -142,15 +142,8 @@ const processJob = async (job) => {
             loopCount = Math.ceil(audioDur / videoDur);
         }
         await mergeMedia(cleanVideo, inputAudio, outputFile, loopTarget, loopCount, targetDuration);
-        try {
-            await fs_1.default.promises.access(outputFile);
-        }
-        catch {
-            console.error(`❌ File merged.mp4 không tồn tại tại đường dẫn: ${outputFile}`);
-            return;
-        }
+        await fs_1.default.promises.access(outputFile);
         const uploadPath = `outputs/${job.outputName}`;
-        console.log(`📤 Upload kết quả lên Supabase: ${uploadPath}`);
         const fileBuffer = await fs_1.default.promises.readFile(outputFile);
         const uploadResult = await supabase.storage
             .from(SUPABASE_STORAGE_BUCKET)
@@ -161,7 +154,9 @@ const processJob = async (job) => {
         if (uploadResult.error)
             throw uploadResult.error;
         console.log(`✅ Đã upload file merged lên Supabase: ${uploadPath}`);
-        // ✅ CHỈ THÊM ĐOẠN NÀY:
+        // ⏳ Ghi job vào Redis ZSET để xoá sau 5 phút (test)
+        await redis.zadd('delete-after-1h', Date.now() + 5 * 60 * 1000, uploadPath);
+        // 🧼 Xoá 2 file nguyên liệu
         const cleanup = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([
             `input-videos/input-${job.jobId}.mp4`,
             `input-audios/input-${job.jobId}.mp3`,
@@ -184,10 +179,24 @@ const processJob = async (job) => {
         console.log('🧹 Đã dọn thư mục RAM tạm:', tmp);
     }
 };
+const checkExpiredDeletes = async () => {
+    const expired = await redis.zrangebyscore('delete-after-1h', 0, Date.now());
+    for (const filePath of expired) {
+        const result = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([filePath]);
+        if (result.error) {
+            console.error(`❌ Xoá file hết hạn thất bại: ${filePath}`, result.error);
+        }
+        else {
+            console.log(`🗑 Đã xoá file hết hạn: ${filePath}`);
+        }
+        await redis.zrem('delete-after-1h', filePath);
+    }
+};
 const startWorker = async () => {
     console.log('🚀 Worker đã khởi động...');
     while (true) {
         try {
+            await checkExpiredDeletes();
             const jobRaw = await redis.rpop('video-process-jobs');
             if (jobRaw) {
                 const job = JSON.parse(jobRaw);
@@ -195,7 +204,7 @@ const startWorker = async () => {
                 await processJob(job);
             }
             else {
-                await delay(2000);
+                await delay(10000);
             }
         }
         catch (err) {
