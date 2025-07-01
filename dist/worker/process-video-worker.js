@@ -161,14 +161,20 @@ const processJob = async (job) => {
         if (uploadResult.error)
             throw uploadResult.error;
         console.log(`✅ Đã upload file merged lên Supabase: ${uploadPath}`);
+        // ✅ CHỈ THÊM ĐOẠN NÀY:
         const cleanup = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([
             `input-videos/input-${job.jobId}.mp4`,
             `input-audios/input-${job.jobId}.mp3`,
         ]);
-        if (cleanup.error)
-            console.warn('⚠️ Lỗi khi xoá file gốc:', cleanup.error);
-        else
-            console.log('🧼 Đã xoá 2 file nguyên liệu gốc.');
+        if (cleanup?.error) {
+            console.error('❌ Xoá file nguyên liệu thất bại:', cleanup.error);
+        }
+        else if (cleanup?.data?.length === 0) {
+            console.warn('⚠️ Supabase không xoá file nào — có thể file không tồn tại.');
+        }
+        else {
+            console.log(`🧼 Đã xoá ${cleanup.data.length} file nguyên liệu gốc:`, cleanup.data);
+        }
     }
     catch (err) {
         console.error(`❌ Lỗi xử lý job ${job.jobId}:`, err);
@@ -185,7 +191,7 @@ const startWorker = async () => {
             const jobRaw = await redis.rpop('video-process-jobs');
             if (jobRaw) {
                 const job = JSON.parse(jobRaw);
-                console.log('📦 Job nhận từ Redis:', job); // ✅ Log mới thêm
+                console.log('📦 Job nhận từ Redis:', job);
                 await processJob(job);
             }
             else {

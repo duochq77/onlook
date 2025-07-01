@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -14,6 +14,8 @@ export default function VideoAudioFile() {
     const [audioFile, setAudioFile] = useState<File | null>(null)
     const [status, setStatus] = useState('')
     const [jobId, setJobId] = useState('')
+    const [downloadUrl, setDownloadUrl] = useState('')
+    const [createdAt, setCreatedAt] = useState<number | null>(null)
 
     const STORAGE_PATH = 'stream-files'
 
@@ -35,6 +37,8 @@ export default function VideoAudioFile() {
 
         const videoUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${videoPath}`
         const audioUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${audioPath}`
+        const outputPath = `${STORAGE_PATH}/outputs/${outputName}`
+        const outputUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${outputPath}`
 
         setStatus('📤 Đang tải lên Supabase...')
 
@@ -79,7 +83,30 @@ export default function VideoAudioFile() {
         }
 
         setStatus('⏳ Đã gửi job. Đang chờ xử lý...')
+
+        const checkInterval = setInterval(async () => {
+            const res = await fetch(`/api/check-output-exists?outputName=${outputName}`)
+            const { exists } = await res.json()
+            if (exists) {
+                clearInterval(checkInterval)
+                setDownloadUrl(outputUrl)
+                setCreatedAt(Date.now())
+                setStatus('✅ File hoàn chỉnh đã sẵn sàng.')
+            }
+        }, 5000)
     }
+
+    useEffect(() => {
+        if (!createdAt) return
+        const interval = setInterval(() => {
+            const now = Date.now()
+            if (now - createdAt >= 5 * 60 * 1000) {
+                setDownloadUrl('')
+                setStatus('⚠️ File tải đã hết hạn.')
+            }
+        }, 10000)
+        return () => clearInterval(interval)
+    }, [createdAt])
 
     return (
         <main className="p-4 space-y-4">
@@ -93,6 +120,16 @@ export default function VideoAudioFile() {
             </button>
 
             <p>{status}</p>
+
+            {downloadUrl && (
+                <a
+                    href={downloadUrl}
+                    download
+                    className="block mt-4 bg-green-600 text-white px-4 py-2 rounded text-center"
+                >
+                    ⬇️ Tải video hoàn chỉnh
+                </a>
+            )}
         </main>
     )
 }

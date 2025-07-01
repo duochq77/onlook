@@ -182,16 +182,8 @@ const processJob = async (job: any) => {
 
         await mergeMedia(cleanVideo, inputAudio, outputFile, loopTarget, loopCount, targetDuration)
 
-        try {
-            await fs.promises.access(outputFile)
-        } catch {
-            console.error(`❌ File merged.mp4 không tồn tại tại đường dẫn: ${outputFile}`)
-            return
-        }
-
+        await fs.promises.access(outputFile)
         const uploadPath = `outputs/${job.outputName}`
-        console.log(`📤 Upload kết quả lên Supabase: ${uploadPath}`)
-
         const fileBuffer = await fs.promises.readFile(outputFile)
 
         const uploadResult = await supabase.storage
@@ -204,12 +196,22 @@ const processJob = async (job: any) => {
         if (uploadResult.error) throw uploadResult.error
         console.log(`✅ Đã upload file merged lên Supabase: ${uploadPath}`)
 
+        // ⏳ Ghi job vào Redis ZSET để xoá sau 5 phút (test)
+        await redis.zadd('delete-after-1h', Date.now() + 5 * 60 * 1000, uploadPath)
+
+        // 🧼 Xoá 2 file nguyên liệu
         const cleanup = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([
             `input-videos/input-${job.jobId}.mp4`,
             `input-audios/input-${job.jobId}.mp3`,
         ])
-        if (cleanup.error) console.warn('⚠️ Lỗi khi xoá file gốc:', cleanup.error)
-        else console.log('🧼 Đã xoá 2 file nguyên liệu gốc.')
+        if (cleanup?.error) {
+            console.error('❌ Xoá file nguyên liệu thất bại:', cleanup.error)
+        } else if (cleanup?.data?.length === 0) {
+            console.warn('⚠️ Supabase không xoá file nào — có thể file không tồn tại.')
+        } else {
+            console.log(`🧼 Đã xoá ${cleanup.data.length} file nguyên liệu gốc:`, cleanup.data)
+        }
+
     } catch (err) {
         console.error(`❌ Lỗi xử lý job ${job.jobId}:`, err)
     } finally {
@@ -218,17 +220,32 @@ const processJob = async (job: any) => {
     }
 }
 
+const checkExpiredDeletes = async () => {
+    const expired = await redis.zrangebyscore('delete-after-1h', 0, Date.now())
+    for (const filePath of expired) {
+        const result = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([filePath])
+        if (result.error) {
+            console.error(`❌ Xoá file hết hạn thất bại: ${filePath}`, result.error)
+        } else {
+            console.log(`🗑 Đã xoá file hết hạn: ${filePath}`)
+        }
+        await redis.zrem('delete-after-1h', filePath)
+    }
+}
+
 const startWorker = async () => {
     console.log('🚀 Worker đã khởi động...')
     while (true) {
         try {
+            await checkExpiredDeletes()
+
             const jobRaw = await redis.rpop('video-process-jobs')
             if (jobRaw) {
                 const job = JSON.parse(jobRaw)
-                console.log('📦 Job nhận từ Redis:', job) // ✅ Log mới thêm
+                console.log('📦 Job nhận từ Redis:', job)
                 await processJob(job)
             } else {
-                await delay(2000)
+                await delay(10000)
             }
         } catch (err) {
             console.error('❌ Lỗi trong worker loop:', err)
