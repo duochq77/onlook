@@ -1,0 +1,18 @@
+# 🐳 Base image nhẹ & ổn định
+FROM node:18
+
+# 📁 Thư mục làm việc
+WORKDIR /app
+
+# 📦 Cài package trước (để cache tốt)
+COPY package*.json ./
+RUN npm install
+
+# 📦 Copy mã nguồn worker (nếu cần bạn có thể tách riêng thư mục worker/)
+COPY . .
+
+# 🛠 Build TypeScript (dùng riêng config nếu cần)
+RUN npx tsc -p tsconfig.worker.json
+
+# 🚀 Chạy file delete-merged-worker sau build
+CMD ["node", "dist/worker/delete-merged-worker.js"]

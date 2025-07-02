@@ -154,9 +154,7 @@ const processJob = async (job) => {
         if (uploadResult.error)
             throw uploadResult.error;
         console.log(`✅ Đã upload file merged lên Supabase: ${uploadPath}`);
-        // ⏳ Ghi job vào Redis ZSET để xoá sau 5 phút (test)
         await redis.zadd('delete-after-1h', Date.now() + 5 * 60 * 1000, uploadPath);
-        // 🧼 Xoá 2 file nguyên liệu
         const cleanup = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([
             `input-videos/input-${job.jobId}.mp4`,
             `input-audios/input-${job.jobId}.mp3`,
@@ -181,6 +179,10 @@ const processJob = async (job) => {
 };
 const checkExpiredDeletes = async () => {
     const expired = await redis.zrangebyscore('delete-after-1h', 0, Date.now());
+    if (expired.length === 0) {
+        console.log('🔎 Không có file nào hết hạn để xoá.');
+        return;
+    }
     for (const filePath of expired) {
         const result = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([filePath]);
         if (result.error) {
@@ -196,15 +198,24 @@ const startWorker = async () => {
     console.log('🚀 Worker đã khởi động...');
     while (true) {
         try {
+            console.log('🔄 Bắt đầu vòng lặp mới');
             await checkExpiredDeletes();
+            console.log('✅ Đã kiểm tra hết hạn');
             const jobRaw = await redis.rpop('video-process-jobs');
             if (jobRaw) {
-                const job = JSON.parse(jobRaw);
-                console.log('📦 Job nhận từ Redis:', job);
-                await processJob(job);
+                try {
+                    const job = JSON.parse(jobRaw);
+                    console.log('📦 Job nhận từ Redis:', job);
+                    await processJob(job);
+                }
+                catch (err) {
+                    console.error('❌ Lỗi khi xử lý job:', err);
+                }
             }
             else {
+                console.log('🕓 Không có job mới – chờ 10s...');
                 await delay(10000);
+                console.log('⏳ Đã hết delay 10s, lặp tiếp');
             }
         }
         catch (err) {

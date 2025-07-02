@@ -15,7 +15,6 @@ export default function VideoAudioFile() {
     const [status, setStatus] = useState('')
     const [jobId, setJobId] = useState('')
     const [downloadUrl, setDownloadUrl] = useState('')
-    const [createdAt, setCreatedAt] = useState<number | null>(null)
 
     const STORAGE_PATH = 'stream-files'
 
@@ -34,16 +33,18 @@ export default function VideoAudioFile() {
 
         const videoPath = `${STORAGE_PATH}/input-videos/${videoName}`
         const audioPath = `${STORAGE_PATH}/input-audios/${audioName}`
-        const outputPath = `${STORAGE_PATH}/outputs/${outputName}`
 
         const videoUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${videoPath}`
         const audioUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${audioPath}`
-        const outputUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${outputPath}`
 
         setStatus('📤 Đang tải lên Supabase...')
 
-        const { error: videoErr } = await supabase.storage.from(STORAGE_PATH).upload(`input-videos/${videoName}`, videoFile, { upsert: true })
-        const { error: audioErr } = await supabase.storage.from(STORAGE_PATH).upload(`input-audios/${audioName}`, audioFile, { upsert: true })
+        const { error: videoErr } = await supabase.storage
+            .from(STORAGE_PATH)
+            .upload(`input-videos/${videoName}`, videoFile, { upsert: true })
+        const { error: audioErr } = await supabase.storage
+            .from(STORAGE_PATH)
+            .upload(`input-audios/${audioName}`, audioFile, { upsert: true })
 
         if (videoErr || audioErr) {
             console.error('❌ Upload lỗi:', videoErr || audioErr)
@@ -63,7 +64,12 @@ export default function VideoAudioFile() {
         const runRes = await fetch('/api/create-process-job', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ jobId: newJobId, videoUrl, audioUrl, outputName }),
+            body: JSON.stringify({
+                jobId: newJobId,
+                videoUrl,
+                audioUrl,
+                outputName,
+            }),
         })
 
         if (!runRes.ok) {
@@ -74,30 +80,25 @@ export default function VideoAudioFile() {
         }
 
         setStatus('⏳ Đã gửi job. Đang chờ xử lý...')
-
-        const checkInterval = setInterval(async () => {
-            const res = await fetch(`/api/check-output-exists?outputName=${outputName}`)
-            const { exists } = await res.json()
-            if (exists) {
-                clearInterval(checkInterval)
-                setDownloadUrl(outputUrl)
-                setCreatedAt(Date.now())
-                setStatus('✅ File hoàn chỉnh đã sẵn sàng.')
-            }
-        }, 5000)
     }
 
+    // Kiểm tra file đã xử lý xuất hiện chưa, rồi theo dõi
     useEffect(() => {
-        if (!createdAt) return
-        const interval = setInterval(() => {
-            const now = Date.now()
-            if (now - createdAt >= 5 * 60 * 1000) {
+        if (!jobId) return
+        const interval = setInterval(async () => {
+            const outputName = `merged-${jobId}.mp4`
+            const res = await fetch(`/api/check-output-exists?outputName=${outputName}`)
+            const data = await res.json()
+            if (data.exists) {
+                const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/stream-files/outputs/${outputName}`
+                setDownloadUrl(publicUrl)
+                setStatus('✅ File đã sẵn sàng tải về.')
+            } else {
                 setDownloadUrl('')
-                setStatus('⚠️ File tải đã hết hạn.')
             }
-        }, 10000)
+        }, 5000)
         return () => clearInterval(interval)
-    }, [createdAt])
+    }, [jobId])
 
     return (
         <main className="p-4 space-y-4">
@@ -116,9 +117,9 @@ export default function VideoAudioFile() {
                 <a
                     href={downloadUrl}
                     download
-                    className="block mt-4 bg-green-600 text-white px-4 py-2 rounded text-center"
+                    className="inline-block mt-2 bg-green-600 text-white px-4 py-2 rounded"
                 >
-                    ⬇️ Tải video hoàn chỉnh
+                    ⬇️ Tải về file hoàn chỉnh
                 </a>
             )}
         </main>
