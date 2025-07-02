@@ -42,7 +42,7 @@ async function startWorker() {
             }
 
             console.log(`🧽 Xoá file hết hạn: ${filePath}`)
-            const { error } = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([filePath])
+            const { error } = await supabase.storage.from(SUPABASE_STORAGE_BUCKET!).remove([filePath])
             if (error) {
                 console.error('❌ Lỗi xoá file:', error.message)
             } else {
