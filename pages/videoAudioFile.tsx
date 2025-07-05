@@ -34,9 +34,6 @@ export default function VideoAudioFile() {
         const videoPath = `${STORAGE_PATH}/input-videos/${videoName}`
         const audioPath = `${STORAGE_PATH}/input-audios/${audioName}`
 
-        const videoUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${videoPath}`
-        const audioUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${audioPath}`
-
         setStatus('📤 Đang tải lên Supabase...')
 
         const { error: videoErr } = await supabase.storage
@@ -49,6 +46,15 @@ export default function VideoAudioFile() {
         if (videoErr || audioErr) {
             console.error('❌ Upload lỗi:', videoErr || audioErr)
             setStatus('❌ Upload thất bại.')
+            return
+        }
+
+        // ✅ Đã sửa: dùng .getPublicUrl thay vì ghép tay
+        const videoUrl = supabase.storage.from(STORAGE_PATH).getPublicUrl(`input-videos/${videoName}`).data.publicUrl
+        const audioUrl = supabase.storage.from(STORAGE_PATH).getPublicUrl(`input-audios/${audioName}`).data.publicUrl
+
+        if (!videoUrl || !audioUrl) {
+            setStatus('❌ Không tạo được URL công khai!')
             return
         }
 
@@ -82,7 +88,6 @@ export default function VideoAudioFile() {
         setStatus('⏳ Đã gửi job. Đang chờ xử lý...')
     }
 
-    // Kiểm tra file đã xử lý xuất hiện chưa, rồi theo dõi
     useEffect(() => {
         if (!jobId) return
         const interval = setInterval(async () => {

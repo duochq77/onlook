@@ -22,7 +22,10 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_STORAGE_BUCKET || !
     throw new Error('❌ Thiếu biến môi trường bắt buộc.')
 }
 
+console.log('📦 Bucket đang dùng:', SUPABASE_STORAGE_BUCKET) // ✅ Dòng đã thêm
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
 const redis = new Redis({
     host: REDIS_HOST,
     port: parseInt(REDIS_PORT),
@@ -204,7 +207,6 @@ const processJob = async (job: any) => {
         if (uploadResult.error) throw uploadResult.error
         console.log(`✅ Đã upload file merged lên Supabase: ${uploadPath}`)
 
-        // 🔁 Gửi job cleanup 5 phút sau
         await redis.rpush('delete-merged-jobs', JSON.stringify({
             jobId: job.jobId,
             filePath: uploadPath,
@@ -212,7 +214,6 @@ const processJob = async (job: any) => {
         }))
         console.log(`🕓 Đã đẩy job xóa file hoàn chỉnh sau 5 phút: ${uploadPath}`)
 
-        // 🧼 Xoá nguyên liệu gốc
         const cleanup = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([
             `input-videos/input-${job.jobId}.mp4`,
             `input-audios/input-${job.jobId}.mp3`,
