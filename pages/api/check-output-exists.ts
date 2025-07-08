@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { createClient } from '@supabase/supabase-js'
-import axios from 'axios'
 
 const supabase = createClient(
     process.env.SUPABASE_URL!,
@@ -20,13 +19,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Thiếu hoặc sai định dạng outputName' })
     }
 
-    const path = `outputs/${outputName}`
-    const publicUrl = supabase.storage.from(BUCKET).getPublicUrl(path).publicUrl
+    const filePath = `outputs/${outputName}`
 
-    try {
-        await axios.head(publicUrl)
-        return res.status(200).json({ exists: true })
-    } catch (err) {
+    // Kiểm tra xem file có tồn tại không
+    const { data: fileList, error } = await supabase
+        .storage
+        .from(BUCKET)
+        .list('outputs', {
+            search: outputName,
+        })
+
+    const exists = fileList?.some(file => file.name === outputName)
+
+    if (!exists) {
         return res.status(200).json({ exists: false })
     }
+
+    // Tạo signed URL có hiệu lực 5 phút (300 giây)
+    const { data: signedData, error: signedError } = await supabase
+        .storage
+        .from(BUCKET)
+        .createSignedUrl(filePath, 300)
+
+    if (signedError || !signedData?.signedUrl) {
+        return res.status(500).json({ error: 'Không tạo được signed URL' })
+    }
+
+    // Trả về trạng thái file và URL tải
+    return res.status(200).json({
+        exists: true,
+        downloadUrl: signedData.signedUrl,
+    })
 }

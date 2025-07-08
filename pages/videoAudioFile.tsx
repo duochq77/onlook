@@ -15,6 +15,7 @@ export default function VideoAudioFile() {
     const [status, setStatus] = useState('')
     const [jobId, setJobId] = useState('')
     const [downloadUrl, setDownloadUrl] = useState('')
+    const [readyAt, setReadyAt] = useState<number | null>(null)
 
     const STORAGE_PATH = 'stream-files'
 
@@ -49,7 +50,6 @@ export default function VideoAudioFile() {
             return
         }
 
-        // ✅ Đã sửa: dùng .getPublicUrl thay vì ghép tay
         const videoUrl = supabase.storage.from(STORAGE_PATH).getPublicUrl(`input-videos/${videoName}`).data.publicUrl
         const audioUrl = supabase.storage.from(STORAGE_PATH).getPublicUrl(`input-audios/${audioName}`).data.publicUrl
 
@@ -90,20 +90,30 @@ export default function VideoAudioFile() {
 
     useEffect(() => {
         if (!jobId) return
+
         const interval = setInterval(async () => {
             const outputName = `merged-${jobId}.mp4`
             const res = await fetch(`/api/check-output-exists?outputName=${outputName}`)
             const data = await res.json()
+
             if (data.exists) {
-                const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/stream-files/outputs/${outputName}`
-                setDownloadUrl(publicUrl)
+                setDownloadUrl(data.downloadUrl)
                 setStatus('✅ File đã sẵn sàng tải về.')
+                if (!readyAt) setReadyAt(Date.now())
             } else {
                 setDownloadUrl('')
+                setStatus('⏳ Đang chờ xử lý...')
+            }
+
+            // Ẩn nút sau 5 phút kể từ khi file sẵn sàng
+            if (readyAt && Date.now() - readyAt > 5 * 60 * 1000) {
+                setDownloadUrl('')
+                setStatus('⏳ File đã hết hạn tải về.')
             }
         }, 5000)
+
         return () => clearInterval(interval)
-    }, [jobId])
+    }, [jobId, readyAt])
 
     return (
         <main className="p-4 space-y-4">
