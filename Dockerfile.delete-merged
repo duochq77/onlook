@@ -1,18 +1,20 @@
-# 🐳 Base image nhẹ & ổn định
-FROM node:18
+# 🐳 Base image ổn định
+FROM node:20
 
 # 📁 Thư mục làm việc
 WORKDIR /app
 
-# 📦 Cài package trước (để cache tốt)
-COPY package*.json ./
+# 📦 Cài thư viện Node.js (sử dụng cache tốt)
+COPY package.json package-lock.json ./
 RUN npm install
 
-# 📦 Copy mã nguồn worker (nếu cần bạn có thể tách riêng thư mục worker/)
+# 📦 Copy toàn bộ mã nguồn & build
 COPY . .
-
-# 🛠 Build TypeScript (dùng riêng config nếu cần)
 RUN npx tsc -p tsconfig.worker.json
 
-# 🚀 Chạy file delete-merged-worker sau build
+# 🌐 Mở port 8080 cho Express (dù không bắt buộc, nên khai báo)
+EXPOSE 8080
+ENV PORT=8080
+
+# 🚀 Chạy delete-merged-worker
 CMD ["node", "dist/worker/delete-merged-worker.js"]

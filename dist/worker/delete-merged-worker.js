@@ -5,49 +5,67 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const supabase_js_1 = require("@supabase/supabase-js");
 const ioredis_1 = __importDefault(require("ioredis"));
+const fs_1 = __importDefault(require("fs"));
 const express_1 = __importDefault(require("express"));
-const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET, REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, PORT = '8080', } = process.env;
-if (!SUPABASE_URL ||
-    !SUPABASE_SERVICE_ROLE_KEY ||
-    !SUPABASE_STORAGE_BUCKET ||
-    !REDIS_HOST ||
-    !REDIS_PORT ||
-    !REDIS_PASSWORD) {
-    throw new Error('❌ Thiếu biến môi trường bắt buộc.');
-}
+const node_fetch_1 = __importDefault(require("node-fetch"));
+// 📁 Đọc secrets từ CSI
+const readSecret = (key) => {
+    try {
+        return fs_1.default.readFileSync(`/mnt/secrets-store/${key}`, 'utf8').trim();
+    }
+    catch (e) {
+        throw new Error(`❌ Lỗi đọc secret ${key}: ${e}`);
+    }
+};
+const SUPABASE_URL = readSecret('SUPABASE_URL');
+const SUPABASE_SERVICE_ROLE_KEY = readSecret('SUPABASE_SERVICE_ROLE_KEY');
+const SUPABASE_STORAGE_BUCKET = readSecret('SUPABASE_STORAGE_BUCKET');
+const REDIS_HOST = readSecret('REDIS_HOST');
+const REDIS_PORT = readSecret('REDIS_PORT');
+const REDIS_PASSWORD = readSecret('REDIS_PASSWORD');
+const PORT = readSecret('PORT') || '8080';
+// 🔐 Kiểm tra log biến môi trường
+console.log('🔐 SUPABASE_SERVICE_ROLE_KEY bắt đầu bằng:', SUPABASE_SERVICE_ROLE_KEY.slice(0, 20) + '...');
+console.log('🔐 SUPABASE_URL:', SUPABASE_URL);
 const supabase = (0, supabase_js_1.createClient)(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const redis = new ioredis_1.default({
     host: REDIS_HOST,
     port: parseInt(REDIS_PORT),
     password: REDIS_PASSWORD,
-    tls: {}, // Bắt buộc để tránh lỗi ECONNRESET khi chạy trên GKE
+    tls: {}, // bắt buộc với Upstash
     retryStrategy: (times) => Math.min(times * 200, 2000),
 });
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 const processJob = async (jobRaw) => {
     try {
-        const parsed = JSON.parse(jobRaw);
-        const { filePath, expiresAt } = parsed;
+        const { filePath, expiresAt } = JSON.parse(jobRaw);
         if (!filePath || !expiresAt) {
-            console.warn('⚠️ Job không hợp lệ, thiếu filePath hoặc expiresAt.');
+            console.warn('⚠️ Job không hợp lệ:', jobRaw);
             return;
         }
-        if (Date.now() < expiresAt) {
-            // Chưa đến hạn xoá – đẩy lại cuối hàng đợi
+        const now = Date.now();
+        if (now < expiresAt) {
+            console.log(`⏳ Chưa đến hạn xoá file: ${filePath} (còn ${((expiresAt - now) / 1000).toFixed(0)}s)`);
             await redis.rpush('delete-merged-jobs', jobRaw);
             return;
         }
         console.log(`🧽 Xoá file hết hạn: ${filePath}`);
-        const { error } = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([filePath]);
-        if (error) {
-            console.error(`❌ Lỗi xoá file ${filePath}:`, error.message);
+        const response = await (0, node_fetch_1.default)(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_STORAGE_BUCKET}/${filePath}`, {
+            method: 'DELETE',
+            headers: {
+                Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            },
+        });
+        if (!response.ok) {
+            const text = await response.text();
+            console.error(`❌ Lỗi xoá file ${filePath}:`, response.status, text);
         }
         else {
             console.log(`✅ Đã xoá file hoàn chỉnh khỏi Supabase: ${filePath}`);
         }
     }
     catch (err) {
-        console.error('❌ Lỗi xử lý job:', err);
+        console.error('❌ Lỗi xử lý job xoá file:', err);
     }
 };
 const startWorker = async () => {
@@ -69,7 +87,7 @@ const startWorker = async () => {
     }
 };
 startWorker().catch(console.error);
-// Express server để kiểm tra trạng thái
+// 🟢 Express để kiểm tra trạng thái sống
 const app = (0, express_1.default)();
 app.get('/', (_req, res) => res.send('🟢 delete-merged-worker đang chạy'));
 app.listen(Number(PORT), () => {

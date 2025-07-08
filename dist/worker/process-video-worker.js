@@ -12,11 +12,24 @@ const express_1 = __importDefault(require("express"));
 const axios_1 = __importDefault(require("axios"));
 const child_process_1 = require("child_process");
 const fluent_ffmpeg_1 = __importDefault(require("fluent-ffmpeg"));
-const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET, REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, PORT = '8080', } = process.env;
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_STORAGE_BUCKET || !REDIS_HOST || !REDIS_PORT || !REDIS_PASSWORD) {
-    throw new Error('❌ Thiếu biến môi trường bắt buộc.');
-}
-console.log('📦 Bucket đang dùng:', SUPABASE_STORAGE_BUCKET); // ✅ Dòng đã thêm
+// 🔐 Đọc secrets từ CSI mount
+const readSecret = (key) => {
+    try {
+        return fs_1.default.readFileSync(`/mnt/secrets-store/${key}`, 'utf8').trim();
+    }
+    catch (e) {
+        throw new Error(`❌ Lỗi đọc secret ${key}: ${e}`);
+    }
+};
+const SUPABASE_URL = readSecret('SUPABASE_URL');
+const SUPABASE_SERVICE_ROLE_KEY = readSecret('SUPABASE_SERVICE_ROLE_KEY');
+const SUPABASE_STORAGE_BUCKET = readSecret('SUPABASE_STORAGE_BUCKET');
+const REDIS_HOST = readSecret('REDIS_HOST');
+const REDIS_PORT = readSecret('REDIS_PORT');
+const REDIS_PASSWORD = readSecret('REDIS_PASSWORD');
+const PORT = readSecret('PORT') || '8080';
+console.log('🔐 SUPABASE_SERVICE_ROLE_KEY bắt đầu bằng:', SUPABASE_SERVICE_ROLE_KEY?.slice(0, 20) + '...');
+console.log('🔐 SUPABASE_URL:', SUPABASE_URL);
 const supabase = (0, supabase_js_1.createClient)(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const redis = new ioredis_1.default({
     host: REDIS_HOST,
@@ -143,13 +156,6 @@ const processJob = async (job) => {
             loopCount = Math.ceil(audioDur / videoDur);
         }
         await mergeMedia(cleanVideo, inputAudio, outputFile, loopTarget, loopCount, targetDuration);
-        try {
-            await fs_1.default.promises.access(outputFile);
-        }
-        catch {
-            console.error(`❌ File merged.mp4 không tồn tại tại đường dẫn: ${outputFile}`);
-            return;
-        }
         const uploadPath = `outputs/${job.outputName}`;
         console.log(`📤 Upload kết quả lên Supabase: ${uploadPath}`);
         const fileBuffer = await fs_1.default.promises.readFile(outputFile);
@@ -162,12 +168,13 @@ const processJob = async (job) => {
         if (uploadResult.error)
             throw uploadResult.error;
         console.log(`✅ Đã upload file merged lên Supabase: ${uploadPath}`);
-        await redis.rpush('delete-merged-jobs', JSON.stringify({
-            jobId: job.jobId,
+        // ✅ Gửi job vào Redis để xoá sau 5 phút
+        const deleteJob = {
             filePath: uploadPath,
-            expiresAt: Date.now() + 5 * 60 * 1000
-        }));
-        console.log(`🕓 Đã đẩy job xóa file hoàn chỉnh sau 5 phút: ${uploadPath}`);
+            expiresAt: Date.now() + 5 * 60 * 1000 // sau 5 phút
+        };
+        await redis.lpush('delete-merged-jobs', JSON.stringify(deleteJob));
+        console.log(`🕓 Đã tạo job xoá sau 5 phút cho: ${uploadPath}`);
         const cleanup = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([
             `input-videos/input-${job.jobId}.mp4`,
             `input-audios/input-${job.jobId}.mp3`,

@@ -1,0 +1,7 @@
+{
+    "name": "auto-delete-disks",
+    "version": "1.0.0",
+    "dependencies": {
+        "@google-cloud/compute": "^5.0.0"
+    }
+}
