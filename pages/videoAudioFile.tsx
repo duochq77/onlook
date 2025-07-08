@@ -96,7 +96,7 @@ export default function VideoAudioFile() {
             const res = await fetch(`/api/check-output-exists?outputName=${outputName}`)
             const data = await res.json()
 
-            if (data.exists) {
+            if (data.exists && data.downloadUrl) {
                 setDownloadUrl(data.downloadUrl)
                 setStatus('✅ File đã sẵn sàng tải về.')
                 if (!readyAt) setReadyAt(Date.now())
@@ -105,7 +105,6 @@ export default function VideoAudioFile() {
                 setStatus('⏳ Đang chờ xử lý...')
             }
 
-            // Ẩn nút sau 5 phút kể từ khi file sẵn sàng
             if (readyAt && Date.now() - readyAt > 5 * 60 * 1000) {
                 setDownloadUrl('')
                 setStatus('⏳ File đã hết hạn tải về.')
