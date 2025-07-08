@@ -19,6 +19,12 @@ export default function VideoAudioFile() {
 
     const STORAGE_PATH = 'stream-files'
 
+    // ✅ Tự động khôi phục jobId từ localStorage nếu bị mất sau reload
+    useEffect(() => {
+        const stored = localStorage.getItem('latestJobId')
+        if (stored && !jobId) setJobId(stored)
+    }, [])
+
     const handleUpload = async () => {
         if (!videoFile || !audioFile) {
             alert('❗ Vui lòng chọn đủ 2 file!')
@@ -27,6 +33,7 @@ export default function VideoAudioFile() {
 
         const newJobId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
         setJobId(newJobId)
+        localStorage.setItem('latestJobId', newJobId) // ✅ Ghi lại jobId vào localStorage
 
         const videoName = `input-${newJobId}.mp4`
         const audioName = `input-${newJobId}.mp3`
