@@ -106,6 +106,7 @@ export default function VideoAudioFile() {
 
         const interval = setInterval(async () => {
             const outputName = `merged-${jobId}.mp4`
+            console.log('⏱️ Bắt đầu kiểm tra trạng thái đầu ra...')
             console.log('🔍 Kiểm tra file:', outputName)
 
             const res = await fetch(`/api/check-output-exists?outputName=${outputName}`)
@@ -118,15 +119,19 @@ export default function VideoAudioFile() {
                 setStatus('✅ File đã sẵn sàng tải về.')
                 if (!readyAt) setReadyAt(Date.now())
             } else {
-                console.log('⏳ Chưa có file. Tiếp tục chờ...')
+                console.log('📉 File chưa sẵn sàng hoặc không có downloadUrl.')
                 setDownloadUrl('')
                 setStatus('⏳ Đang chờ xử lý...')
             }
 
-            if (readyAt && Date.now() - readyAt > 5 * 60 * 1000) {
-                console.warn('⏳ File đã hết hạn tải về.')
-                setDownloadUrl('')
-                setStatus('⏳ File đã hết hạn tải về.')
+            if (readyAt) {
+                const timePassed = Date.now() - readyAt
+                console.log('⏰ Kiểm tra hết hạn tải...', `${Math.round(timePassed / 1000)}s đã trôi qua`)
+                if (timePassed > 5 * 60 * 1000) {
+                    console.warn('🧯 File đã hết hạn tải.')
+                    setDownloadUrl('')
+                    setStatus('⏳ File đã hết hạn tải về.')
+                }
             }
         }, 5000)
 
