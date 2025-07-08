@@ -19,10 +19,12 @@ export default function VideoAudioFile() {
 
     const STORAGE_PATH = 'stream-files'
 
-    // ✅ Tự động khôi phục jobId từ localStorage nếu bị mất sau reload
     useEffect(() => {
         const stored = localStorage.getItem('latestJobId')
-        if (stored && !jobId) setJobId(stored)
+        if (stored && !jobId) {
+            console.log('📦 Khôi phục jobId từ localStorage:', stored)
+            setJobId(stored)
+        }
     }, [])
 
     const handleUpload = async () => {
@@ -33,7 +35,7 @@ export default function VideoAudioFile() {
 
         const newJobId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
         setJobId(newJobId)
-        localStorage.setItem('latestJobId', newJobId) // ✅ Ghi lại jobId vào localStorage
+        localStorage.setItem('latestJobId', newJobId)
 
         const videoName = `input-${newJobId}.mp4`
         const audioName = `input-${newJobId}.mp3`
@@ -41,6 +43,10 @@ export default function VideoAudioFile() {
 
         const videoPath = `${STORAGE_PATH}/input-videos/${videoName}`
         const audioPath = `${STORAGE_PATH}/input-audios/${audioName}`
+
+        console.log('📤 Bắt đầu upload:')
+        console.log('- videoPath:', videoPath)
+        console.log('- audioPath:', audioPath)
 
         setStatus('📤 Đang tải lên Supabase...')
 
@@ -60,14 +66,13 @@ export default function VideoAudioFile() {
         const videoUrl = supabase.storage.from(STORAGE_PATH).getPublicUrl(`input-videos/${videoName}`).data.publicUrl
         const audioUrl = supabase.storage.from(STORAGE_PATH).getPublicUrl(`input-audios/${audioName}`).data.publicUrl
 
-        if (!videoUrl || !audioUrl) {
-            setStatus('❌ Không tạo được URL công khai!')
-            return
-        }
+        console.log('🌐 Video URL:', videoUrl)
+        console.log('🌐 Audio URL:', audioUrl)
 
         const videoCheck = await fetch(videoUrl)
         const audioCheck = await fetch(audioUrl)
         if (!videoCheck.ok || !audioCheck.ok) {
+            console.error('❌ File chưa tồn tại công khai!')
             setStatus('❌ File chưa tồn tại công khai!')
             return
         }
@@ -92,6 +97,7 @@ export default function VideoAudioFile() {
             return
         }
 
+        console.log('📨 Đã gửi job thành công:', newJobId)
         setStatus('⏳ Đã gửi job. Đang chờ xử lý...')
     }
 
@@ -100,19 +106,25 @@ export default function VideoAudioFile() {
 
         const interval = setInterval(async () => {
             const outputName = `merged-${jobId}.mp4`
+            console.log('🔍 Kiểm tra file:', outputName)
+
             const res = await fetch(`/api/check-output-exists?outputName=${outputName}`)
             const data = await res.json()
+            console.log('📥 Phản hồi từ API check-output:', data)
 
             if (data.exists && data.downloadUrl) {
+                console.log('✅ File đã sẵn sàng tải về:', data.downloadUrl)
                 setDownloadUrl(data.downloadUrl)
                 setStatus('✅ File đã sẵn sàng tải về.')
                 if (!readyAt) setReadyAt(Date.now())
             } else {
+                console.log('⏳ Chưa có file. Tiếp tục chờ...')
                 setDownloadUrl('')
                 setStatus('⏳ Đang chờ xử lý...')
             }
 
             if (readyAt && Date.now() - readyAt > 5 * 60 * 1000) {
+                console.warn('⏳ File đã hết hạn tải về.')
                 setDownloadUrl('')
                 setStatus('⏳ File đã hết hạn tải về.')
             }
