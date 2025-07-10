@@ -1,87 +1,121 @@
-export const dynamic = 'force-dynamic' // Ngăn lỗi Audio khi prerender trên server
-
-import React, { useEffect, useRef, useState } from 'react'
-import { supabase } from '@/services/SupabaseService'
+'use client'
+import React, { useRef, useState } from 'react'
 const livekit = require('livekit-client')
 
-const WebcamAudioFilePage: React.FC = () => {
+export default function WebcamAudioFilePage() {
     const videoRef = useRef<HTMLVideoElement>(null)
-    const [room, setRoom] = useState<any>(null)
-    const [useSampleAudio, setUseSampleAudio] = useState<boolean>(false)
+    const [mp3File, setMp3File] = useState<File | null>(null)
+    const [streaming, setStreaming] = useState(false)
+    const roomRef = useRef<any>(null)
+    const jobId = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    const uploadedKey = useRef<string | null>(null)
 
-    useEffect(() => {
-        let audioElement: HTMLAudioElement | null = null
+    const handleStart = async () => {
+        if (!mp3File) return alert('Vui lòng chọn file MP3 trước!')
 
-        const startStream = async () => {
-            const roomName = 'default-room'
-            const identity = 'seller-webcam-audiofile-' + Math.floor(Math.random() * 10000)
-            const role = 'publisher'
+        // 1. Upload MP3 lên Cloudflare R2
+        const formData = new FormData()
+        formData.append('file', mp3File)
+        formData.append('jobId', jobId.current)
 
-            const room = new livekit.Room()
-            const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=${role}`)
-            const { token } = await res.json()
-            await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, token)
-            setRoom(room)
+        const uploadRes = await fetch('/api/upload-audio-to-r2', { method: 'POST', body: formData })
+        const uploadData = await uploadRes.json()
+        if (!uploadData.success) return alert('❌ Upload MP3 thất bại')
+        const audioUrl = uploadData.url
+        uploadedKey.current = uploadData.key
 
-            const videoTrack = await livekit.createLocalVideoTrack()
-            await room.localParticipant.publishTrack(videoTrack)
-            videoTrack.attach(videoRef.current!)
+        // 2. Tạo room + kết nối LiveKit
+        const roomName = 'room-' + jobId.current
+        const identity = 'seller-' + jobId.current
+        const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=publisher`)
+        const { token } = await res.json()
+        const room = new livekit.Room()
+        await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, token)
+        roomRef.current = room
 
-            let audioTrack: any = null
-            if (useSampleAudio) {
-                const { data } = await supabase.storage.from('uploads').download('sample-audio.mp3')
-                if (data) {
-                    const url = URL.createObjectURL(data)
-                    audioElement = new Audio(url)
-                    audioElement.loop = true
-                    await audioElement.play()
+        // 3. Lấy video từ webcam
+        const camStream = await navigator.mediaDevices.getUserMedia({ video: true })
+        const videoTrack = camStream.getVideoTracks()[0]
+        const localVideoTrack = new livekit.LocalVideoTrack(videoTrack)
+        await room.localParticipant.publishTrack(localVideoTrack)
+        videoRef.current!.srcObject = new MediaStream([videoTrack])
 
-                    const audioEl = audioElement as any
-                    const stream =
-                        (typeof audioEl.captureStream === 'function' ? audioEl.captureStream() : null) ||
-                        (typeof audioEl.mozCaptureStream === 'function' ? audioEl.mozCaptureStream() : null)
+        // 4. Trộn MP3 + mic
+        const ctx = new AudioContext()
+        const mp3Response = await fetch(audioUrl)
+        const mp3Buffer = await mp3Response.arrayBuffer()
+        const decoded = await ctx.decodeAudioData(mp3Buffer)
+        const mp3Source = ctx.createBufferSource()
+        mp3Source.buffer = decoded
+        mp3Source.loop = true
 
-                    if (stream) {
-                        const audioMediaTrack = stream.getAudioTracks()[0]
-                        audioTrack = new livekit.LocalAudioTrack(audioMediaTrack)
-                        await room.localParticipant.publishTrack(audioTrack)
-                    }
-                }
-            } else {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-                const micTrack = stream.getAudioTracks()[0]
-                audioTrack = new livekit.LocalAudioTrack(micTrack)
-                await room.localParticipant.publishTrack(audioTrack)
-            }
+        const mp3Gain = ctx.createGain()
+        mp3Gain.gain.value = 1
+        mp3Source.connect(mp3Gain)
+
+        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        const micSource = ctx.createMediaStreamSource(micStream)
+        const micGain = ctx.createGain()
+        micGain.gain.value = 1 / 3
+        micSource.connect(micGain)
+
+        const dest = ctx.createMediaStreamDestination()
+        mp3Gain.connect(dest)
+        micGain.connect(dest)
+        mp3Source.start()
+
+        const audioTrack = dest.stream.getAudioTracks()[0]
+        const localAudioTrack = new livekit.LocalAudioTrack(audioTrack)
+        await room.localParticipant.publishTrack(localAudioTrack)
+
+        setStreaming(true)
+    }
+
+    const handleStop = async () => {
+        if (roomRef.current) {
+            roomRef.current.disconnect()
         }
 
-        startStream()
-
-        return () => {
-            if (audioElement) {
-                audioElement.pause()
-                audioElement.src = ''
-            }
-            room?.disconnect()
+        // Gọi API xoá file từ R2
+        if (uploadedKey.current) {
+            await fetch('/api/delete-audio-from-r2', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: uploadedKey.current }),
+            })
         }
-    }, [useSampleAudio])
+
+        setStreaming(false)
+    }
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen">
-            <h1 className="text-2xl font-bold mb-4">Phát webcam + audio từ mic hoặc mẫu</h1>
-            <video ref={videoRef} autoPlay muted className="w-full max-w-xl rounded-lg shadow" />
-            <div className="mt-4">
-                <label className="flex items-center space-x-2">
-                    <input
-                        type="checkbox"
-                        checked={useSampleAudio}
-                        onChange={(e) => setUseSampleAudio(e.target.checked)}
-                    />
-                    <span>Dùng audio mẫu từ kho AI (Supabase)</span>
-                </label>
-            </div>
-        </div>
+        <main className="p-6 max-w-xl mx-auto space-y-4">
+            <h1 className="text-xl font-bold">🎥 Livestream webcam + audio MP3</h1>
+
+            <input
+                type="file"
+                accept="audio/mpeg"
+                onChange={(e) => setMp3File(e.target.files?.[0] || null)}
+                disabled={streaming}
+            />
+
+            <button
+                onClick={handleStart}
+                disabled={!mp3File || streaming}
+                className="bg-blue-600 text-white px-4 py-2 rounded"
+            >
+                ▶️ Bắt đầu livestream
+            </button>
+
+            <button
+                onClick={handleStop}
+                disabled={!streaming}
+                className="bg-red-600 text-white px-4 py-2 rounded"
+            >
+                ⏹️ Kết thúc livestream
+            </button>
+
+            <video ref={videoRef} autoPlay muted className="w-full rounded shadow" />
+        </main>
     )
 }
-
-export default WebcamAudioFilePage
