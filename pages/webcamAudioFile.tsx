@@ -13,6 +13,8 @@ export default function WebcamAudioFilePage() {
     const handleStart = async () => {
         if (!mp3File) return alert('Vui lòng chọn file MP3 trước!')
 
+        console.log('📤 Bắt đầu upload file MP3:', mp3File.name)
+
         // === 1. Upload MP3 lên Cloudflare R2 qua Cloud Run ===
         const formData = new FormData()
         formData.append('file', mp3File)
@@ -23,28 +25,45 @@ export default function WebcamAudioFilePage() {
             { method: 'POST', body: formData }
         )
 
+        if (!uploadRes.ok) {
+            console.error('❌ Upload thất bại. Mã lỗi:', uploadRes.status)
+            return alert(`❌ Upload MP3 thất bại: ${uploadRes.status}`)
+        }
+
         const uploadData = await uploadRes.json()
-        if (!uploadData.success) return alert('❌ Upload MP3 thất bại')
+        if (!uploadData.success) {
+            console.error('❌ Server không trả về success:', uploadData)
+            return alert('❌ Upload MP3 thất bại (server không trả về success)')
+        }
+
         const audioUrl = uploadData.url
         uploadedKey.current = uploadData.key
+        console.log('✅ Upload thành công:', audioUrl)
 
         // === 2. Tạo room + kết nối LiveKit ===
         const roomName = 'room-' + jobId.current
         const identity = 'seller-' + jobId.current
+        console.log('🔑 Yêu cầu token LiveKit...')
         const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=publisher`)
         const { token } = await res.json()
+        console.log('✅ Nhận token LiveKit')
+
         const room = new livekit.Room()
         await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, token)
         roomRef.current = room
+        console.log('🔌 Đã kết nối tới LiveKit:', roomName)
 
         // === 3. Lấy video từ webcam ===
+        console.log('📷 Đang bật webcam...')
         const camStream = await navigator.mediaDevices.getUserMedia({ video: true })
         const videoTrack = camStream.getVideoTracks()[0]
         const localVideoTrack = new livekit.LocalVideoTrack(videoTrack)
         await room.localParticipant.publishTrack(localVideoTrack)
         videoRef.current!.srcObject = new MediaStream([videoTrack])
+        console.log('✅ Đã phát video webcam')
 
         // === 4. Trộn MP3 + mic ===
+        console.log('🎵 Trộn âm thanh từ file MP3 và mic...')
         const ctx = new AudioContext()
         const mp3Response = await fetch(audioUrl)
         const mp3Buffer = await mp3Response.arrayBuffer()
@@ -71,17 +90,21 @@ export default function WebcamAudioFilePage() {
         const audioTrack = dest.stream.getAudioTracks()[0]
         const localAudioTrack = new livekit.LocalAudioTrack(audioTrack)
         await room.localParticipant.publishTrack(localAudioTrack)
+        console.log('✅ Đã phát audio mix (mp3 + mic)')
 
         setStreaming(true)
+        console.log('🚀 Livestream bắt đầu')
     }
 
     const handleStop = async () => {
         if (roomRef.current) {
             roomRef.current.disconnect()
+            console.log('🔌 Ngắt kết nối LiveKit')
         }
 
         // === Xoá file .mp3 trên R2 qua Cloud Run ===
         if (uploadedKey.current) {
+            console.log('🧼 Đang xoá file MP3:', uploadedKey.current)
             await fetch(
                 'https://delete-audio-worker-729288097042.asia-southeast1.run.app/delete',
                 {
@@ -93,6 +116,7 @@ export default function WebcamAudioFilePage() {
         }
 
         setStreaming(false)
+        console.log('🛑 Đã dừng livestream')
     }
 
     return (
