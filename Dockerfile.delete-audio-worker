@@ -1,0 +1,15 @@
+# 🐳 Base image ổn định
+FROM node:20
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm install
+
+COPY . .
+RUN npx tsc -p tsconfig.worker.json
+
+EXPOSE 8080
+ENV PORT=8080
+
+CMD ["node", "dist/worker/delete-audio-worker.js"]

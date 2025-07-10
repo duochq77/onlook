@@ -1,5 +1,10 @@
+import express from 'express'
+import cors from 'cors'
 import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3'
-import type { NextApiRequest, NextApiResponse } from 'next'
+
+const app = express()
+app.use(cors())
+app.use(express.json())
 
 const R2 = new S3Client({
     region: 'auto',
@@ -10,11 +15,9 @@ const R2 = new S3Client({
     },
 })
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-    if (req.method !== 'POST') return res.status(405).json({ error: 'Only POST allowed' })
-
+app.post('/delete', async (req, res) => {
     const { key } = req.body
-    if (!key) return res.status(400).json({ error: 'Thiếu key để xoá file' })
+    if (!key) return res.status(400).json({ error: 'Thiếu key file' })
 
     try {
         await R2.send(
@@ -24,7 +27,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             })
         )
         return res.status(200).json({ success: true })
-    } catch (err) {
-        return res.status(500).json({ error: 'Xoá file thất bại', detail: (err as Error).message })
+    } catch (e: any) {
+        return res.status(500).json({ error: 'Delete failed', detail: e.message })
     }
-}
+})
+
+const PORT = process.env.PORT || 8080
+app.listen(PORT, () => {
+    console.log(`🧼 Delete Audio Worker running on port ${PORT}`)
+})
