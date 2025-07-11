@@ -13,7 +13,7 @@ export default function WebcamAudioFilePage() {
     const handleStart = async () => {
         if (!mp3File) return alert('Vui lòng chọn file MP3 trước!')
 
-        console.log('📤 Bắt đầu upload file MP3:', mp3File.name)
+        console.log('📤 Đang upload file MP3:', mp3File.name)
 
         const formData = new FormData()
         formData.append('file', mp3File)
@@ -25,55 +25,48 @@ export default function WebcamAudioFilePage() {
         })
 
         if (!uploadRes.ok) {
-            console.error('❌ Upload thất bại. Mã lỗi:', uploadRes.status)
+            console.error('❌ Upload thất bại:', uploadRes.status)
             return alert(`❌ Upload MP3 thất bại: ${uploadRes.status}`)
         }
 
         const uploadData = await uploadRes.json()
-        if (!uploadData.success) {
-            console.error('❌ Server không trả về success:', uploadData)
-            return alert('❌ Upload MP3 thất bại (server không trả về success)')
+        if (!uploadData.success || !uploadData.url) {
+            console.error('❌ Server không trả về URL hợp lệ:', uploadData)
+            return alert('❌ Upload MP3 thất bại (không có URL trả về)')
         }
 
         const audioUrl = uploadData.url
         uploadedKey.current = uploadData.key
-        console.log('✅ Upload thành công:', audioUrl)
+        console.log('✅ Đã upload xong. URL file MP3:', audioUrl)
 
         const roomName = 'room-' + jobId.current
         const identity = 'seller-' + jobId.current
-        console.log('🔑 Yêu cầu token LiveKit...')
-        const res = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=publisher`)
-        const { token } = await res.json()
-        console.log('✅ Nhận token LiveKit')
+        const tokenRes = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=publisher`)
+        const { token } = await tokenRes.json()
 
         const room = new livekit.Room()
         await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, token)
         roomRef.current = room
-        console.log('🔌 Đã kết nối tới LiveKit:', roomName)
+        console.log('🔌 Đã kết nối LiveKit')
 
-        console.log('📷 Đang bật webcam...')
         const camStream = await navigator.mediaDevices.getUserMedia({ video: true })
         const videoTrack = camStream.getVideoTracks()[0]
         const localVideoTrack = new livekit.LocalVideoTrack(videoTrack)
         await room.localParticipant.publishTrack(localVideoTrack)
         videoRef.current!.srcObject = new MediaStream([videoTrack])
-        console.log('✅ Đã phát video webcam')
+        console.log('📷 Đã phát video webcam')
 
-        // === Trộn MP3 và mic
-        console.log('🎵 Trộn âm thanh từ file MP3 và mic...')
         const ctx = new AudioContext()
-        const mp3Response = await fetch(audioUrl)
+        const mp3Res = await fetch(audioUrl)
 
-        if (!mp3Response.ok) {
-            console.error('❌ Không fetch được file MP3:', mp3Response.status)
-            return alert('❌ Không thể tải file MP3 (CORS hoặc URL sai)')
+        if (!mp3Res.ok) {
+            console.error('❌ Không fetch được MP3:', mp3Res.status)
+            return alert(`❌ CORS hoặc URL lỗi: ${mp3Res.status}`)
         }
 
-        const mp3Buffer = await mp3Response.arrayBuffer()
-        console.log('🧪 Kích thước buffer MP3:', mp3Buffer.byteLength)
-
+        const mp3Buffer = await mp3Res.arrayBuffer()
         if (mp3Buffer.byteLength === 0) {
-            return alert('❌ File MP3 rỗng hoặc bị chặn bởi CORS.')
+            return alert('❌ File MP3 bị rỗng hoặc bị chặn.')
         }
 
         const decoded = await ctx.decodeAudioData(mp3Buffer)
@@ -99,16 +92,14 @@ export default function WebcamAudioFilePage() {
         const audioTrack = dest.stream.getAudioTracks()[0]
         const localAudioTrack = new livekit.LocalAudioTrack(audioTrack)
         await room.localParticipant.publishTrack(localAudioTrack)
-        console.log('✅ Đã phát audio mix (mp3 + mic)')
+        console.log('🎵 Đã phát âm thanh mix (mic + mp3)')
 
         setStreaming(true)
-        console.log('🚀 Livestream bắt đầu')
     }
 
     const handleStop = async () => {
         if (roomRef.current) {
             roomRef.current.disconnect()
-            console.log('🔌 Ngắt kết nối LiveKit')
         }
 
         if (uploadedKey.current) {
@@ -121,12 +112,11 @@ export default function WebcamAudioFilePage() {
         }
 
         setStreaming(false)
-        console.log('🛑 Đã dừng livestream')
     }
 
     return (
         <main className="p-6 max-w-xl mx-auto space-y-4">
-            <h1 className="text-xl font-bold">🎥 Livestream webcam + audio MP3</h1>
+            <h1 className="text-xl font-bold">🎥 Livestream webcam + file MP3 người bán upload</h1>
             <input
                 type="file"
                 accept="audio/mpeg"

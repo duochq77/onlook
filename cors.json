@@ -1,0 +1,18 @@
+{
+    "CORSRules": [
+        {
+            "AllowedOrigins": [
+                "https://onlook-qoj986fen-hoang-quang-djuocs-projects.vercel.app"
+            ],
+            "AllowedMethods": [
+                "GET",
+                "HEAD",
+                "OPTIONS"
+            ],
+            "AllowedHeaders": [
+                "*"
+            ],
+            "MaxAgeSeconds": 3600
+        }
+    ]
+}
