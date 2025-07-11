@@ -15,15 +15,14 @@ export default function WebcamAudioFilePage() {
 
         console.log('📤 Bắt đầu upload file MP3:', mp3File.name)
 
-        // === 1. Upload MP3 lên Cloudflare R2 qua Cloud Run ===
         const formData = new FormData()
         formData.append('file', mp3File)
         formData.append('jobId', jobId.current)
 
-        const uploadRes = await fetch(
-            'https://upload-audio-worker-729288097042.asia-southeast1.run.app/upload',
-            { method: 'POST', body: formData }
-        )
+        const uploadRes = await fetch('https://upload-audio-worker-729288097042.asia-southeast1.run.app/upload', {
+            method: 'POST',
+            body: formData,
+        })
 
         if (!uploadRes.ok) {
             console.error('❌ Upload thất bại. Mã lỗi:', uploadRes.status)
@@ -40,7 +39,6 @@ export default function WebcamAudioFilePage() {
         uploadedKey.current = uploadData.key
         console.log('✅ Upload thành công:', audioUrl)
 
-        // === 2. Tạo room + kết nối LiveKit ===
         const roomName = 'room-' + jobId.current
         const identity = 'seller-' + jobId.current
         console.log('🔑 Yêu cầu token LiveKit...')
@@ -53,7 +51,6 @@ export default function WebcamAudioFilePage() {
         roomRef.current = room
         console.log('🔌 Đã kết nối tới LiveKit:', roomName)
 
-        // === 3. Lấy video từ webcam ===
         console.log('📷 Đang bật webcam...')
         const camStream = await navigator.mediaDevices.getUserMedia({ video: true })
         const videoTrack = camStream.getVideoTracks()[0]
@@ -62,11 +59,23 @@ export default function WebcamAudioFilePage() {
         videoRef.current!.srcObject = new MediaStream([videoTrack])
         console.log('✅ Đã phát video webcam')
 
-        // === 4. Trộn MP3 + mic ===
+        // === Trộn MP3 và mic
         console.log('🎵 Trộn âm thanh từ file MP3 và mic...')
         const ctx = new AudioContext()
         const mp3Response = await fetch(audioUrl)
+
+        if (!mp3Response.ok) {
+            console.error('❌ Không fetch được file MP3:', mp3Response.status)
+            return alert('❌ Không thể tải file MP3 (CORS hoặc URL sai)')
+        }
+
         const mp3Buffer = await mp3Response.arrayBuffer()
+        console.log('🧪 Kích thước buffer MP3:', mp3Buffer.byteLength)
+
+        if (mp3Buffer.byteLength === 0) {
+            return alert('❌ File MP3 rỗng hoặc bị chặn bởi CORS.')
+        }
+
         const decoded = await ctx.decodeAudioData(mp3Buffer)
         const mp3Source = ctx.createBufferSource()
         mp3Source.buffer = decoded
@@ -102,17 +111,13 @@ export default function WebcamAudioFilePage() {
             console.log('🔌 Ngắt kết nối LiveKit')
         }
 
-        // === Xoá file .mp3 trên R2 qua Cloud Run ===
         if (uploadedKey.current) {
             console.log('🧼 Đang xoá file MP3:', uploadedKey.current)
-            await fetch(
-                'https://delete-audio-worker-729288097042.asia-southeast1.run.app/delete',
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: uploadedKey.current }),
-                }
-            )
+            await fetch('https://delete-audio-worker-729288097042.asia-southeast1.run.app/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: uploadedKey.current }),
+            })
         }
 
         setStreaming(false)
@@ -122,14 +127,12 @@ export default function WebcamAudioFilePage() {
     return (
         <main className="p-6 max-w-xl mx-auto space-y-4">
             <h1 className="text-xl font-bold">🎥 Livestream webcam + audio MP3</h1>
-
             <input
                 type="file"
                 accept="audio/mpeg"
                 onChange={(e) => setMp3File(e.target.files?.[0] || null)}
                 disabled={streaming}
             />
-
             <button
                 onClick={handleStart}
                 disabled={!mp3File || streaming}
@@ -137,7 +140,6 @@ export default function WebcamAudioFilePage() {
             >
                 ▶️ Bắt đầu livestream
             </button>
-
             <button
                 onClick={handleStop}
                 disabled={!streaming}
@@ -145,7 +147,6 @@ export default function WebcamAudioFilePage() {
             >
                 ⏹️ Kết thúc livestream
             </button>
-
             <video ref={videoRef} autoPlay muted className="w-full rounded shadow" />
         </main>
     )
