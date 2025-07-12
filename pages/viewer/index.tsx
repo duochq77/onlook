@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { Room, RemoteTrackPublication, RemoteAudioTrack, RemoteVideoTrack, connect } from 'livekit-client'
+import { Room, connect } from 'livekit-client'
 import debounce from 'lodash/debounce'
 
-const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL
+const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL!
 
 type RoomInfo = {
     room: string
@@ -18,14 +18,14 @@ export default function ViewerFeed() {
     const videoRef = useRef<HTMLVideoElement>(null)
     const roomRef = useRef<Room | null>(null)
 
-    // 🧲 Lấy danh sách phòng đang hoạt động
+    // 🔗 Lấy danh sách các room đang phát
     useEffect(() => {
         fetch('/api/active-rooms')
             .then((res) => res.json())
             .then((data) => setRooms(data.rooms || []))
     }, [])
 
-    // 🔁 Khi đổi room → join phòng mới
+    // 🔁 Khi currentIndex thay đổi → join vào room mới
     useEffect(() => {
         if (rooms.length === 0) return
 
@@ -33,23 +33,26 @@ export default function ViewerFeed() {
         const identity = `viewer-${Math.floor(Math.random() * 10000)}`
 
         const fetchTokenAndJoin = async () => {
-            const res = await fetch('/api/token', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ room: roomName, identity }),
-            })
+            // 🔄 Sử dụng query params để phù hợp với handler token hiện tại
+            const url = `/api/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`
+            const res = await fetch(url)
+            if (!res.ok) {
+                console.error('Fetch token lỗi', await res.text())
+                return
+            }
             const { token } = await res.json()
 
-            // Ngắt kết nối phòng cũ nếu có
+            // Rời room cũ nếu đang có
             if (roomRef.current) {
                 await roomRef.current.disconnect()
                 roomRef.current = null
             }
 
+            // Tạo và kết nối vào room mới
             const room = new Room()
             roomRef.current = room
 
-            room.on('trackSubscribed', (track, publication, participant) => {
+            room.on('trackSubscribed', (track) => {
                 if (track.kind === 'video' && videoRef.current) {
                     track.attach(videoRef.current)
                 }
@@ -58,13 +61,13 @@ export default function ViewerFeed() {
                 }
             })
 
-            await connect(room, LIVEKIT_URL!, token)
+            await connect(room, LIVEKIT_URL, token)
         }
 
         fetchTokenAndJoin()
     }, [currentIndex, rooms])
 
-    // ⬅️➡️ Chuyển room bằng phím trái/phải
+    // ⬅️➡️ Chế độ chuyển room bằng phím
     const handleKey = debounce((e: KeyboardEvent) => {
         if (e.key === 'ArrowRight') {
             setCurrentIndex((i) => (i + 1) % rooms.length)
