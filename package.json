@@ -29,6 +29,8 @@
     "ioredis": "^5.6.1",
     "livekit-client": "^2.13.1",
     "livekit-server-sdk": "^2.11.0",
+    "lodash": "^4.17.21",
+    "lucide-react": "^0.525.0",
     "mime": "^4.0.7",
     "next": "^15.3.3",
     "node-fetch": "^2.7.0",

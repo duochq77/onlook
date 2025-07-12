@@ -1,11 +1,8 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { useRouter } from 'next/router'
-import { Room } from 'livekit-client/dist/room'
-import { RemoteTrackPublication, RemoteVideoTrack, RemoteAudioTrack } from 'livekit-client'
-import { connect } from 'livekit-client'
-import { debounce } from 'lodash'
+import { Room, RemoteTrackPublication, RemoteAudioTrack, RemoteVideoTrack, connect } from 'livekit-client'
+import debounce from 'lodash/debounce'
 
 const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL
 
@@ -21,19 +18,21 @@ export default function ViewerFeed() {
     const videoRef = useRef<HTMLVideoElement>(null)
     const roomRef = useRef<Room | null>(null)
 
-    // 🧲 Fetch danh sách phòng đang phát
+    // 🧲 Lấy danh sách phòng đang hoạt động
     useEffect(() => {
         fetch('/api/active-rooms')
             .then((res) => res.json())
             .then((data) => setRooms(data.rooms || []))
     }, [])
 
-    // 🔁 Mỗi khi đổi room → tạo token mới + join room LiveKit
+    // 🔁 Khi đổi room → join phòng mới
     useEffect(() => {
         if (rooms.length === 0) return
+
         const roomName = rooms[currentIndex].room
         const identity = `viewer-${Math.floor(Math.random() * 10000)}`
-        const fetchToken = async () => {
+
+        const fetchTokenAndJoin = async () => {
             const res = await fetch('/api/token', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -41,7 +40,7 @@ export default function ViewerFeed() {
             })
             const { token } = await res.json()
 
-            // 👋 Rời room cũ nếu có
+            // Ngắt kết nối phòng cũ nếu có
             if (roomRef.current) {
                 await roomRef.current.disconnect()
                 roomRef.current = null
@@ -62,10 +61,10 @@ export default function ViewerFeed() {
             await connect(room, LIVEKIT_URL!, token)
         }
 
-        fetchToken()
+        fetchTokenAndJoin()
     }, [currentIndex, rooms])
 
-    // 🔀 Swipe trái/phải để đổi phòng
+    // ⬅️➡️ Chuyển room bằng phím trái/phải
     const handleKey = debounce((e: KeyboardEvent) => {
         if (e.key === 'ArrowRight') {
             setCurrentIndex((i) => (i + 1) % rooms.length)
