@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { Room, connect } from 'livekit-client'
+import { Room } from 'livekit-client'
 import debounce from 'lodash/debounce'
 
 const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL!
@@ -18,14 +18,14 @@ export default function ViewerFeed() {
     const videoRef = useRef<HTMLVideoElement>(null)
     const roomRef = useRef<Room | null>(null)
 
-    // 🔗 Lấy danh sách các room đang phát
+    // 🔗 Lấy danh sách phòng livestream
     useEffect(() => {
         fetch('/api/active-rooms')
             .then((res) => res.json())
             .then((data) => setRooms(data.rooms || []))
     }, [])
 
-    // 🔁 Khi currentIndex thay đổi → join vào room mới
+    // 🎥 Khi đổi phòng → tạo token & join
     useEffect(() => {
         if (rooms.length === 0) return
 
@@ -33,22 +33,21 @@ export default function ViewerFeed() {
         const identity = `viewer-${Math.floor(Math.random() * 10000)}`
 
         const fetchTokenAndJoin = async () => {
-            // 🔄 Sử dụng query params để phù hợp với handler token hiện tại
             const url = `/api/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`
             const res = await fetch(url)
             if (!res.ok) {
-                console.error('Fetch token lỗi', await res.text())
+                console.error('❌ Lỗi lấy token:', await res.text())
                 return
             }
             const { token } = await res.json()
 
-            // Rời room cũ nếu đang có
+            // Ngắt kết nối nếu có room trước
             if (roomRef.current) {
                 await roomRef.current.disconnect()
                 roomRef.current = null
             }
 
-            // Tạo và kết nối vào room mới
+            // Tạo Room và kết nối
             const room = new Room()
             roomRef.current = room
 
@@ -61,13 +60,13 @@ export default function ViewerFeed() {
                 }
             })
 
-            await connect(room, LIVEKIT_URL, token)
+            await room.connect(LIVEKIT_URL, token) // 🔑 **Phải dùng this connect đúng docs**  :contentReference[oaicite:1]{index=1}
         }
 
         fetchTokenAndJoin()
     }, [currentIndex, rooms])
 
-    // ⬅️➡️ Chế độ chuyển room bằng phím
+    // ⬅️➡️ Đổi phòng bằng phím
     const handleKey = debounce((e: KeyboardEvent) => {
         if (e.key === 'ArrowRight') {
             setCurrentIndex((i) => (i + 1) % rooms.length)
@@ -82,7 +81,11 @@ export default function ViewerFeed() {
     }, [rooms])
 
     if (rooms.length === 0) {
-        return <p className="text-center mt-10 text-gray-500">⏳ Đang tải danh sách phòng livestream...</p>
+        return (
+            <p className="text-center mt-10 text-gray-500">
+                ⏳ Đang tải danh sách phòng livestream...
+            </p>
+        )
     }
 
     const currentRoom = rooms[currentIndex]
