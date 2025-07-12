@@ -4,11 +4,13 @@ const livekit = require('livekit-client')
 
 export default function WebcamAudioFilePage() {
     const videoRef = useRef<HTMLVideoElement>(null)
+    const audioRef = useRef<HTMLAudioElement>(null)
     const [mp3File, setMp3File] = useState<File | null>(null)
     const [streaming, setStreaming] = useState(false)
     const roomRef = useRef<any>(null)
     const jobId = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`)
     const uploadedKey = useRef<string | null>(null)
+    const destRef = useRef<MediaStreamAudioDestinationNode | null>(null)
 
     const handleStart = async () => {
         if (!mp3File) return alert('Vui lòng chọn file MP3 trước!')
@@ -35,7 +37,6 @@ export default function WebcamAudioFilePage() {
             return alert('❌ Upload MP3 thất bại (không có key trả về)')
         }
 
-        // 👉 Tạo lại URL thủ công từ public R2 URL
         const audioUrl = `https://pub-f7639404296d4552819a5bc64f436da7.r2.dev/${uploadData.key}`
         uploadedKey.current = uploadData.key
         console.log('✅ Đã upload xong. URL file MP3:', audioUrl)
@@ -89,11 +90,17 @@ export default function WebcamAudioFilePage() {
         mp3Gain.connect(dest)
         micGain.connect(dest)
         mp3Source.start()
+        destRef.current = dest
 
         const audioTrack = dest.stream.getAudioTracks()[0]
         const localAudioTrack = new livekit.LocalAudioTrack(audioTrack)
         await room.localParticipant.publishTrack(localAudioTrack)
         console.log('🎵 Đã phát âm thanh mix (mic + mp3)')
+
+        // 🎧 Gắn stream ra loa người bán
+        if (audioRef.current) {
+            audioRef.current.srcObject = dest.stream
+        }
 
         setStreaming(true)
     }
@@ -138,7 +145,15 @@ export default function WebcamAudioFilePage() {
             >
                 ⏹️ Kết thúc livestream
             </button>
+
             <video ref={videoRef} autoPlay muted className="w-full rounded shadow" />
+
+            {/* 🎧 Loa ẩn để người bán nghe thấy stream mix */}
+            <audio
+                autoPlay
+                ref={audioRef}
+                style={{ display: 'none' }}
+            />
         </main>
     )
 }
