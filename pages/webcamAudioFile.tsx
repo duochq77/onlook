@@ -41,7 +41,6 @@ export default function WebcamAudioFilePage() {
         if (!tokenRes.ok) return alert('❌ Không lấy được token LiveKit')
         const { token } = await tokenRes.json()
 
-        // 🎯 Kết nối đúng theo tài liệu
         const room = new Room()
         roomRef.current = room
         await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token)
@@ -54,7 +53,9 @@ export default function WebcamAudioFilePage() {
         videoRef.current!.srcObject = new MediaStream([videoTrack])
         console.log('📷 Đã phát video webcam')
 
+        // ✅ Khởi tạo AudioContext tại đây là hợp lệ với user gesture
         const ctx = new AudioContext()
+
         const mp3Res = await fetch(audioUrl)
         if (!mp3Res.ok) return alert(`❌ CORS hoặc URL lỗi: ${mp3Res.status}`)
         const mp3Buffer = await mp3Res.arrayBuffer()
