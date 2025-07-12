@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { Room, connect, RoomEvent } from 'livekit-client'
+import { Room, RoomEvent } from 'livekit-client'
 import debounce from 'lodash/debounce'
 
 const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL!
@@ -56,8 +56,9 @@ export default function ViewerFeed() {
                 }
             })
 
-            await room.connect(LIVEKIT_URL, token)
+            await room.connect(LIVEKIT_URL!, token)
         }
+
         fetchAndJoin()
     }, [currentIndex, rooms])
 
