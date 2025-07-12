@@ -3,23 +3,39 @@ import Link from 'next/link'
 
 const HomePage: React.FC = () => {
     return (
-        <main className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-center px-4">
-            <h1 className="text-4xl font-bold mb-4">Chào mừng đến với Onlook 🎥</h1>
-            <p className="mb-6 text-lg text-gray-700">
-                Nền tảng bán hàng livestream định vị, phục vụ hàng triệu người!
+        <main className="min-h-screen flex flex-col items-center justify-center bg-white text-center px-4">
+            <h1 className="text-5xl font-extrabold mb-6 text-black">🎥 Onlook</h1>
+            <p className="mb-8 text-lg text-gray-700 max-w-xl">
+                Nền tảng bán hàng livestream tại địa điểm thực tế – xem lướt kiểu TikTok, không giới hạn người xem, tích hợp thanh toán thông minh và ví nội bộ!
             </p>
-            <div className="space-x-4">
-                <Link href="/seller/webcam" className="bg-blue-500 text-white px-4 py-2 rounded-xl shadow">
-                    Bắt đầu Livestream
+
+            <div className="space-y-4 w-full max-w-sm">
+                <Link
+                    href="/seller/webcam"
+                    className="block w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-lg font-medium shadow"
+                >
+                    🚀 Bắt đầu Livestream (Webcam)
                 </Link>
-                <Link href="/viewer/default-room" className="bg-green-500 text-white px-4 py-2 rounded-xl shadow">
-                    Xem Livestream
+
+                <Link
+                    href="/viewer"
+                    className="block w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl text-lg font-medium shadow"
+                >
+                    📺 Xem Livestream Kiểu TikTok
                 </Link>
-                <Link href="/admin" className="bg-gray-700 text-white px-4 py-2 rounded-xl shadow">
-                    Trang Admin
+
+                <Link
+                    href="/admin"
+                    className="block w-full bg-gray-800 hover:bg-gray-900 text-white py-3 rounded-xl text-lg font-medium shadow"
+                >
+                    🛠️ Trang Admin
                 </Link>
-                <Link href="/seller/VideoAudioFile" className="bg-purple-500 text-white px-4 py-2 rounded-xl shadow">
-                    Test VideoAudioFile
+
+                <Link
+                    href="/seller/VideoAudioFile"
+                    className="block w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl text-lg font-medium shadow"
+                >
+                    🎬 Test Ghép Video + Audio
                 </Link>
             </div>
         </main>
