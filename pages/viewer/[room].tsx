@@ -2,9 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
-import { Room } from 'livekit-client/dist/room'
-import { RemoteTrack } from 'livekit-client/dist/track/RemoteTrack'
-import { RoomEvent } from 'livekit-client/dist/events'
+import { Room, RemoteTrack, RoomEvent } from 'livekit-client'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,7 +26,7 @@ export default function ViewerRoomPage() {
 
         const connectLiveKit = async () => {
             try {
-                console.log(`🚀 Đang kết nối vào phòng: ${roomName}`)
+                console.log(`🚀 Kết nối vào phòng: ${roomName}`)
 
                 const res = await fetch('/api/token', {
                     method: 'POST',
@@ -41,34 +39,29 @@ export default function ViewerRoomPage() {
 
                 const { token } = await res.json()
                 if (!token) {
-                    console.error('❌ Không lấy được token')
+                    console.error('❌ Token không hợp lệ')
                     return
                 }
 
                 const newRoom = new Room()
 
-                newRoom.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, pub, participant) => {
+                newRoom.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, publication, participant) => {
                     console.log(`📥 Nhận track ${track.kind} từ ${participant.identity}`)
 
                     if (track.kind === 'video' && videoRef.current) {
-                        const el = track.attach()
-                        el.style.width = '100%'
-                        videoRef.current.replaceWith(el)
-                        videoRef.current = el as HTMLVideoElement
+                        track.attach(videoRef.current)
                     }
-
                     if (track.kind === 'audio' && audioRef.current) {
-                        const el = track.attach()
-                        audioRef.current.srcObject = el.srcObject
+                        track.attach(audioRef.current)
                     }
                 })
 
                 await newRoom.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token)
-                console.log('✅ Viewer đã vào phòng:', roomName)
+                console.log('✅ Viewer đã kết nối vào phòng:', roomName)
 
                 setRoom(newRoom)
             } catch (err) {
-                console.error('❌ Lỗi khi kết nối:', err)
+                console.error('❌ Lỗi kết nối LiveKit:', err)
             }
         }
 
@@ -76,17 +69,17 @@ export default function ViewerRoomPage() {
 
         return () => {
             if (room) {
-                console.log('⛔ Ngắt kết nối khỏi phòng:', roomName)
+                console.log('⛔ Ngắt kết nối phòng:', roomName)
                 room.disconnect()
             }
         }
     }, [roomName])
 
     return (
-        <main className="p-6 max-w-xl mx-auto space-y-4">
-            <h1 className="text-xl font-bold text-center">👁️ Người xem đang theo dõi phòng: {roomName}</h1>
-            <video ref={videoRef} autoPlay playsInline muted className="w-full rounded shadow" />
+        <div style={{ padding: 40 }}>
+            <h2>👁️ Viewer đang xem phòng: {roomName}</h2>
+            <video ref={videoRef} autoPlay playsInline width="100%" />
             <audio ref={audioRef} autoPlay />
-        </main>
+        </div>
     )
 }
