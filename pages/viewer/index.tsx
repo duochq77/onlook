@@ -56,7 +56,7 @@ export default function ViewerFeed() {
                 }
             })
 
-            await room.connect(LIVEKIT_URL, token)
+            await room.connect(LIVEKIT_URL, token)  // 👈 đúng usage theo docs :contentReference[oaicite:1]{index=1}
         }
         fetchAndJoin()
     }, [currentIndex, rooms])
