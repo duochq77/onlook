@@ -2,10 +2,9 @@
 import React, { useRef, useState } from 'react'
 import {
     Room,
-    connect,
     LocalVideoTrack,
     LocalAudioTrack
-} from 'livekit-client'  // ✅ import chính xác từ livekit-client
+} from 'livekit-client'
 
 export default function WebcamAudioFilePage() {
     const videoRef = useRef<HTMLVideoElement>(null)
@@ -20,7 +19,6 @@ export default function WebcamAudioFilePage() {
     const handleStart = async () => {
         if (!mp3File) return alert('Vui lòng chọn file MP3 trước!')
 
-        // Upload MP3
         console.log('📤 Đang upload file MP3:', mp3File.name)
         const formData = new FormData()
         formData.append('file', mp3File)
@@ -31,52 +29,42 @@ export default function WebcamAudioFilePage() {
             body: formData,
         })
         if (!uploadRes.ok) {
-            console.error('❌ Upload thất bại:', uploadRes.status)
             return alert(`❌ Upload MP3 thất bại: ${uploadRes.status}`)
         }
         const uploadData = await uploadRes.json()
         if (!uploadData.success || !uploadData.key) {
-            console.error('❌ Server không trả về key hợp lệ:', uploadData)
             return alert('❌ Upload MP3 thất bại (không có key trả về)')
         }
+
         const audioUrl = `https://pub-f7639404296d4552819a5bc64f436da7.r2.dev/${uploadData.key}`
         uploadedKey.current = uploadData.key
         console.log('✅ Đã upload xong. URL file MP3:', audioUrl)
 
-        // Lấy token và kết nối LiveKit
         const roomName = 'room-' + jobId.current
         const identity = 'seller-' + jobId.current
         const tokenRes = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=publisher`)
         if (!tokenRes.ok) {
-            console.error('❌ Fetch token thất bại:', await tokenRes.text())
             return alert('❌ Không lấy được token LiveKit')
         }
         const { token } = await tokenRes.json()
 
         const room = new Room()
         roomRef.current = room
-        await connect(room, process.env.NEXT_PUBLIC_LIVEKIT_URL!, token)
+        await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token)
         console.log('🔌 Đã kết nối LiveKit')
 
-        // Publish webcam video
         const camStream = await navigator.mediaDevices.getUserMedia({ video: true })
         const videoTrack = camStream.getVideoTracks()[0]
         const localVideoTrack = new LocalVideoTrack(videoTrack)
         await room.localParticipant.publishTrack(localVideoTrack)
         videoRef.current!.srcObject = new MediaStream([videoTrack])
-        console.log('📷 Đã phát video webcam')
 
-        // Xử lý âm thanh: mix MP3 + mic
         const ctx = new AudioContext()
         const mp3Res = await fetch(audioUrl)
-        if (!mp3Res.ok) {
-            console.error('❌ Không fetch được MP3:', mp3Res.status)
-            return alert(`❌ CORS hoặc URL lỗi: ${mp3Res.status}`)
-        }
+        if (!mp3Res.ok) return alert(`❌ CORS hoặc URL lỗi: ${mp3Res.status}`)
         const mp3Buffer = await mp3Res.arrayBuffer()
-        if (mp3Buffer.byteLength === 0) {
-            return alert('❌ File MP3 bị rỗng hoặc bị chặn.')
-        }
+        if (mp3Buffer.byteLength === 0) return alert('❌ File MP3 bị rỗng hoặc bị chặn.')
+
         const decoded = await ctx.decodeAudioData(mp3Buffer)
         const mp3Source = ctx.createBufferSource()
         mp3Source.buffer = decoded
@@ -100,11 +88,8 @@ export default function WebcamAudioFilePage() {
         const audioTrack = dest.stream.getAudioTracks()[0]
         const localAudioTrack = new LocalAudioTrack(audioTrack)
         await room.localParticipant.publishTrack(localAudioTrack)
-        console.log('🎵 Đã phát âm thanh mix (mic + mp3)')
+        audioRef.current!.srcObject = dest.stream
 
-        if (audioRef.current) {
-            audioRef.current.srcObject = dest.stream
-        }
         setStreaming(true)
     }
 
@@ -114,7 +99,6 @@ export default function WebcamAudioFilePage() {
             roomRef.current = null
         }
         if (uploadedKey.current) {
-            console.log('🧼 Đang xoá file MP3:', uploadedKey.current)
             await fetch('https://delete-audio-worker-729288097042.asia-southeast1.run.app/delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -128,12 +112,7 @@ export default function WebcamAudioFilePage() {
     return (
         <main className="p-6 max-w-xl mx-auto space-y-4">
             <h1 className="text-xl font-bold">🎥 Livestream webcam + file MP3</h1>
-            <input
-                type="file"
-                accept="audio/mpeg"
-                onChange={(e) => setMp3File(e.target.files?.[0] || null)}
-                disabled={streaming}
-            />
+            <input type="file" accept="audio/mpeg" onChange={(e) => setMp3File(e.target.files?.[0] || null)} disabled={streaming} />
             <button onClick={handleStart} disabled={!mp3File || streaming} className="bg-blue-600 text-white px-4 py-2 rounded">
                 ▶️ Bắt đầu livestream
             </button>
