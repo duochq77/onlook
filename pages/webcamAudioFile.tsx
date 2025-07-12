@@ -14,35 +14,31 @@ export default function WebcamAudioFilePage() {
     const handleStart = async () => {
         if (!mp3File) return alert('Chọn MP3 trước!')
 
-        // 🔄 Upload file MP3
         const form = new FormData()
         form.append('file', mp3File)
         form.append('jobId', jobId.current)
+
         const uploadRes = await fetch('https://upload-audio-worker-…/upload', { method: 'POST', body: form })
         const uploadData = await uploadRes.json()
         const audioUrl = `https://pub-…/${uploadData.key}`
         uploadedKey.current = uploadData.key
 
-        // 🔐 Lấy token với vai trò publisher
         const roomName = 'room-' + jobId.current
         const identity = 'seller-' + jobId.current
         const tokRes = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=publisher`)
         const { token } = await tokRes.json()
 
-        // 🔗 Kết nối LiveKit đúng cách
         const room = new Room()
         roomRef.current = room
         await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token)
         console.log('🔌 Connected LiveKit')
 
-        // 📷 Publish webcam video
         const cam = await navigator.mediaDevices.getUserMedia({ video: true })
         const videoTrack = cam.getVideoTracks()[0]
         const localVid = new LocalVideoTrack(videoTrack)
         await room.localParticipant.publishTrack(localVid)
         videoRef.current!.srcObject = new MediaStream([videoTrack])
 
-        // 🎵 Mix giữa mic và MP3
         const ctx = new AudioContext()
         const mp3Buf = await (await fetch(audioUrl)).arrayBuffer()
         const decoded = await ctx.decodeAudioData(mp3Buf)
@@ -62,12 +58,10 @@ export default function WebcamAudioFilePage() {
         micGain.connect(dest)
         mp3Src.start()
 
-        // 🧠 Publish audio mix
         const audioTrack = dest.stream.getAudioTracks()[0]
         const localAud = new LocalAudioTrack(audioTrack)
         await room.localParticipant.publishTrack(localAud)
 
-        // 🔊 Gắn stream mix để seller nghe
         audioRef.current!.srcObject = dest.stream
         setStreaming(true)
     }
@@ -80,12 +74,7 @@ export default function WebcamAudioFilePage() {
     return (
         <main className="p-6 max-w-xl mx-auto space-y-4">
             <h1 className="text-xl font-bold">🎥 Livestream webcam + MP3</h1>
-            <input
-                type="file"
-                accept="audio/mpeg"
-                onChange={(e) => setMp3File(e.target.files?.[0] || null)}
-                disabled={streaming}
-            />
+            <input type="file" accept="audio/mpeg" onChange={(e) => setMp3File(e.target.files?.[0] || null)} disabled={streaming} />
             <button onClick={handleStart} disabled={!mp3File || streaming} className="bg-blue-600 text-white px-4 py-2 rounded">
                 ▶️ Bắt đầu
             </button>
