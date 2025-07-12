@@ -15,6 +15,7 @@ type RoomInfo = {
 export default function ViewerFeed() {
     const [rooms, setRooms] = useState<RoomInfo[]>([])
     const [currentIndex, setCurrentIndex] = useState(0)
+    const [started, setStarted] = useState(false)
     const videoRef = useRef<HTMLVideoElement>(null)
     const roomRef = useRef<Room | null>(null)
 
@@ -25,7 +26,7 @@ export default function ViewerFeed() {
     }, [])
 
     useEffect(() => {
-        if (rooms.length === 0) return
+        if (!started || rooms.length === 0) return
 
         const roomName = rooms[currentIndex].room
         const identity = `viewer-${Math.floor(Math.random() * 10000)}`
@@ -51,17 +52,21 @@ export default function ViewerFeed() {
                     track.attach(videoRef.current)
                 }
                 if (track.kind === 'audio') {
-                    track.attach()
+                    const attached = track.attach()
+                    const ctx = new AudioContext()
+                    if (ctx.state === 'suspended') {
+                        ctx.resume().then(() => console.log('✅ Đã resume AudioContext'))
+                    }
+                    attached && attached.play?.().catch(console.warn)
                 }
             })
 
-            // 🎯 Kết nối đúng theo tài liệu
             await room.connect(LIVEKIT_URL, token)
             console.log('🔌 Viewer đã kết nối phòng:', roomName)
         }
 
         fetchTokenAndJoin()
-    }, [currentIndex, rooms])
+    }, [started, currentIndex, rooms])
 
     const handleKey = debounce((e: KeyboardEvent) => {
         if (e.key === 'ArrowRight') setCurrentIndex(i => (i + 1) % rooms.length)
@@ -69,9 +74,14 @@ export default function ViewerFeed() {
     }, 100)
 
     useEffect(() => {
+        if (!started) return
         window.addEventListener('keydown', handleKey)
         return () => window.removeEventListener('keydown', handleKey)
-    }, [rooms])
+    }, [rooms, started])
+
+    const handleStart = () => {
+        setStarted(true)
+    }
 
     if (rooms.length === 0) {
         return <p className="text-center mt-10 text-gray-500">⏳ Đang tải danh sách phòng livestream...</p>
@@ -80,6 +90,14 @@ export default function ViewerFeed() {
     const currentRoom = rooms[currentIndex]
     return (
         <div className="w-screen h-screen bg-black flex flex-col items-center justify-center relative">
+            {!started && (
+                <button
+                    onClick={handleStart}
+                    className="absolute z-50 px-6 py-3 bg-blue-600 text-white rounded shadow-lg"
+                >
+                    ▶️ Bắt đầu xem livestream
+                </button>
+            )}
             <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
             <div className="absolute top-4 left-4 text-white text-xl font-bold">🎥 {currentRoom.sellerName}</div>
             <div className="absolute bottom-4 w-full text-center text-white">
