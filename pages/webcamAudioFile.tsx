@@ -53,8 +53,10 @@ export default function WebcamAudioFilePage() {
         videoRef.current!.srcObject = new MediaStream([videoTrack])
         console.log('📷 Đã phát video webcam')
 
-        // ✅ Khởi tạo AudioContext tại đây là hợp lệ với user gesture
         const ctx = new AudioContext()
+        if (ctx.state === 'suspended') {
+            await ctx.resume()
+        }
 
         const mp3Res = await fetch(audioUrl)
         if (!mp3Res.ok) return alert(`❌ CORS hoặc URL lỗi: ${mp3Res.status}`)
