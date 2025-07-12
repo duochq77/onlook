@@ -18,14 +18,12 @@ export default function ViewerFeed() {
     const videoRef = useRef<HTMLVideoElement>(null)
     const roomRef = useRef<Room | null>(null)
 
-    // 🔗 Lấy danh sách phòng livestream
     useEffect(() => {
         fetch('/api/active-rooms')
-            .then((res) => res.json())
-            .then((data) => setRooms(data.rooms || []))
+            .then(res => res.json())
+            .then(data => setRooms(data.rooms || []))
     }, [])
 
-    // 🎥 Khi đổi phòng → tạo token & join
     useEffect(() => {
         if (rooms.length === 0) return
 
@@ -33,21 +31,18 @@ export default function ViewerFeed() {
         const identity = `viewer-${Math.floor(Math.random() * 10000)}`
 
         const fetchTokenAndJoin = async () => {
-            const url = `/api/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`
-            const res = await fetch(url)
+            const res = await fetch(`/api/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`)
             if (!res.ok) {
                 console.error('❌ Lỗi lấy token:', await res.text())
                 return
             }
             const { token } = await res.json()
 
-            // Ngắt kết nối nếu có room trước
             if (roomRef.current) {
                 await roomRef.current.disconnect()
                 roomRef.current = null
             }
 
-            // Tạo Room và kết nối
             const room = new Room()
             roomRef.current = room
 
@@ -60,19 +55,17 @@ export default function ViewerFeed() {
                 }
             })
 
-            await room.connect(LIVEKIT_URL, token) // 🔑 **Phải dùng this connect đúng docs**  :contentReference[oaicite:1]{index=1}
+            // 🎯 Kết nối đúng theo tài liệu
+            await room.connect(LIVEKIT_URL, token)
+            console.log('🔌 Viewer đã kết nối phòng:', roomName)
         }
 
         fetchTokenAndJoin()
     }, [currentIndex, rooms])
 
-    // ⬅️➡️ Đổi phòng bằng phím
     const handleKey = debounce((e: KeyboardEvent) => {
-        if (e.key === 'ArrowRight') {
-            setCurrentIndex((i) => (i + 1) % rooms.length)
-        } else if (e.key === 'ArrowLeft') {
-            setCurrentIndex((i) => (i - 1 + rooms.length) % rooms.length)
-        }
+        if (e.key === 'ArrowRight') setCurrentIndex(i => (i + 1) % rooms.length)
+        if (e.key === 'ArrowLeft') setCurrentIndex(i => (i - 1 + rooms.length) % rooms.length)
     }, 100)
 
     useEffect(() => {
@@ -81,22 +74,15 @@ export default function ViewerFeed() {
     }, [rooms])
 
     if (rooms.length === 0) {
-        return (
-            <p className="text-center mt-10 text-gray-500">
-                ⏳ Đang tải danh sách phòng livestream...
-            </p>
-        )
+        return <p className="text-center mt-10 text-gray-500">⏳ Đang tải danh sách phòng livestream...</p>
     }
 
     const currentRoom = rooms[currentIndex]
-
     return (
         <div className="w-screen h-screen bg-black flex flex-col items-center justify-center relative">
             <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-            <div className="absolute top-4 left-4 text-white text-xl font-bold">
-                🎥 {currentRoom.sellerName}
-            </div>
-            <div className="absolute bottom-4 text-center w-full text-white">
+            <div className="absolute top-4 left-4 text-white text-xl font-bold">🎥 {currentRoom.sellerName}</div>
+            <div className="absolute bottom-4 w-full text-center text-white">
                 <p>⬅️ Dùng phím trái/phải để lướt giữa các phòng livestream</p>
                 <p className="mt-1 text-sm text-gray-300">Đang xem: {currentRoom.room}</p>
             </div>

@@ -14,7 +14,6 @@ export default function WebcamAudioFilePage() {
     const roomRef = useRef<Room | null>(null)
     const jobId = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`)
     const uploadedKey = useRef<string | null>(null)
-    const destRef = useRef<MediaStreamAudioDestinationNode | null>(null)
 
     const handleStart = async () => {
         if (!mp3File) return alert('Vui lòng chọn file MP3 trước!')
@@ -28,13 +27,9 @@ export default function WebcamAudioFilePage() {
             method: 'POST',
             body: formData,
         })
-        if (!uploadRes.ok) {
-            return alert(`❌ Upload MP3 thất bại: ${uploadRes.status}`)
-        }
+        if (!uploadRes.ok) return alert(`❌ Upload MP3 thất bại: ${uploadRes.status}`)
         const uploadData = await uploadRes.json()
-        if (!uploadData.success || !uploadData.key) {
-            return alert('❌ Upload MP3 thất bại (không có key trả về)')
-        }
+        if (!uploadData.success || !uploadData.key) return alert('❌ Upload MP3 thất bại (không có key trả về)')
 
         const audioUrl = `https://pub-f7639404296d4552819a5bc64f436da7.r2.dev/${uploadData.key}`
         uploadedKey.current = uploadData.key
@@ -43,11 +38,10 @@ export default function WebcamAudioFilePage() {
         const roomName = 'room-' + jobId.current
         const identity = 'seller-' + jobId.current
         const tokenRes = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=publisher`)
-        if (!tokenRes.ok) {
-            return alert('❌ Không lấy được token LiveKit')
-        }
+        if (!tokenRes.ok) return alert('❌ Không lấy được token LiveKit')
         const { token } = await tokenRes.json()
 
+        // 🎯 Kết nối đúng theo tài liệu
         const room = new Room()
         roomRef.current = room
         await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token)
@@ -58,6 +52,7 @@ export default function WebcamAudioFilePage() {
         const localVideoTrack = new LocalVideoTrack(videoTrack)
         await room.localParticipant.publishTrack(localVideoTrack)
         videoRef.current!.srcObject = new MediaStream([videoTrack])
+        console.log('📷 Đã phát video webcam')
 
         const ctx = new AudioContext()
         const mp3Res = await fetch(audioUrl)
@@ -83,12 +78,12 @@ export default function WebcamAudioFilePage() {
         mp3Gain.connect(dest)
         micGain.connect(dest)
         mp3Source.start()
-        destRef.current = dest
 
         const audioTrack = dest.stream.getAudioTracks()[0]
         const localAudioTrack = new LocalAudioTrack(audioTrack)
         await room.localParticipant.publishTrack(localAudioTrack)
         audioRef.current!.srcObject = dest.stream
+        console.log('🎵 Đã phát âm thanh mix (mic + mp3)')
 
         setStreaming(true)
     }
@@ -112,13 +107,9 @@ export default function WebcamAudioFilePage() {
     return (
         <main className="p-6 max-w-xl mx-auto space-y-4">
             <h1 className="text-xl font-bold">🎥 Livestream webcam + file MP3</h1>
-            <input type="file" accept="audio/mpeg" onChange={(e) => setMp3File(e.target.files?.[0] || null)} disabled={streaming} />
-            <button onClick={handleStart} disabled={!mp3File || streaming} className="bg-blue-600 text-white px-4 py-2 rounded">
-                ▶️ Bắt đầu livestream
-            </button>
-            <button onClick={handleStop} disabled={!streaming} className="bg-red-600 text-white px-4 py-2 rounded">
-                ⏹️ Kết thúc livestream
-            </button>
+            <input type="file" accept="audio/mpeg" onChange={e => setMp3File(e.target.files?.[0] || null)} disabled={streaming} />
+            <button onClick={handleStart} disabled={!mp3File || streaming} className="bg-blue-600 text-white px-4 py-2 rounded">▶️ Bắt đầu livestream</button>
+            <button onClick={handleStop} disabled={!streaming} className="bg-red-600 text-white px-4 py-2 rounded">⏹️ Kết thúc livestream</button>
             <video ref={videoRef} autoPlay muted className="w-full rounded shadow" />
             <audio autoPlay ref={audioRef} style={{ display: 'none' }} />
         </main>
