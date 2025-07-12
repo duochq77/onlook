@@ -1,4 +1,5 @@
 import express from 'express'
+import cors from 'cors'
 import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import dotenv from 'dotenv'
 import path from 'path'
@@ -7,15 +8,18 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') })
 
 const app = express()
 const port = process.env.PORT || 8080
+
+// ✅ Cho phép mọi domain gọi API (có thể thay thế origin cụ thể)
+app.use(cors({ origin: true }))
 app.use(express.json())
 
-// 🔍 In log biến môi trường
+// 🔍 Log các biến môi trường để kiểm tra
 console.log('🌍 ENV R2_BUCKET_NAME:', process.env.R2_BUCKET_NAME)
 console.log('🌍 ENV R2_ACCOUNT_ID:', process.env.R2_ACCOUNT_ID)
 console.log('🌍 ENV R2_ACCESS_KEY_ID:', process.env.R2_ACCESS_KEY_ID ? '✅ Có' : '❌ Không có')
 console.log('🌍 ENV R2_SECRET_ACCESS_KEY:', process.env.R2_SECRET_ACCESS_KEY ? '✅ Có' : '❌ Không có')
 
-// ✅ Cấu hình Cloudflare R2
+// ✅ Cấu hình kết nối tới Cloudflare R2
 const s3 = new S3Client({
     region: 'auto',
     endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
@@ -27,6 +31,10 @@ const s3 = new S3Client({
 
 const BUCKET_NAME = process.env.R2_BUCKET_NAME!
 
+// 👇 Xử lý CORS cho preflight request
+app.options('/delete', cors({ origin: true }))
+
+// ✅ API xoá file .mp3 từ R2
 app.post('/delete', async (req, res) => {
     const { key } = req.body
     if (!key) return res.status(400).json({ error: 'Thiếu key để xoá' })
@@ -47,6 +55,7 @@ app.post('/delete', async (req, res) => {
     }
 })
 
+// ✅ Khởi động server
 app.listen(port, () => {
     console.log(`🚀 Delete Audio Worker running on port ${port}`)
 })
