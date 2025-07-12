@@ -30,12 +30,13 @@ export default function WebcamAudioFilePage() {
         }
 
         const uploadData = await uploadRes.json()
-        if (!uploadData.success || !uploadData.url) {
-            console.error('❌ Server không trả về URL hợp lệ:', uploadData)
-            return alert('❌ Upload MP3 thất bại (không có URL trả về)')
+        if (!uploadData.success || !uploadData.key) {
+            console.error('❌ Server không trả về key hợp lệ:', uploadData)
+            return alert('❌ Upload MP3 thất bại (không có key trả về)')
         }
 
-        const audioUrl = uploadData.url
+        // 👉 Tạo lại URL thủ công từ public R2 URL
+        const audioUrl = `https://pub-f7639404296d4552819a5bc64f436da7.r2.dev/${uploadData.key}`
         uploadedKey.current = uploadData.key
         console.log('✅ Đã upload xong. URL file MP3:', audioUrl)
 

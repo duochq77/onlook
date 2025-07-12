@@ -2,7 +2,7 @@
     "CORSRules": [
         {
             "AllowedOrigins": [
-                "https://onlook-qoj986fen-hoang-quang-djuocs-projects.vercel.app"
+                "https://onlook-lg44loasz-hoang-quang-djuocs-projects.vercel.app"
             ],
             "AllowedMethods": [
                 "GET",
