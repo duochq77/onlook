@@ -1,10 +1,6 @@
 'use client'
 import React, { useRef, useState } from 'react'
-import {
-    Room,
-    LocalVideoTrack,
-    LocalAudioTrack
-} from 'livekit-client'
+import { Room, LocalVideoTrack, LocalAudioTrack } from 'livekit-client'
 
 export default function WebcamAudioFilePage() {
     const videoRef = useRef<HTMLVideoElement>(null)
@@ -15,55 +11,40 @@ export default function WebcamAudioFilePage() {
     const jobId = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`)
     const uploadedKey = useRef<string | null>(null)
 
-    const handleStart = async () => {
+    async function handleStart() {
         if (!mp3File) return alert('Vui lòng chọn file MP3 trước!')
+        console.log('STEP 1: Upload file MP3...')
+        const fd = new FormData()
+        fd.append('file', mp3File)
+        fd.append('jobId', jobId.current)
+        const up = await fetch('https://upload-audio-worker-729288097042.asia-southeast1.run.app/upload', { method: 'POST', body: fd })
+        const ud = await up.json()
+        if (!ud.success || !ud.key) return alert('❌ Upload thất bại!')
+        uploadedKey.current = ud.key
+        const audioUrl = `https://pub-f7639404296d4552819a5bc64f436da7.r2.dev/${ud.key}`
+        console.log('Uploaded MP3, URL:', audioUrl)
 
-        console.log('📤 Đang upload file MP3:', mp3File.name)
-        const formData = new FormData()
-        formData.append('file', mp3File)
-        formData.append('jobId', jobId.current)
-
-        const uploadRes = await fetch('https://upload-audio-worker-729288097042.asia-southeast1.run.app/upload', {
-            method: 'POST',
-            body: formData,
-        })
-        if (!uploadRes.ok) return alert(`❌ Upload MP3 thất bại: ${uploadRes.status}`)
-        const uploadData = await uploadRes.json()
-        if (!uploadData.success || !uploadData.key) return alert('❌ Upload MP3 thất bại (không có key trả về)')
-
-        const audioUrl = `https://pub-f7639404296d4552819a5bc64f436da7.r2.dev/${uploadData.key}`
-        uploadedKey.current = uploadData.key
-        console.log('✅ Đã upload xong. URL file MP3:', audioUrl)
-
+        console.log('STEP 2: Request token & connect LiveKit...')
         const roomName = 'room-' + jobId.current
-        const identity = 'seller-' + jobId.current
-        const tokenRes = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=publisher`)
-        if (!tokenRes.ok) return alert('❌ Không lấy được token LiveKit')
-        const { token } = await tokenRes.json()
-
+        const id = 'seller-' + jobId.current
+        const tkRes = await fetch(`/api/token?room=${roomName}&identity=${id}&role=publisher`)
+        const { token } = await tkRes.json()
         const room = new Room()
         roomRef.current = room
         await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token)
-        console.log('🔌 Đã kết nối LiveKit')
+        console.log('Connected to LiveKit')
 
-        const camStream = await navigator.mediaDevices.getUserMedia({ video: true })
-        const videoTrack = camStream.getVideoTracks()[0]
-        const localVideoTrack = new LocalVideoTrack(videoTrack)
-        await room.localParticipant.publishTrack(localVideoTrack)
-        videoRef.current!.srcObject = new MediaStream([videoTrack])
-        console.log('📷 Đã phát video webcam')
+        console.log('STEP 3: Publish webcam video')
+        const cam = await navigator.mediaDevices.getUserMedia({ video: true })
+        const vt = cam.getVideoTracks()[0]
+        await room.localParticipant.publishTrack(new LocalVideoTrack(vt))
+        videoRef.current!.srcObject = new MediaStream([vt])
 
+        console.log('STEP 4: Mix MP3 + mic')
         const ctx = new AudioContext()
-        if (ctx.state === 'suspended') {
-            await ctx.resume()
-        }
-
-        const mp3Res = await fetch(audioUrl)
-        if (!mp3Res.ok) return alert(`❌ CORS hoặc URL lỗi: ${mp3Res.status}`)
-        const mp3Buffer = await mp3Res.arrayBuffer()
-        if (mp3Buffer.byteLength === 0) return alert('❌ File MP3 bị rỗng hoặc bị chặn.')
-
-        const decoded = await ctx.decodeAudioData(mp3Buffer)
+        if (ctx.state === 'suspended') await ctx.resume()
+        const mp3Buf = await fetch(audioUrl).then(r => r.arrayBuffer())
+        const decoded = await ctx.decodeAudioData(mp3Buf)
         const mp3Source = ctx.createBufferSource()
         mp3Source.buffer = decoded
         mp3Source.loop = true
@@ -72,26 +53,25 @@ export default function WebcamAudioFilePage() {
         mp3Source.connect(mp3Gain)
 
         const micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        const micSource = ctx.createMediaStreamSource(micStream)
+        const micSrc = ctx.createMediaStreamSource(micStream)
         const micGain = ctx.createGain()
         micGain.gain.value = 1 / 3
-        micSource.connect(micGain)
+        micSrc.connect(micGain)
 
         const dest = ctx.createMediaStreamDestination()
         mp3Gain.connect(dest)
         micGain.connect(dest)
         mp3Source.start()
 
+        console.log('STEP 5: Publish mixed audio')
         const audioTrack = dest.stream.getAudioTracks()[0]
-        const localAudioTrack = new LocalAudioTrack(audioTrack)
-        await room.localParticipant.publishTrack(localAudioTrack)
+        await room.localParticipant.publishTrack(new LocalAudioTrack(audioTrack))
         audioRef.current!.srcObject = dest.stream
-        console.log('🎵 Đã phát âm thanh mix (mic + mp3)')
-
         setStreaming(true)
     }
 
-    const handleStop = async () => {
+    async function handleStop() {
+        console.log('STEP 6: Stop stream & clean up')
         if (roomRef.current) {
             await roomRef.current.disconnect()
             roomRef.current = null
@@ -108,13 +88,13 @@ export default function WebcamAudioFilePage() {
     }
 
     return (
-        <main className="p-6 max-w-xl mx-auto space-y-4">
-            <h1 className="text-xl font-bold">🎥 Livestream webcam + file MP3</h1>
-            <input type="file" accept="audio/mpeg" onChange={e => setMp3File(e.target.files?.[0] || null)} disabled={streaming} />
-            <button onClick={handleStart} disabled={!mp3File || streaming} className="bg-blue-600 text-white px-4 py-2 rounded">▶️ Bắt đầu livestream</button>
-            <button onClick={handleStop} disabled={!streaming} className="bg-red-600 text-white px-4 py-2 rounded">⏹️ Kết thúc livestream</button>
-            <video ref={videoRef} autoPlay muted className="w-full rounded shadow" />
-            <audio autoPlay ref={audioRef} style={{ display: 'none' }} />
+        <main className="p-6 space-y-4">
+            <h1>🎥 Livestream webcam + MP3</h1>
+            <input type="file" accept="audio/mpeg" disabled={streaming} onChange={e => setMp3File(e.target.files?.[0] || null)} />
+            <button onClick={handleStart} disabled={!mp3File || streaming}>▶️ Bắt đầu livestream</button>
+            <button onClick={handleStop} disabled={!streaming}>⏹️ Kết thúc livestream</button>
+            <video ref={videoRef} autoPlay muted className="w-full" />
+            <audio ref={audioRef} autoPlay style={{ display: 'none' }} />
         </main>
     )
 }

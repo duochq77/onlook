@@ -1,5 +1,4 @@
 'use client'
-
 import { useEffect, useState, useRef } from 'react'
 import { Room } from 'livekit-client'
 import debounce from 'lodash/debounce'
@@ -14,96 +13,68 @@ type RoomInfo = {
 
 export default function ViewerFeed() {
     const [rooms, setRooms] = useState<RoomInfo[]>([])
-    const [currentIndex, setCurrentIndex] = useState(0)
+    const [curIdx, setCurIdx] = useState(0)
     const [started, setStarted] = useState(false)
     const videoRef = useRef<HTMLVideoElement>(null)
     const roomRef = useRef<Room | null>(null)
 
     useEffect(() => {
-        fetch('/api/active-rooms')
-            .then(res => res.json())
-            .then(data => setRooms(data.rooms || []))
+        fetch('/api/active-rooms').then(r => r.json()).then(d => setRooms(d.rooms || []))
     }, [])
 
     useEffect(() => {
         if (!started || rooms.length === 0) return
+            ; (async () => {
+                const roomName = rooms[curIdx].room
+                const identity = `viewer-${Date.now()}`
+                console.log('Viewer requesting token for', roomName)
+                const res = await fetch(`/api/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}&role=subscriber`)
+                const { token } = await res.json()
 
-        const roomName = rooms[currentIndex].room
-        const identity = `viewer-${Math.floor(Math.random() * 10000)}`
-
-        const fetchTokenAndJoin = async () => {
-            const res = await fetch(`/api/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`)
-            if (!res.ok) {
-                console.error('❌ Lỗi lấy token:', await res.text())
-                return
-            }
-            const { token } = await res.json()
-
-            if (roomRef.current) {
-                await roomRef.current.disconnect()
-                roomRef.current = null
-            }
-
-            const room = new Room()
-            roomRef.current = room
-
-            room.on('trackSubscribed', (track) => {
-                if (track.kind === 'video' && videoRef.current) {
-                    track.attach(videoRef.current)
+                if (roomRef.current) {
+                    await roomRef.current.disconnect()
+                    roomRef.current = null
+                    videoRef.current!.srcObject = null
                 }
-                if (track.kind === 'audio') {
-                    const attached = track.attach()
-                    const ctx = new AudioContext()
-                    if (ctx.state === 'suspended') {
-                        ctx.resume().then(() => console.log('✅ Đã resume AudioContext'))
+
+                const room = new Room()
+                roomRef.current = room
+
+                room.on('trackSubscribed', (track) => {
+                    if (track.kind === 'video' && videoRef.current) track.attach(videoRef.current)
+                    if (track.kind === 'audio') {
+                        const el = track.attach()
+                        const ctx = new AudioContext()
+                        if (ctx.state === 'suspended') ctx.resume()
+                        el.play().catch(console.warn)
                     }
-                    attached && attached.play?.().catch(console.warn)
-                }
-            })
+                })
 
-            await room.connect(LIVEKIT_URL, token)
-            console.log('🔌 Viewer đã kết nối phòng:', roomName)
-        }
-
-        fetchTokenAndJoin()
-    }, [started, currentIndex, rooms])
-
-    const handleKey = debounce((e: KeyboardEvent) => {
-        if (e.key === 'ArrowRight') setCurrentIndex(i => (i + 1) % rooms.length)
-        if (e.key === 'ArrowLeft') setCurrentIndex(i => (i - 1 + rooms.length) % rooms.length)
-    }, 100)
+                await room.connect(LIVEKIT_URL, token)
+                console.log('Viewer connected to', roomName)
+            })()
+    }, [started, curIdx, rooms])
 
     useEffect(() => {
         if (!started) return
-        window.addEventListener('keydown', handleKey)
-        return () => window.removeEventListener('keydown', handleKey)
+        const onKey = debounce((e: KeyboardEvent) => {
+            if (e.key === 'ArrowRight') setCurIdx(i => (i + 1) % rooms.length)
+            if (e.key === 'ArrowLeft') setCurIdx(i => (i - 1 + rooms.length) % rooms.length)
+        }, 100)
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
     }, [rooms, started])
 
-    const handleStart = () => {
-        setStarted(true)
-    }
+    if (rooms.length === 0) return <p>⏳ Loading active rooms...</p>
 
-    if (rooms.length === 0) {
-        return <p className="text-center mt-10 text-gray-500">⏳ Đang tải danh sách phòng livestream...</p>
-    }
-
-    const currentRoom = rooms[currentIndex]
+    const curr = rooms[curIdx]
     return (
-        <div className="w-screen h-screen bg-black flex flex-col items-center justify-center relative">
+        <div className="w-full h-full bg-black">
             {!started && (
-                <button
-                    onClick={handleStart}
-                    className="absolute z-50 px-6 py-3 bg-blue-600 text-white rounded shadow-lg"
-                >
-                    ▶️ Bắt đầu xem livestream
-                </button>
+                <button onClick={() => setStarted(true)}>▶️ Bắt đầu xem livestream</button>
             )}
             <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-            <div className="absolute top-4 left-4 text-white text-xl font-bold">🎥 {currentRoom.sellerName}</div>
-            <div className="absolute bottom-4 w-full text-center text-white">
-                <p>⬅️ Dùng phím trái/phải để lướt giữa các phòng livestream</p>
-                <p className="mt-1 text-sm text-gray-300">Đang xem: {currentRoom.room}</p>
-            </div>
+            <div className="overlay">{curr.sellerName}</div>
         </div>
     )
 }
