@@ -1,16 +1,11 @@
-// pages/viewer/index.tsx
 'use client'
 import { useEffect, useState, useRef } from 'react'
-import { Room } from 'livekit-client'
+import { Room, RoomEvent } from 'livekit-client'
 import debounce from 'lodash/debounce'
 
 const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL!
 
-type RoomInfo = {
-    room: string
-    sellerName: string
-    thumbnail: string
-}
+type RoomInfo = { room: string, sellerName: string, thumbnail: string }
 
 export default function ViewerFeed() {
     const [rooms, setRooms] = useState<RoomInfo[]>([])
@@ -19,22 +14,22 @@ export default function ViewerFeed() {
     const videoRef = useRef<HTMLVideoElement>(null)
     const roomRef = useRef<Room | null>(null)
 
-    // Lấy danh sách phòng active
+    // 1️⃣ Lấy danh sách phòng active
     useEffect(() => {
         fetch('/api/active-rooms')
-            .then(async res => {
-                if (!res.ok) {
-                    const txt = await res.text()
-                    console.error('❌ active-rooms API lỗi:', res.status, txt)
+            .then(async r => {
+                if (!r.ok) {
+                    const txt = await r.text()
+                    console.error('❌ active-rooms API lỗi:', r.status, txt)
                     return
                 }
-                const d = await res.json()
+                const d = await r.json()
                 setRooms(d.rooms || [])
             })
             .catch(err => console.error('❌ Request /active-rooms thất bại:', err))
     }, [])
 
-    // Khi viewer bắt đầu hoặc chuyển phòng
+    // 2️⃣ Kết nối khi start hoặc đổi phòng
     useEffect(() => {
         if (!started || rooms.length === 0) return
 
@@ -53,26 +48,30 @@ export default function ViewerFeed() {
                 }
                 const { token } = await res.json()
 
+                // Ngắt kết nối phòng trước nếu có
                 if (roomRef.current) {
+                    console.log('🔌 Disconnect previous room')
+                    roomRef.current.off(RoomEvent.TrackSubscribed)
                     await roomRef.current.disconnect()
                     roomRef.current = null
                     if (videoRef.current) videoRef.current.srcObject = null
                 }
 
-                const room = new Room()
+                const room = new Room({ autoSubscribe: true })
                 roomRef.current = room
 
-                room.on('trackSubscribed', track => {
+                room.on(RoomEvent.TrackSubscribed, track => {
                     if (track.kind === 'video' && videoRef.current) {
+                        console.log('📹 Video subscribed')
                         track.attach(videoRef.current)
                     }
                     if (track.kind === 'audio') {
+                        console.log('🔊 Audio subscribed')
                         const el = track.attach()
-                        const ctx = new AudioContext()
-                        if (ctx.state === 'suspended') {
-                            ctx.resume().then(() => console.log('✅ AudioContext resumed'))
-                        }
-                        el.play().catch(console.warn)
+                        el.play().catch(() => {
+                            console.warn('Autoplay audio failed – yêu cầu user gesture')
+                            room.startAudio()
+                        })
                     }
                 })
 
@@ -81,7 +80,7 @@ export default function ViewerFeed() {
             })()
     }, [started, curIdx, rooms])
 
-    // Key navigation
+    // 3️⃣ Điều hướng trái phải
     useEffect(() => {
         if (!started) return
         const handler = debounce((e: KeyboardEvent) => {
@@ -92,11 +91,9 @@ export default function ViewerFeed() {
         return () => window.removeEventListener('keydown', handler)
     }, [rooms, started])
 
-    if (rooms.length === 0) {
-        return <p>⏳ Đang tải phòng livestream...</p>
-    }
-
+    if (rooms.length === 0) return <p>⏳ Đang tải phòng livestream...</p>
     const curr = rooms[curIdx]
+
     return (
         <div className="w-full h-full bg-black relative">
             {!started && (
