@@ -1,3 +1,4 @@
+// pages/viewer/index.tsx
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import { Room } from 'livekit-client'
@@ -18,27 +19,36 @@ export default function ViewerFeed() {
     const videoRef = useRef<HTMLVideoElement>(null)
     const roomRef = useRef<Room | null>(null)
 
+    // Lấy danh sách phòng active
     useEffect(() => {
         fetch('/api/active-rooms')
-            .then(res => {
-                if (!res.ok) throw new Error(`Status ${res.status}`)
-                return res.json()
+            .then(async res => {
+                if (!res.ok) {
+                    const txt = await res.text()
+                    console.error('❌ active-rooms API lỗi:', res.status, txt)
+                    return
+                }
+                const d = await res.json()
+                setRooms(d.rooms || [])
             })
-            .then(d => setRooms(d.rooms || []))
-            .catch(err => console.error('❌ fetch active-rooms failed', err))
+            .catch(err => console.error('❌ Request /active-rooms thất bại:', err))
     }, [])
 
+    // Khi viewer bắt đầu hoặc chuyển phòng
     useEffect(() => {
         if (!started || rooms.length === 0) return
+
             ; (async () => {
                 const roomName = rooms[curIdx].room
                 const identity = `viewer-${Date.now()}`
-                console.log('Request token for', roomName)
+                console.log('▶️ Viewer request token for', roomName)
+
                 const res = await fetch(
                     `/api/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}&role=subscriber`
                 )
                 if (!res.ok) {
-                    console.error('❌ token fetch failed', await res.text())
+                    const txt = await res.text()
+                    console.error('❌ Lỗi token:', res.status, txt)
                     return
                 }
                 const { token } = await res.json()
@@ -46,7 +56,7 @@ export default function ViewerFeed() {
                 if (roomRef.current) {
                     await roomRef.current.disconnect()
                     roomRef.current = null
-                    videoRef.current!.srcObject = null
+                    if (videoRef.current) videoRef.current.srcObject = null
                 }
 
                 const room = new Room()
@@ -59,7 +69,9 @@ export default function ViewerFeed() {
                     if (track.kind === 'audio') {
                         const el = track.attach()
                         const ctx = new AudioContext()
-                        if (ctx.state === 'suspended') ctx.resume()
+                        if (ctx.state === 'suspended') {
+                            ctx.resume().then(() => console.log('✅ AudioContext resumed'))
+                        }
                         el.play().catch(console.warn)
                     }
                 })
@@ -69,6 +81,7 @@ export default function ViewerFeed() {
             })()
     }, [started, curIdx, rooms])
 
+    // Key navigation
     useEffect(() => {
         if (!started) return
         const handler = debounce((e: KeyboardEvent) => {
@@ -79,13 +92,18 @@ export default function ViewerFeed() {
         return () => window.removeEventListener('keydown', handler)
     }, [rooms, started])
 
-    if (rooms.length === 0) return <p>⏳ Loading rooms…</p>
+    if (rooms.length === 0) {
+        return <p>⏳ Đang tải phòng livestream...</p>
+    }
 
     const curr = rooms[curIdx]
     return (
         <div className="w-full h-full bg-black relative">
             {!started && (
-                <button onClick={() => setStarted(true)} className="absolute z-20 px-4 py-2 bg-blue-600 text-white rounded">
+                <button
+                    onClick={() => setStarted(true)}
+                    className="absolute z-20 px-4 py-2 bg-blue-600 text-white rounded"
+                >
                     ▶️ Bắt đầu xem livestream
                 </button>
             )}

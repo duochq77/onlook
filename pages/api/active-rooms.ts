@@ -1,19 +1,17 @@
+// pages/api/active-rooms.ts
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { RoomServiceClient } from 'livekit-server-sdk'
 
-const LIVEKIT_WS = process.env.LIVEKIT_URL
-const API_KEY = process.env.LIVEKIT_API_KEY
-const API_SECRET = process.env.LIVEKIT_API_SECRET
+// Đọc biến môi trường để cấu hình LiveKit
+const WS_URL = process.env.LIVEKIT_URL!
+const API_KEY = process.env.LIVEKIT_API_KEY!
+const API_SECRET = process.env.LIVEKIT_API_SECRET!
 
-if (!LIVEKIT_WS?.startsWith('ws')) {
-    console.error('❌ LIVEKIT_URL is missing or invalid:', LIVEKIT_WS)
-}
+console.log('📡 LIVEKIT_URL=', WS_URL)
+console.log('🔑 LIVEKIT_API_KEY=', API_KEY ? '✔' : '❌ MISSING')
+console.log('🔐 LIVEKIT_API_SECRET=', API_SECRET ? '✔' : '❌ MISSING')
 
-const svc = new RoomServiceClient(
-    LIVEKIT_WS!,
-    API_KEY!,
-    API_SECRET!
-)
+const svc = new RoomServiceClient(WS_URL, API_KEY, API_SECRET)
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'GET') {
@@ -21,8 +19,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-        const list = await svc.listRooms()
-        const rooms = list.rooms.map(r => ({
+        const roomsRaw = await svc.listRooms()
+        // roomsRaw là mảng LiveKit Room 객체
+        const rooms = roomsRaw.map(r => ({
             room: r.name,
             sellerName: r.metadata || r.name,
             thumbnail: r.metadata?.thumbnail || ''
@@ -33,7 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.error('❌ /api/active-rooms error:', err)
         return res.status(500).json({
             error: 'Cannot list rooms',
-            detail: err.message || String(err)
+            detail: err.message
         })
     }
 }
