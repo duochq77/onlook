@@ -1,3 +1,4 @@
+// pages/viewer/index.tsx
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import { Room } from 'livekit-client'
@@ -5,7 +6,11 @@ import debounce from 'lodash/debounce'
 
 const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL!
 
-type RoomInfo = { room: string, sellerName: string, thumbnail: string }
+type RoomInfo = {
+    room: string
+    sellerName: string
+    thumbnail: string
+}
 
 export default function ViewerFeed() {
     const [rooms, setRooms] = useState<RoomInfo[]>([])
@@ -13,67 +18,57 @@ export default function ViewerFeed() {
     const [started, setStarted] = useState(false)
     const videoRef = useRef<HTMLVideoElement>(null)
     const roomRef = useRef<Room | null>(null)
-    const audioCtx = useRef<AudioContext | null>(null)
 
-    // Load danh sách phòng
+    // Lấy danh sách phòng active
     useEffect(() => {
         fetch('/api/active-rooms')
-            .then(r => {
-                if (!r.ok) throw new Error(`Status ${r.status}`)
-                return r.json()
+            .then(async res => {
+                if (!res.ok) {
+                    const txt = await res.text()
+                    console.error('❌ active-rooms API lỗi:', res.status, txt)
+                    return
+                }
+                const d = await res.json()
+                setRooms(d.rooms || [])
             })
-            .then(d => setRooms(d.rooms || []))
-            .catch(e => console.error('❌ fetch active-rooms failed', e))
+            .catch(err => console.error('❌ Request /active-rooms thất bại:', err))
     }, [])
 
-    // Khi bắt đầu xem hoặc chuyển phòng
+    // Khi viewer bắt đầu hoặc chuyển phòng
     useEffect(() => {
         if (!started || rooms.length === 0) return
 
             ; (async () => {
-                console.log('🔄 connecting viewer to room', rooms[curIdx].room)
                 const roomName = rooms[curIdx].room
                 const identity = `viewer-${Date.now()}`
+                console.log('▶️ Viewer request token for', roomName)
 
-                // Disconnect nếu đang kết nối phòng trước
-                if (roomRef.current) {
-                    console.log('🔌 Disconnecting old room...')
-                    roomRef.current.off('trackSubscribed')
-                    await roomRef.current.disconnect()
-                    roomRef.current = null
-                }
-                if (videoRef.current) {
-                    console.log('🗑 Clear old video srcObject')
-                    videoRef.current.srcObject = null
-                }
-
-                // Tạo AudioContext nếu chưa tạo
-                if (!audioCtx.current) {
-                    audioCtx.current = new AudioContext()
-                    console.log('🎧 AudioContext created')
-                }
-
-                // Lấy token và connect
-                const res = await fetch(`/api/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}&role=subscriber`)
+                const res = await fetch(
+                    `/api/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}&role=subscriber`
+                )
                 if (!res.ok) {
-                    console.error('❌ Token request failed', await res.text())
+                    const txt = await res.text()
+                    console.error('❌ Lỗi token:', res.status, txt)
                     return
                 }
                 const { token } = await res.json()
 
+                if (roomRef.current) {
+                    await roomRef.current.disconnect()
+                    roomRef.current = null
+                    if (videoRef.current) videoRef.current.srcObject = null
+                }
+
                 const room = new Room()
                 roomRef.current = room
 
-                // Subscribed event
                 room.on('trackSubscribed', track => {
                     if (track.kind === 'video' && videoRef.current) {
-                        console.log('📹 Video track subscribed')
                         track.attach(videoRef.current)
                     }
                     if (track.kind === 'audio') {
-                        console.log('🔊 Audio track subscribed')
                         const el = track.attach()
-                        const ctx = audioCtx.current!
+                        const ctx = new AudioContext()
                         if (ctx.state === 'suspended') {
                             ctx.resume().then(() => console.log('✅ AudioContext resumed'))
                         }
@@ -86,27 +81,34 @@ export default function ViewerFeed() {
             })()
     }, [started, curIdx, rooms])
 
-    // Handle phím trái/phải
+    // Key navigation
     useEffect(() => {
         if (!started) return
-        const onKey = debounce((e: KeyboardEvent) => {
+        const handler = debounce((e: KeyboardEvent) => {
             if (e.key === 'ArrowRight') setCurIdx(i => (i + 1) % rooms.length)
             if (e.key === 'ArrowLeft') setCurIdx(i => (i - 1 + rooms.length) % rooms.length)
         }, 100)
-        window.addEventListener('keydown', onKey)
-        return () => window.removeEventListener('keydown', onKey)
+        window.addEventListener('keydown', handler)
+        return () => window.removeEventListener('keydown', handler)
     }, [rooms, started])
 
-    if (rooms.length === 0) return <p>⏳ Loading active rooms...</p>
-    const curr = rooms[curIdx]
+    if (rooms.length === 0) {
+        return <p>⏳ Đang tải phòng livestream...</p>
+    }
 
+    const curr = rooms[curIdx]
     return (
-        <div className="w-full h-full bg-black">
+        <div className="w-full h-full bg-black relative">
             {!started && (
-                <button onClick={() => setStarted(true)}>▶️ Bắt đầu xem livestream</button>
+                <button
+                    onClick={() => setStarted(true)}
+                    className="absolute z-20 px-4 py-2 bg-blue-600 text-white rounded"
+                >
+                    ▶️ Bắt đầu xem livestream
+                </button>
             )}
             <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-            <div className="overlay">{curr.sellerName}</div>
+            <div className="absolute top-4 left-4 text-white text-xl">{curr.sellerName}</div>
         </div>
     )
 }
