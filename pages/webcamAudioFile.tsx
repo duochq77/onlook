@@ -1,100 +1,129 @@
+// file: ViewerFeed.tsx (thay cho pages/viewer/index.tsx)
 'use client'
-import React, { useRef, useState } from 'react'
-import { Room, LocalVideoTrack, LocalAudioTrack } from 'livekit-client'
 
-export default function WebcamAudioFilePage() {
+import { useEffect, useState, useRef } from 'react'
+import { Room } from 'livekit-client'
+import debounce from 'lodash/debounce'
+
+const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL!
+
+type RoomInfo = { room: string, sellerName: string, thumbnail: string }
+
+export default function ViewerFeed() {
+    const [rooms, setRooms] = useState<RoomInfo[]>([])
+    const [curIdx, setCurIdx] = useState(0)
+    const [started, setStarted] = useState(false)
     const videoRef = useRef<HTMLVideoElement>(null)
-    const audioRef = useRef<HTMLAudioElement>(null)
-    const [mp3File, setMp3File] = useState<File | null>(null)
-    const [streaming, setStreaming] = useState(false)
     const roomRef = useRef<Room | null>(null)
-    const jobId = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`)
-    const uploadedKey = useRef<string | null>(null)
+    const audioCtx = useRef<AudioContext | null>(null)
 
-    async function handleStart() {
-        if (!mp3File) return alert('Vui lòng chọn file MP3 trước!')
-        console.log('STEP 1: Upload file MP3...')
-        const fd = new FormData()
-        fd.append('file', mp3File)
-        fd.append('jobId', jobId.current)
-        const up = await fetch('https://upload-audio-worker-729288097042.asia-southeast1.run.app/upload', { method: 'POST', body: fd })
-        const ud = await up.json()
-        if (!ud.success || !ud.key) return alert('❌ Upload thất bại!')
-        uploadedKey.current = ud.key
-        const audioUrl = `https://pub-f7639404296d4552819a5bc64f436da7.r2.dev/${ud.key}`
-        console.log('Uploaded MP3, URL:', audioUrl)
-
-        console.log('STEP 2: Request token & connect LiveKit...')
-        const roomName = 'room-' + jobId.current
-        const id = 'seller-' + jobId.current
-        const tkRes = await fetch(`/api/token?room=${roomName}&identity=${id}&role=publisher`)
-        const { token } = await tkRes.json()
-        const room = new Room()
-        roomRef.current = room
-        await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token)
-        console.log('Connected to LiveKit')
-
-        console.log('STEP 3: Publish webcam video')
-        const cam = await navigator.mediaDevices.getUserMedia({ video: true })
-        const vt = cam.getVideoTracks()[0]
-        await room.localParticipant.publishTrack(new LocalVideoTrack(vt))
-        videoRef.current!.srcObject = new MediaStream([vt])
-
-        console.log('STEP 4: Mix MP3 + mic')
-        const ctx = new AudioContext()
-        if (ctx.state === 'suspended') await ctx.resume()
-        const mp3Buf = await fetch(audioUrl).then(r => r.arrayBuffer())
-        const decoded = await ctx.decodeAudioData(mp3Buf)
-        const mp3Source = ctx.createBufferSource()
-        mp3Source.buffer = decoded
-        mp3Source.loop = true
-        const mp3Gain = ctx.createGain()
-        mp3Gain.gain.value = 1
-        mp3Source.connect(mp3Gain)
-
-        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        const micSrc = ctx.createMediaStreamSource(micStream)
-        const micGain = ctx.createGain()
-        micGain.gain.value = 1 / 3
-        micSrc.connect(micGain)
-
-        const dest = ctx.createMediaStreamDestination()
-        mp3Gain.connect(dest)
-        micGain.connect(dest)
-        mp3Source.start()
-
-        console.log('STEP 5: Publish mixed audio')
-        const audioTrack = dest.stream.getAudioTracks()[0]
-        await room.localParticipant.publishTrack(new LocalAudioTrack(audioTrack))
-        audioRef.current!.srcObject = dest.stream
-        setStreaming(true)
-    }
-
-    async function handleStop() {
-        console.log('STEP 6: Stop stream & clean up')
-        if (roomRef.current) {
-            await roomRef.current.disconnect()
-            roomRef.current = null
-        }
-        if (uploadedKey.current) {
-            await fetch('https://delete-audio-worker-729288097042.asia-southeast1.run.app/delete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key: uploadedKey.current }),
+    // Load danh sách phòng livestream
+    useEffect(() => {
+        fetch('/api/active-rooms')
+            .then(r => {
+                if (!r.ok) throw new Error(`Status ${r.status}`)
+                return r.json()
             })
-            uploadedKey.current = null
-        }
-        setStreaming(false)
-    }
+            .then(d => {
+                setRooms(d.rooms || [])
+                console.log('✅ Active rooms loaded:', d.rooms)
+            })
+            .catch(e => console.error('❌ fetch active-rooms failed', e))
+    }, [])
+
+    // Kết nối/view khi bắt đầu hoặc chuyển phòng
+    useEffect(() => {
+        if (!started || rooms.length === 0) return
+
+            ; (async () => {
+                console.log('🔄 Connecting viewer to room', rooms[curIdx].room)
+                const roomName = rooms[curIdx].room
+                const identity = `viewer-${Date.now()}`
+
+                // Cleanup trước khi connect mới
+                if (roomRef.current) {
+                    console.log('🔌 Disconnecting old room...')
+                    roomRef.current.off('trackSubscribed')
+                    await roomRef.current.disconnect()
+                    roomRef.current = null
+                }
+                if (videoRef.current) {
+                    console.log('🗑 Clearing old video srcObject')
+                    videoRef.current.srcObject = null
+                }
+
+                // Khởi tạo AudioContext nếu chưa có
+                if (!audioCtx.current) {
+                    audioCtx.current = new AudioContext()
+                    console.log('🎧 AudioContext created')
+                }
+
+                // Gọi lấy token
+                const res = await fetch(`/api/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}&role=subscriber`)
+                if (!res.ok) {
+                    console.error('❌ Token request failed', await res.text())
+                    return
+                }
+                const { token } = await res.json()
+
+                const room = new Room()
+                roomRef.current = room
+
+                room.on('trackSubscribed', track => {
+                    if (track.kind === 'video' && videoRef.current) {
+                        console.log('📹 Video track subscribed')
+                        track.attach(videoRef.current)
+                    }
+                    if (track.kind === 'audio') {
+                        console.log('🔊 Audio track subscribed')
+                        const el = track.attach()
+                        const ctx = audioCtx.current!
+                        if (ctx.state === 'suspended') {
+                            ctx.resume().then(() => console.log('✅ AudioContext resumed'))
+                        }
+                        el.play().catch(console.warn)
+                    }
+                })
+
+                await room.connect(LIVEKIT_URL, token)
+                console.log('✅ Viewer connected to', roomName)
+            })()
+    }, [started, curIdx, rooms])
+
+    // Điều hướng qua trái phải
+    useEffect(() => {
+        if (!started) return
+        const onKey = debounce((e: KeyboardEvent) => {
+            if (e.key === 'ArrowRight') setCurIdx(i => (i + 1) % rooms.length)
+            if (e.key === 'ArrowLeft') setCurIdx(i => (i - 1 + rooms.length) % rooms.length)
+        }, 100)
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+    }, [rooms, started])
+
+    if (rooms.length === 0) return <p>⏳ Loading active rooms...</p>
+
+    const curr = rooms[curIdx]
 
     return (
-        <main className="p-6 space-y-4">
-            <h1>🎥 Livestream webcam + MP3</h1>
-            <input type="file" accept="audio/mpeg" disabled={streaming} onChange={e => setMp3File(e.target.files?.[0] || null)} />
-            <button onClick={handleStart} disabled={!mp3File || streaming}>▶️ Bắt đầu livestream</button>
-            <button onClick={handleStop} disabled={!streaming}>⏹️ Kết thúc livestream</button>
-            <video ref={videoRef} autoPlay muted className="w-full" />
-            <audio ref={audioRef} autoPlay style={{ display: 'none' }} />
-        </main>
+        <div className="w-full h-full bg-black relative">
+            {!started && (
+                <button
+                    onClick={() => setStarted(true)}
+                    className="absolute z-50 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-blue-600 text-white px-6 py-3 rounded"
+                >
+                    ▶️ Bắt đầu xem livestream
+                </button>
+            )}
+            <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                className="w-full h-full object-cover bg-black"
+            />
+            <div className="absolute top-4 left-4 text-white text-xl font-bold">
+                🎥 {curr.sellerName}
+            </div>
+        </div>
     )
 }
