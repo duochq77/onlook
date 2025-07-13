@@ -1,35 +1,36 @@
-// pages/api/active-rooms.ts
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { RoomServiceClient } from 'livekit-server-sdk'
 
-// Khởi tạo RoomServiceClient để quản lý và liệt kê phòng
+const LIVEKIT_WS = process.env.LIVEKIT_URL
+const API_KEY = process.env.LIVEKIT_API_KEY
+const API_SECRET = process.env.LIVEKIT_API_SECRET
+
+if (!LIVEKIT_WS?.startsWith('ws')) {
+    console.error('❌ LIVEKIT_URL is missing or invalid:', LIVEKIT_WS)
+}
+
 const svc = new RoomServiceClient(
-    process.env.LIVEKIT_URL!,
-    process.env.LIVEKIT_API_KEY!,
-    process.env.LIVEKIT_API_SECRET!
+    LIVEKIT_WS!,
+    API_KEY!,
+    API_SECRET!
 )
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-    // Chỉ hỗ trợ GET
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method Not Allowed' })
     }
 
     try {
-        // Lấy danh sách phòng đang tồn tại
         const list = await svc.listRooms()
-        // Chuyển đổi format để client dễ sử dụng
         const rooms = list.rooms.map(r => ({
             room: r.name,
             sellerName: r.metadata || r.name,
-            thumbnail: '' // có thể bổ sung thumbnail nếu metadata có
+            thumbnail: r.metadata?.thumbnail || ''
         }))
-
         console.log('✅ Active rooms:', rooms.map(r => r.room))
         return res.status(200).json({ rooms })
     } catch (err: any) {
         console.error('❌ /api/active-rooms error:', err)
-        // Trả JSON rõ ràng, không trả HTML
         return res.status(500).json({
             error: 'Cannot list rooms',
             detail: err.message || String(err)

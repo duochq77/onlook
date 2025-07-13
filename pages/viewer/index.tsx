@@ -19,7 +19,13 @@ export default function ViewerFeed() {
     const roomRef = useRef<Room | null>(null)
 
     useEffect(() => {
-        fetch('/api/active-rooms').then(r => r.json()).then(d => setRooms(d.rooms || []))
+        fetch('/api/active-rooms')
+            .then(res => {
+                if (!res.ok) throw new Error(`Status ${res.status}`)
+                return res.json()
+            })
+            .then(d => setRooms(d.rooms || []))
+            .catch(err => console.error('❌ fetch active-rooms failed', err))
     }, [])
 
     useEffect(() => {
@@ -27,8 +33,14 @@ export default function ViewerFeed() {
             ; (async () => {
                 const roomName = rooms[curIdx].room
                 const identity = `viewer-${Date.now()}`
-                console.log('Viewer requesting token for', roomName)
-                const res = await fetch(`/api/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}&role=subscriber`)
+                console.log('Request token for', roomName)
+                const res = await fetch(
+                    `/api/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}&role=subscriber`
+                )
+                if (!res.ok) {
+                    console.error('❌ token fetch failed', await res.text())
+                    return
+                }
                 const { token } = await res.json()
 
                 if (roomRef.current) {
@@ -40,8 +52,10 @@ export default function ViewerFeed() {
                 const room = new Room()
                 roomRef.current = room
 
-                room.on('trackSubscribed', (track) => {
-                    if (track.kind === 'video' && videoRef.current) track.attach(videoRef.current)
+                room.on('trackSubscribed', track => {
+                    if (track.kind === 'video' && videoRef.current) {
+                        track.attach(videoRef.current)
+                    }
                     if (track.kind === 'audio') {
                         const el = track.attach()
                         const ctx = new AudioContext()
@@ -51,30 +65,32 @@ export default function ViewerFeed() {
                 })
 
                 await room.connect(LIVEKIT_URL, token)
-                console.log('Viewer connected to', roomName)
+                console.log('✅ Viewer connected to', roomName)
             })()
     }, [started, curIdx, rooms])
 
     useEffect(() => {
         if (!started) return
-        const onKey = debounce((e: KeyboardEvent) => {
+        const handler = debounce((e: KeyboardEvent) => {
             if (e.key === 'ArrowRight') setCurIdx(i => (i + 1) % rooms.length)
             if (e.key === 'ArrowLeft') setCurIdx(i => (i - 1 + rooms.length) % rooms.length)
         }, 100)
-        window.addEventListener('keydown', onKey)
-        return () => window.removeEventListener('keydown', onKey)
+        window.addEventListener('keydown', handler)
+        return () => window.removeEventListener('keydown', handler)
     }, [rooms, started])
 
-    if (rooms.length === 0) return <p>⏳ Loading active rooms...</p>
+    if (rooms.length === 0) return <p>⏳ Loading rooms…</p>
 
     const curr = rooms[curIdx]
     return (
-        <div className="w-full h-full bg-black">
+        <div className="w-full h-full bg-black relative">
             {!started && (
-                <button onClick={() => setStarted(true)}>▶️ Bắt đầu xem livestream</button>
+                <button onClick={() => setStarted(true)} className="absolute z-20 px-4 py-2 bg-blue-600 text-white rounded">
+                    ▶️ Bắt đầu xem livestream
+                </button>
             )}
             <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-            <div className="overlay">{curr.sellerName}</div>
+            <div className="absolute top-4 left-4 text-white text-xl">{curr.sellerName}</div>
         </div>
     )
 }
