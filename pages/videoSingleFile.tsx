@@ -1,84 +1,104 @@
 'use client'
-
-import React, { useEffect, useRef, useState } from 'react'
-import { supabase } from '@/services/SupabaseService'
+import React, { useRef, useState } from 'react'
+import { Room, LocalVideoTrack } from 'livekit-client'
 
 export default function VideoSingleFilePage() {
     const videoRef = useRef<HTMLVideoElement>(null)
     const [videoFile, setVideoFile] = useState<File | null>(null)
-    const [videoUrl, setVideoUrl] = useState<string | null>(null)
-    const [isStreaming, setIsStreaming] = useState(false)
+    const [streaming, setStreaming] = useState(false)
+    const roomRef = useRef<Room | null>(null)
+    const uploadedKey = useRef<string | null>(null)
+    const jobId = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`)
 
-    const handleUpload = async () => {
-        if (!videoFile) return
+    async function handleStart() {
+        if (!videoFile) return alert('Chọn file video trước!')
 
-        const timestamp = Date.now()
-        const path = `outputs/${timestamp}-single.mp4`
+        console.log('STEP 1: Upload video lên R2...')
+        const fd = new FormData()
+        fd.append('file', videoFile)
+        fd.append('jobId', jobId.current)
 
-        const { error } = await supabase.storage.from('stream-files').upload(path, videoFile, { upsert: true })
-        if (error) {
-            alert('❌ Upload video thất bại: ' + error.message)
-            return
+        const upRes = await fetch('https://upload-audio-worker-729288097042.asia-southeast1.run.app/upload', {
+            method: 'POST',
+            body: fd,
+        })
+        const upJson = await upRes.json()
+        if (!upJson.success || !upJson.key) {
+            return alert('❌ Upload thất bại')
         }
+        uploadedKey.current = upJson.key
+        const videoUrl = upJson.url as string
+        console.log('✅ Upload xong, URL:', videoUrl)
 
-        const { data } = supabase.storage.from('stream-files').getPublicUrl(path)
-        setVideoUrl(data.publicUrl)
+        console.log('STEP 2: Lấy token & connect LiveKit')
+        const roomName = 'room-video-' + jobId.current
+        const identity = 'seller-video-' + jobId.current
+        const tkRes = await fetch(`/api/token?room=${roomName}&identity=${identity}&role=publisher`)
+        const { token } = await tkRes.json()
+        const room = new Room()
+        roomRef.current = room
+        await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token)
+        console.log('🔗 Kết nối LiveKit thành công')
+
+        console.log('STEP 3: Play video & publish track')
+        const videoEl = document.createElement('video')
+        videoEl.src = videoUrl
+        await videoEl.play()
+        const stream = videoEl.captureStream()
+        const vidTrack = stream.getVideoTracks()[0]
+        await room.localParticipant.publishTrack(new LocalVideoTrack(vidTrack))
+        videoRef.current!.srcObject = new MediaStream([vidTrack])
+        console.log('🎥 Đã publish video track')
+
+        setStreaming(true)
     }
 
-    const toggleStream = async () => {
-        if (!videoUrl) return
+    async function handleStop() {
+        console.log('STEP 4: Stop livestream & cleanup')
+        if (roomRef.current) {
+            await roomRef.current.disconnect()
+            roomRef.current = null
+        }
 
-        if (!isStreaming) {
-            alert('▶️ Bắt đầu livestream')
-            setIsStreaming(true)
-            videoRef.current?.play()
-        } else {
-            const fileName = `outputs/${videoUrl.split('/').pop()}`
-            await fetch('/api/stop-stream', {
+        if (uploadedKey.current) {
+            await fetch('https://delete-audio-worker-729288097042.asia-southeast1.run.app/delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fileName })
+                body: JSON.stringify({ key: uploadedKey.current }),
             })
-            alert('⛔ Đã kết thúc livestream')
-            setIsStreaming(false)
-            videoRef.current?.pause()
+            console.log('🗑️ Đã xóa file R2:', uploadedKey.current)
+            uploadedKey.current = null
         }
+
+        setStreaming(false)
     }
 
     return (
-        <div className="p-8">
-            <h1 className="text-2xl font-bold mb-4">📤 Livestream video đã hoàn chỉnh</h1>
-
+        <main className="p-6 space-y-4 max-w-xl mx-auto">
+            <h1 className="text-xl font-bold">🎬 Livestream từ file video hiện có</h1>
             <input
                 type="file"
-                accept="video/mp4"
-                onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
-                className="mb-4"
+                accept="video/*"
+                disabled={streaming}
+                onChange={e => setVideoFile(e.target.files?.[0] || null)}
             />
-
-            <button
-                onClick={handleUpload}
-                disabled={!videoFile}
-                className="bg-blue-600 text-white px-4 py-2 rounded mb-6"
-            >
-                ⬆️ Upload video
-            </button>
-
-            {videoUrl && (
-                <>
-                    <video ref={videoRef} src={videoUrl} controls className="w-full max-w-xl mb-4" />
-                    <button
-                        onClick={toggleStream}
-                        className={`px-4 py-2 rounded text-white ${isStreaming ? 'bg-red-600' : 'bg-green-600'
-                            }`}
-                    >
-                        {isStreaming ? '⛔ Kết thúc livestream' : '▶️ Bắt đầu livestream'}
-                    </button>
-                    <p className="text-sm text-gray-500 mt-2">
-                        ⚠️ File sẽ tự động xoá sau 10 phút kể từ khi kết thúc livestream.
-                    </p>
-                </>
-            )}
-        </div>
+            <div className="flex gap-2">
+                <button
+                    onClick={handleStart}
+                    disabled={!videoFile || streaming}
+                    className="px-4 py-2 bg-blue-600 text-white rounded"
+                >
+                    ▶️ Bắt đầu livestream
+                </button>
+                <button
+                    onClick={handleStop}
+                    disabled={!streaming}
+                    className="px-4 py-2 bg-red-600 text-white rounded"
+                >
+                    ⏹️ Kết thúc livestream
+                </button>
+            </div>
+            <video ref={videoRef} autoPlay playsInline muted className="w-full rounded shadow" />
+        </main>
     )
 }
