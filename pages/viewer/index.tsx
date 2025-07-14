@@ -14,7 +14,6 @@ export default function ViewerFeed() {
     const videoRef = useRef<HTMLVideoElement>(null)
     const roomRef = useRef<Room | null>(null)
 
-    // 1️⃣ Lấy danh sách phòng
     useEffect(() => {
         fetch('/api/active-rooms')
             .then(async r => {
@@ -30,57 +29,52 @@ export default function ViewerFeed() {
             .catch(err => console.error('❌ Request /active-rooms thất bại:', err))
     }, [])
 
-    // 2️⃣ Kết nối khi bắt đầu hoặc đổi phòng
     useEffect(() => {
         if (!started || rooms.length === 0) return
+        (async () => {
+            const roomName = rooms[curIdx].room
+            const identity = `viewer-${Date.now()}`
+            console.log('▶️ Viewer request token for', roomName)
 
-            ; (async () => {
-                const roomName = rooms[curIdx].room
-                const identity = `viewer-${Date.now()}`
-                console.log('▶️ Viewer request token for', roomName)
+            const res = await fetch(`/api/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}&role=subscriber`)
+            if (!res.ok) {
+                const txt = await res.text()
+                console.error('❌ Lỗi token:', res.status, txt)
+                return
+            }
+            const { token } = await res.json()
 
-                const res = await fetch(
-                    `/api/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}&role=subscriber`
-                )
-                if (!res.ok) {
-                    const txt = await res.text()
-                    console.error('❌ Lỗi token:', res.status, txt)
-                    return
+            if (roomRef.current) {
+                console.log('🔌 Disconnect previous room')
+                roomRef.current.off(RoomEvent.TrackSubscribed)
+                await roomRef.current.disconnect()
+                roomRef.current = null
+                if (videoRef.current) videoRef.current.srcObject = null
+            }
+
+            const room = new Room({ autoSubscribe: true })
+            roomRef.current = room
+
+            room.on(RoomEvent.TrackSubscribed, track => {
+                if (track.kind === 'video' && videoRef.current) {
+                    console.log('📹 Video subscribed')
+                    track.attach(videoRef.current)
                 }
-                const { token } = await res.json()
-
-                if (roomRef.current) {
-                    console.log('🔌 Disconnect previous room')
-                    roomRef.current.off(RoomEvent.TrackSubscribed)
-                    await roomRef.current.disconnect()
-                    roomRef.current = null
-                    if (videoRef.current) videoRef.current.srcObject = null
+                if (track.kind === 'audio') {
+                    console.log('🔊 Audio subscribed')
+                    const el = track.attach()
+                    el.play().catch(() => {
+                        console.warn('Autoplay audio failed – require user gesture')
+                        room.startAudio()
+                    })
                 }
+            })
 
-                const room = new Room({ autoSubscribe: true })
-                roomRef.current = room
-
-                room.on(RoomEvent.TrackSubscribed, track => {
-                    if (track.kind === 'video' && videoRef.current) {
-                        console.log('📹 Video subscribed')
-                        track.attach(videoRef.current)
-                    }
-                    if (track.kind === 'audio') {
-                        console.log('🔊 Audio subscribed')
-                        const el = track.attach()
-                        el.play().catch(() => {
-                            console.warn('Autoplay audio failed – yêu cầu user gesture')
-                            room.startAudio()
-                        })
-                    }
-                })
-
-                await room.connect(LIVEKIT_URL, token)
-                console.log('✅ Viewer connected to', roomName)
-            })()
+            await room.connect(LIVEKIT_URL, token)
+            console.log('✅ Viewer connected to', roomName)
+        })()
     }, [started, curIdx, rooms])
 
-    // 3️⃣ Điều hướng trái/phải
     useEffect(() => {
         if (!started) return
         const handler = debounce((e: KeyboardEvent) => {
@@ -97,10 +91,7 @@ export default function ViewerFeed() {
     return (
         <div className="w-full h-full bg-black relative">
             {!started && (
-                <button
-                    onClick={() => setStarted(true)}
-                    className="absolute z-20 px-4 py-2 bg-blue-600 text-white rounded"
-                >
+                <button onClick={() => setStarted(true)} className="absolute z-20 px-4 py-2 bg-blue-600 text-white rounded">
                     ▶️ Bắt đầu xem livestream
                 </button>
             )}
