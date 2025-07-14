@@ -13,7 +13,7 @@ export default function WebcamAudioFilePage() {
 
     async function handleStart() {
         if (!mp3File) return alert('Vui lòng chọn file MP3 trước!')
-        console.log('STEP 1: Upload file MP3...')
+        console.log('STEP 1: Upload MP3…')
         const fd = new FormData()
         fd.append('file', mp3File)
         fd.append('jobId', jobId.current)
@@ -21,10 +21,10 @@ export default function WebcamAudioFilePage() {
         const ud = await up.json()
         if (!ud.success || !ud.key) return alert('❌ Upload thất bại!')
         uploadedKey.current = ud.key
-        const audioUrl = `https://pub-f7639404296d4552819a5bc64f436da7.r2.dev/${ud.key}`
+        const audioUrl = `https://pub-…/${ud.key}`
         console.log('Uploaded MP3, URL:', audioUrl)
 
-        console.log('STEP 2: Request token & connect LiveKit...')
+        console.log('STEP 2: Token & connect LiveKit…')
         const roomName = 'room-' + jobId.current
         const id = 'seller-' + jobId.current
         const tkRes = await fetch(`/api/token?room=${roomName}&identity=${id}&role=publisher`)
@@ -32,7 +32,7 @@ export default function WebcamAudioFilePage() {
         const room = new Room()
         roomRef.current = room
         await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token)
-        console.log('Connected to LiveKit')
+        console.log('✔ Kết nối LiveKit thành công')
 
         console.log('STEP 3: Publish webcam video')
         const cam = await navigator.mediaDevices.getUserMedia({ video: true })
@@ -45,23 +45,21 @@ export default function WebcamAudioFilePage() {
         if (ctx.state === 'suspended') await ctx.resume()
         const mp3Buf = await fetch(audioUrl).then(r => r.arrayBuffer())
         const decoded = await ctx.decodeAudioData(mp3Buf)
-        const mp3Source = ctx.createBufferSource()
-        mp3Source.buffer = decoded
-        mp3Source.loop = true
+        const mp3Src = ctx.createBufferSource()
+        mp3Src.buffer = decoded
+        mp3Src.loop = true
         const mp3Gain = ctx.createGain()
         mp3Gain.gain.value = 1
-        mp3Source.connect(mp3Gain)
-
-        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        const micSrc = ctx.createMediaStreamSource(micStream)
+        mp3Src.connect(mp3Gain)
+        const mic = await navigator.mediaDevices.getUserMedia({ audio: true })
+        const micSrc = ctx.createMediaStreamSource(mic)
         const micGain = ctx.createGain()
         micGain.gain.value = 1 / 3
         micSrc.connect(micGain)
-
         const dest = ctx.createMediaStreamDestination()
         mp3Gain.connect(dest)
         micGain.connect(dest)
-        mp3Source.start()
+        mp3Src.start()
 
         console.log('STEP 5: Publish mixed audio')
         const audioTrack = dest.stream.getAudioTracks()[0]
@@ -72,7 +70,7 @@ export default function WebcamAudioFilePage() {
     }
 
     async function handleStop() {
-        console.log('STEP 6: Stop stream & clean up')
+        console.log('STEP 6: Stop & cleanup')
         if (roomRef.current) {
             await roomRef.current.disconnect()
             roomRef.current = null
