@@ -1,9 +1,8 @@
-// ✅ Chuẩn chạy trên server Vercel với "type": "module"
 import { NextApiRequest, NextApiResponse } from 'next'
 
-// ✅ API tạo token JWT cho LiveKit với RoomServiceClient để tạo room (nếu chưa có)
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { room, identity, role } = req.query
+
   if (
     !room || !identity || !role ||
     typeof room !== 'string' ||
@@ -21,9 +20,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const livekitUrl = process.env.LIVEKIT_URL!
 
     const svc = new RoomServiceClient(livekitUrl, apiKey, apiSecret)
+
     await svc.createRoom({ name: room, departureTimeout: 0 }).catch(err => {
       if (!/already exists/.test((err as Error).message)) {
-        console.error('🚨 createRoom error:', err)
+        console.error(err)
       }
     })
 
@@ -36,11 +36,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
 
     const jwt = await at.toJwt()
-    console.log(`✅ Issued token for ${identity} as ${role} in room ${room}`)
     return res.status(200).json({ token: jwt })
-
   } catch (err) {
-    console.error('❌ Token creation failed:', err)
     return res.status(500).json({ error: 'Token creation failed' })
   }
 }

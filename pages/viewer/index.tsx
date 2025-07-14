@@ -19,60 +19,53 @@ export default function ViewerFeed() {
             .then(async r => {
                 if (!r.ok) {
                     const txt = await r.text()
-                    console.error('❌ active-rooms API lỗi:', r.status, txt)
+                    console.error(r.status, txt)
                     return
                 }
                 const d = await r.json()
-                console.log('📥 Load rooms:', d.rooms)
                 setRooms(d.rooms || [])
             })
-            .catch(err => console.error('❌ Request /active-rooms thất bại:', err))
+            .catch(err => console.error(err))
     }, [])
 
     useEffect(() => {
         if (!started || rooms.length === 0) return
-        (async () => {
-            const roomName = rooms[curIdx].room
-            const identity = `viewer-${Date.now()}`
-            console.log('▶️ Viewer request token for', roomName)
 
-            const res = await fetch(`/api/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}&role=subscriber`)
-            if (!res.ok) {
-                const txt = await res.text()
-                console.error('❌ Lỗi token:', res.status, txt)
-                return
-            }
-            const { token } = await res.json()
+            ; (async () => {
+                const roomName = rooms[curIdx].room
+                const identity = `viewer-${Date.now()}`
 
-            if (roomRef.current) {
-                console.log('🔌 Disconnect previous room')
-                roomRef.current.off(RoomEvent.TrackSubscribed)
-                await roomRef.current.disconnect()
-                roomRef.current = null
-                if (videoRef.current) videoRef.current.srcObject = null
-            }
+                const res = await fetch(
+                    `/api/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}&role=subscriber`
+                )
+                if (!res.ok) return
 
-            const room = new Room({ autoSubscribe: true })
-            roomRef.current = room
+                const { token } = await res.json()
 
-            room.on(RoomEvent.TrackSubscribed, track => {
-                if (track.kind === 'video' && videoRef.current) {
-                    console.log('📹 Video subscribed')
-                    track.attach(videoRef.current)
+                if (roomRef.current) {
+                    roomRef.current.off(RoomEvent.TrackSubscribed)
+                    await roomRef.current.disconnect()
+                    roomRef.current = null
+                    if (videoRef.current) videoRef.current.srcObject = null
                 }
-                if (track.kind === 'audio') {
-                    console.log('🔊 Audio subscribed')
-                    const el = track.attach()
-                    el.play().catch(() => {
-                        console.warn('Autoplay audio failed – require user gesture')
-                        room.startAudio()
-                    })
-                }
-            })
 
-            await room.connect(LIVEKIT_URL, token)
-            console.log('✅ Viewer connected to', roomName)
-        })()
+                const room = new Room({ autoSubscribe: true })
+                roomRef.current = room
+
+                room.on(RoomEvent.TrackSubscribed, track => {
+                    if (track.kind === 'video' && videoRef.current) {
+                        track.attach(videoRef.current)
+                    }
+                    if (track.kind === 'audio') {
+                        const el = track.attach()
+                        el.play().catch(() => {
+                            room.startAudio()
+                        })
+                    }
+                })
+
+                await room.connect(LIVEKIT_URL, token)
+            })()
     }, [started, curIdx, rooms])
 
     useEffect(() => {
@@ -91,7 +84,10 @@ export default function ViewerFeed() {
     return (
         <div className="w-full h-full bg-black relative">
             {!started && (
-                <button onClick={() => setStarted(true)} className="absolute z-20 px-4 py-2 bg-blue-600 text-white rounded">
+                <button
+                    onClick={() => setStarted(true)}
+                    className="absolute z-20 px-4 py-2 bg-blue-600 text-white rounded"
+                >
                     ▶️ Bắt đầu xem livestream
                 </button>
             )}
