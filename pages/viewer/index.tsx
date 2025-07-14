@@ -5,7 +5,7 @@ import debounce from 'lodash/debounce'
 
 const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL!
 
-type RoomInfo = { room: string, sellerName: string, thumbnail: string }
+type RoomInfo = { room: string; sellerName: string; thumbnail: string }
 
 export default function ViewerFeed() {
     const [rooms, setRooms] = useState<RoomInfo[]>([])
@@ -14,35 +14,38 @@ export default function ViewerFeed() {
     const videoRef = useRef<HTMLVideoElement>(null)
     const roomRef = useRef<Room | null>(null)
 
+    // 1️⃣ Load danh sách phòng
     useEffect(() => {
         fetch('/api/active-rooms')
             .then(async r => {
                 if (!r.ok) {
-                    const txt = await r.text()
-                    console.error(r.status, txt)
+                    const t = await r.text()
+                    console.error('❌ active-rooms API lỗi:', r.status, t)
                     return
                 }
                 const d = await r.json()
-                setRooms(d.rooms || [])
+                console.log('📥 Load rooms:', d.rooms)
+                setRooms(d.rooms ?? [])
             })
-            .catch(err => console.error(err))
+            .catch(e => console.error('❌ fetch active-rooms failed:', e))
     }, [])
 
+    // 2️⃣ Khi bắt đầu xem hoặc chuyển phòng
     useEffect(() => {
         if (!started || rooms.length === 0) return
-
             ; (async () => {
-                const roomName = rooms[curIdx].room
-                const identity = `viewer-${Date.now()}`
+                const { room: roomName } = rooms[curIdx]
+                console.log('▶️ Viewer chuẩn bị kết nối tới:', roomName)
 
-                const res = await fetch(
-                    `/api/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}&role=subscriber`
-                )
-                if (!res.ok) return
-
+                const res = await fetch(`/api/token?room=${encodeURIComponent(roomName)}&identity=viewer-${Date.now()}&role=subscriber`)
+                if (!res.ok) {
+                    const t = await res.text()
+                    return console.error('❌ Lỗi token:', res.status, t)
+                }
                 const { token } = await res.json()
 
                 if (roomRef.current) {
+                    console.log('🔌 Disconnect phòng cũ')
                     roomRef.current.off(RoomEvent.TrackSubscribed)
                     await roomRef.current.disconnect()
                     roomRef.current = null
@@ -54,28 +57,33 @@ export default function ViewerFeed() {
 
                 room.on(RoomEvent.TrackSubscribed, track => {
                     if (track.kind === 'video' && videoRef.current) {
+                        console.log('📹 Video track subscribed')
                         track.attach(videoRef.current)
                     }
                     if (track.kind === 'audio') {
+                        console.log('🔊 Audio track subscribed')
                         const el = track.attach()
                         el.play().catch(() => {
+                            console.warn('Audio autoplay bị chặn, thử startAudio()')
                             room.startAudio()
                         })
                     }
                 })
 
                 await room.connect(LIVEKIT_URL, token)
+                console.log('✅ Viewer đã vào room', roomName)
             })()
     }, [started, curIdx, rooms])
 
+    // 3️⃣ Điều khiển trái/phải
     useEffect(() => {
         if (!started) return
-        const handler = debounce((e: KeyboardEvent) => {
+        const onKey = debounce((e: KeyboardEvent) => {
             if (e.key === 'ArrowRight') setCurIdx(i => (i + 1) % rooms.length)
             if (e.key === 'ArrowLeft') setCurIdx(i => (i - 1 + rooms.length) % rooms.length)
         }, 100)
-        window.addEventListener('keydown', handler)
-        return () => window.removeEventListener('keydown', handler)
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
     }, [rooms, started])
 
     if (rooms.length === 0) return <p>⏳ Đang tải phòng livestream...</p>
