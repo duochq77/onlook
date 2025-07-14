@@ -1,12 +1,9 @@
 // ✅ Chuẩn chạy trên server Vercel với "type": "module"
 import { NextApiRequest, NextApiResponse } from 'next'
 
-// ✅ API tạo token JWT cho LiveKit (dùng cho cả seller và viewer)
-// URL dạng: /api/token?room=ROOM_NAME&identity=UNIQUE_ID&role=publisher|subscriber
-
+// ✅ API tạo token JWT cho LiveKit với RoomServiceClient để tạo room (nếu chưa có)
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { room, identity, role } = req.query
-
   if (
     !room || !identity || !role ||
     typeof room !== 'string' ||
@@ -18,25 +15,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // ✅ Import động để phù hợp khi dùng "type": "module" trong Vercel
     const { AccessToken, RoomServiceClient } = await import('livekit-server-sdk')
-
     const apiKey = process.env.LIVEKIT_API_KEY!
     const apiSecret = process.env.LIVEKIT_API_SECRET!
     const livekitUrl = process.env.LIVEKIT_URL!
 
-    // ✅ Khởi tạo client để tạo room (nếu chưa có)
     const svc = new RoomServiceClient(livekitUrl, apiKey, apiSecret)
-
-    // ✅ Tạo room nếu chưa tồn tại, với departureTimeout = 0 để room không tự đóng khi không có người
     await svc.createRoom({ name: room, departureTimeout: 0 }).catch(err => {
-      // Nếu room đã tồn tại, chỉ log
       if (!/already exists/.test((err as Error).message)) {
         console.error('🚨 createRoom error:', err)
       }
     })
 
-    // ✅ Tạo AccessToken và phân quyền theo role
     const at = new AccessToken(apiKey, apiSecret, { identity })
     at.addGrant({
       roomJoin: true,

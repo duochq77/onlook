@@ -67,6 +67,7 @@ export default function WebcamAudioFilePage() {
         const audioTrack = dest.stream.getAudioTracks()[0]
         await room.localParticipant.publishTrack(new LocalAudioTrack(audioTrack))
         audioRef.current!.srcObject = dest.stream
+
         setStreaming(true)
     }
 

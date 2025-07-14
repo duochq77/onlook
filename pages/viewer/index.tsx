@@ -14,7 +14,7 @@ export default function ViewerFeed() {
     const videoRef = useRef<HTMLVideoElement>(null)
     const roomRef = useRef<Room | null>(null)
 
-    // 1️⃣ Lấy danh sách phòng active
+    // 1️⃣ Lấy danh sách phòng active rồi hiển thị
     useEffect(() => {
         fetch('/api/active-rooms')
             .then(async r => {
@@ -29,7 +29,7 @@ export default function ViewerFeed() {
             .catch(err => console.error('❌ Request /active-rooms thất bại:', err))
     }, [])
 
-    // 2️⃣ Kết nối khi start hoặc đổi phòng
+    // 2️⃣ Kết nối hoặc chuyển phòng -> tạo mới connection
     useEffect(() => {
         if (!started || rooms.length === 0) return
 
@@ -48,7 +48,6 @@ export default function ViewerFeed() {
                 }
                 const { token } = await res.json()
 
-                // Ngắt kết nối phòng trước nếu có
                 if (roomRef.current) {
                     console.log('🔌 Disconnect previous room')
                     roomRef.current.off(RoomEvent.TrackSubscribed)
@@ -69,7 +68,7 @@ export default function ViewerFeed() {
                         console.log('🔊 Audio subscribed')
                         const el = track.attach()
                         el.play().catch(() => {
-                            console.warn('Autoplay audio failed – yêu cầu user gesture')
+                            console.warn('Autoplay audio failed – cần user gesture')
                             room.startAudio()
                         })
                     }
@@ -80,7 +79,7 @@ export default function ViewerFeed() {
             })()
     }, [started, curIdx, rooms])
 
-    // 3️⃣ Điều hướng trái phải
+    // 3️⃣ Điều hướng giữa các room bằng phím trái/phải
     useEffect(() => {
         if (!started) return
         const handler = debounce((e: KeyboardEvent) => {
