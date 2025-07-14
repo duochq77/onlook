@@ -1,27 +1,24 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { RoomServiceClient } from 'livekit-server-sdk'
 
-// Đọc biến môi trường để cấu hình LiveKit
 const WS_URL = process.env.LIVEKIT_URL!
 const API_KEY = process.env.LIVEKIT_API_KEY!
 const API_SECRET = process.env.LIVEKIT_API_SECRET!
 
-// Khởi tạo RoomServiceClient
 const svc = new RoomServiceClient(WS_URL, API_KEY, API_SECRET)
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method Not Allowed' })
     }
-
     try {
-        const resp = await svc.listRooms()  // resp có cấu trúc: { rooms: Room[] }
-        const rooms = (resp.rooms || []).map(r => ({
+        const list = await svc.listRooms()  // list is object with .rooms array
+        const roomsRaw = list.rooms || []
+        const rooms = roomsRaw.map(r => ({
             room: r.name,
             sellerName: r.metadata || r.name,
             thumbnail: r.metadata?.thumbnail || ''
         }))
-
         console.log('✅ Active rooms:', rooms.map(r => r.room))
         return res.status(200).json({ rooms })
     } catch (err: any) {
