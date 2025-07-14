@@ -13,27 +13,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-        console.log('🛰️ Calling listRooms()')
         const listResp = await svc.listRooms()
-        const roomsRaw = listResp.rooms
-        if (!Array.isArray(roomsRaw)) {
-            console.error('❗ listResp.rooms invalid:', listResp)
+        const listData = listResp.rooms
+        if (!Array.isArray(listData)) {
+            console.error('❗ listResp.rooms is not array:', listResp)
             return res.status(500).json({ error: 'Invalid server response' })
         }
-        const rooms = roomsRaw.map(r => ({
-            room: r.name,
-            sellerName: r.metadata || r.name,
-            thumbnail: typeof r.metadata === 'string'
-                ? (JSON.parse(r.metadata)?.thumbnail || '')
-                : ''
-        }))
+
+        const rooms = listData.map(r => {
+            let sellerName = r.name
+            let thumbnail = ''
+            if (typeof r.metadata === 'string' && r.metadata.trim() !== '') {
+                try {
+                    const meta = JSON.parse(r.metadata)
+                    sellerName = meta.sellerName || r.name
+                    thumbnail = meta.thumbnail || ''
+                } catch (err) {
+                    console.warn(`⚠️ Không parse được metadata cho room ${r.name}:`, r.metadata)
+                }
+            }
+            return { room: r.name, sellerName, thumbnail }
+        })
+
         console.log('✅ Active rooms:', rooms.map(r => r.room))
         return res.status(200).json({ rooms })
     } catch (err: any) {
         console.error('❌ /api/active-rooms error:', err)
         return res.status(500).json({
             error: 'Cannot list rooms',
-            detail: err.message || String(err)
+            detail: err?.message || String(err)
         })
     }
 }
