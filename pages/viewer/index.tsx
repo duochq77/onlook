@@ -5,7 +5,7 @@ import debounce from 'lodash/debounce'
 
 const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL!
 
-type RoomInfo = { room: string; sellerName: string; thumbnail: string }
+type RoomInfo = { room: string, sellerName: string, thumbnail: string }
 
 export default function ViewerFeed() {
     const [rooms, setRooms] = useState<RoomInfo[]>([])
@@ -14,7 +14,7 @@ export default function ViewerFeed() {
     const videoRef = useRef<HTMLVideoElement>(null)
     const roomRef = useRef<Room | null>(null)
 
-    // 🧩 Step 1: Load active rooms
+    // 1️⃣ Lấy danh sách phòng active từ backend
     useEffect(() => {
         fetch('/api/active-rooms')
             .then(async r => {
@@ -24,20 +24,19 @@ export default function ViewerFeed() {
                     return
                 }
                 const d = await r.json()
+                console.log('📥 Load rooms:', d.rooms)
                 setRooms(d.rooms || [])
-                console.log('🔃 Load rooms:', d.rooms)
             })
             .catch(err => console.error('❌ Request /active-rooms thất bại:', err))
     }, [])
 
-    // 🧩 Step 2: Connect to room when started or curIdx changes
+    // 2️⃣ Kết nối khi kích start hoặc chuyển phòng
     useEffect(() => {
         if (!started || rooms.length === 0) return
 
             ; (async () => {
                 const roomName = rooms[curIdx].room
                 const identity = `viewer-${Date.now()}`
-
                 console.log('▶️ Viewer request token for', roomName)
 
                 const res = await fetch(
@@ -50,7 +49,7 @@ export default function ViewerFeed() {
                 }
                 const { token } = await res.json()
 
-                // 👋 Disconnect if already connected
+                // Ngắt kết nối phòng trước nếu đã kết nối
                 if (roomRef.current) {
                     console.log('🔌 Disconnect previous room')
                     roomRef.current.off(RoomEvent.TrackSubscribed)
@@ -82,7 +81,7 @@ export default function ViewerFeed() {
             })()
     }, [started, curIdx, rooms])
 
-    // 🧩 Step 3: Keyboard navigation
+    // 3️⃣ Điều khiển trái/phải
     useEffect(() => {
         if (!started) return
         const handler = debounce((e: KeyboardEvent) => {
