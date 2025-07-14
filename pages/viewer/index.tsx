@@ -5,7 +5,7 @@ import debounce from 'lodash/debounce'
 
 const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL!
 
-type RoomInfo = { room: string, sellerName: string, thumbnail: string }
+type RoomInfo = { room: string; sellerName: string; thumbnail: string }
 
 export default function ViewerFeed() {
     const [rooms, setRooms] = useState<RoomInfo[]>([])
@@ -14,7 +14,7 @@ export default function ViewerFeed() {
     const videoRef = useRef<HTMLVideoElement>(null)
     const roomRef = useRef<Room | null>(null)
 
-    // 1️⃣ Lấy danh sách phòng active rồi hiển thị
+    // 🧩 Step 1: Load active rooms
     useEffect(() => {
         fetch('/api/active-rooms')
             .then(async r => {
@@ -25,17 +25,19 @@ export default function ViewerFeed() {
                 }
                 const d = await r.json()
                 setRooms(d.rooms || [])
+                console.log('🔃 Load rooms:', d.rooms)
             })
             .catch(err => console.error('❌ Request /active-rooms thất bại:', err))
     }, [])
 
-    // 2️⃣ Kết nối hoặc chuyển phòng -> tạo mới connection
+    // 🧩 Step 2: Connect to room when started or curIdx changes
     useEffect(() => {
         if (!started || rooms.length === 0) return
 
             ; (async () => {
                 const roomName = rooms[curIdx].room
                 const identity = `viewer-${Date.now()}`
+
                 console.log('▶️ Viewer request token for', roomName)
 
                 const res = await fetch(
@@ -48,6 +50,7 @@ export default function ViewerFeed() {
                 }
                 const { token } = await res.json()
 
+                // 👋 Disconnect if already connected
                 if (roomRef.current) {
                     console.log('🔌 Disconnect previous room')
                     roomRef.current.off(RoomEvent.TrackSubscribed)
@@ -68,7 +71,7 @@ export default function ViewerFeed() {
                         console.log('🔊 Audio subscribed')
                         const el = track.attach()
                         el.play().catch(() => {
-                            console.warn('Autoplay audio failed – cần user gesture')
+                            console.warn('Autoplay audio failed – yêu cầu user gesture')
                             room.startAudio()
                         })
                     }
@@ -79,7 +82,7 @@ export default function ViewerFeed() {
             })()
     }, [started, curIdx, rooms])
 
-    // 3️⃣ Điều hướng giữa các room bằng phím trái/phải
+    // 🧩 Step 3: Keyboard navigation
     useEffect(() => {
         if (!started) return
         const handler = debounce((e: KeyboardEvent) => {
