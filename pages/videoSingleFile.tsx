@@ -10,10 +10,11 @@ export default function VideoSingleFilePage() {
     const uploadedKey = useRef<string | null>(null)
 
     async function handleStart() {
-        if (!file) return alert('Chọn file MP4 đã nhé!')
+        if (!file) return alert('Chọn file MP4 rồi hãy phát nhé!')
         setStreaming(true)
+
         try {
-            // 1️⃣ Upload & connect LiveKit
+            // STEP 1: Upload lên R2
             console.log('STEP 1: Upload video lên R2...')
             const fd = new FormData()
             fd.append('file', file)
@@ -24,6 +25,7 @@ export default function VideoSingleFilePage() {
             const videoUrl = `https://pub-f7639404296d4552819a5bc64f436da7.r2.dev/${ud.key}`
             console.log('✅ Video URL:', videoUrl)
 
+            // STEP 2: Kết nối LiveKit
             console.log('STEP 2: Request token & connect LiveKit...')
             const roomName = 'room-' + Date.now()
             const identity = 'seller-' + roomName
@@ -34,37 +36,37 @@ export default function VideoSingleFilePage() {
             await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, tk.token)
             console.log('✔ Connected LiveKit')
 
-            // 2️⃣ Play + capture
+            // STEP 3: Play & Capture + Publish
             const vid = videoRef.current!
             vid.crossOrigin = 'anonymous'
             vid.src = videoUrl
 
-            vid.onloadedmetadata = () => console.log('[📌]', 'duration:', vid.duration)
+            vid.onloadedmetadata = () => console.log('[📌] duration:', vid.duration)
             vid.onplaying = () => console.log('[▶️] Video playing')
-            vid.onended = () => { console.log('[🏁] Ended — stop'); handleStop() }
-            vid.onerror = e => console.error('[❌] Video error', e)
+            vid.onended = () => {
+                console.log('[🏁] Video ended – stopping livestream')
+                handleStop()
+            }
+            vid.onerror = e => console.error('[❌] Video element error', e)
 
             await vid.play()
 
             const stream = vid.captureStream()
-            console.log('[🎬] Tracks VT:', stream.getVideoTracks().length, ', AT:', stream.getAudioTracks().length)
-
             const vtracks = stream.getVideoTracks()
             const atracks = stream.getAudioTracks()
+            console.log('[🎬] Tracks - video:', vtracks.length, ', audio:', atracks.length)
 
-            if (vtracks.length === 0) throw new Error('Không có video track')
-            // Publish video
+            if (vtracks.length === 0) {
+                throw new Error('Không capture được video track!')
+            }
             await room.localParticipant.publishTrack(new LocalVideoTrack(vtracks[0]))
-
-            // Publish audio nếu có
             if (atracks.length > 0) {
                 await room.localParticipant.publishTrack(new LocalAudioTrack(atracks[0]))
             }
-
             console.log('🚀 Published video + audio (nếu có)')
         } catch (e: any) {
             console.error('❌ Error livestream:', e)
-            alert('Phát livestream lỗi – xem console!')
+            alert('Phát livestream lỗi — xem console để biết chi tiết!')
             await handleStop()
         }
     }
@@ -83,16 +85,32 @@ export default function VideoSingleFilePage() {
             uploadedKey.current = null
         }
         setStreaming(false)
-        console.log('🛑 Stopped')
+        console.log('🛑 Livestream stopped')
     }
 
     return (
-        <main>
-            <h1>Livestream video file từ R2</h1>
-            <input type="file" accept="video/mp4" disabled={streaming} onChange={e => setFile(e.target.files?.[0] || null)} />
-            <button onClick={handleStart} disabled={!file || streaming}>▶️ Bắt đầu livestream</button>
-            <button onClick={handleStop} disabled={!streaming}>⏹️ Dừng livestream</button>
-            <video ref={videoRef} width="640" height="360" muted playsInline style={{ background: '#000' }} />
+        <main className="p-6 space-y-4">
+            <h1>📁 Livestream video file từ R2</h1>
+            <input
+                type="file"
+                accept="video/mp4"
+                disabled={streaming}
+                onChange={e => setFile(e.target.files?.[0] || null)}
+            />
+            <button onClick={handleStart} disabled={!file || streaming}>
+                ▶️ Bắt đầu livestream
+            </button>
+            <button onClick={handleStop} disabled={!streaming}>
+                ⏹️ Dừng livestream
+            </button>
+            <video
+                ref={videoRef}
+                width="640"
+                height="360"
+                muted
+                playsInline
+                style={{ background: '#000' }}
+            />
         </main>
     )
 }
