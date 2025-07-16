@@ -4,6 +4,7 @@ metadata:
   name: delete-service
   namespace: livekit
 spec:
+  type: LoadBalancer  # ✅ Đã đổi từ ClusterIP
   selector:
     app: delete-service
   ports:
