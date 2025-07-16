@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: delete-service
+  namespace: livekit
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: delete-service
+  template:
+    metadata:
+      labels:
+        app: delete-service
+    spec:
+      containers:
+        - name: delete-worker
+          image: gcr.io/onlook-main/worker-delete:v1
+          ports:
+            - containerPort: 4002
+          envFrom:
+            - secretRef:
+                name: livekit-secret

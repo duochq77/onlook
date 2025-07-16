@@ -1,0 +1,19 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: delete-worker-scaled
+  namespace: livekit
+spec:
+  scaleTargetRef:
+    name: delete-service
+  pollingInterval: 15
+  cooldownPeriod: 300
+  minReplicaCount: 0
+  maxReplicaCount: 5
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc.cluster.local:9090
+        metricName: delete_worker_trigger
+        query: delete_worker_trigger
+        threshold: "1"

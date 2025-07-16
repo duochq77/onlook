@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: delete-service
+  namespace: livekit
+spec:
+  selector:
+    app: delete-service
+  ports:
+    - protocol: TCP
+      port: 4002
+      targetPort: 4002

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: livekit-values
+  namespace: livekit
+data:
+  replicaCount: "2"
+  redis.url: "clean-humpback-36746.upstash.io:6379"
+  turn.enable: "true"
+  ingress.enabled: "true"
+  ingress.replicaCount: "0"
+  ingress.autoscaling.enabled: "true"
+  ingress.autoscaling.minReplicas: "0"
+  ingress.autoscaling.maxReplicas: "5"
+  ingress.autoscaling.targetCPUUtilizationPercentage: "60"
+  prometheus.enabled: "true"
+  prometheus.port: "9090"
