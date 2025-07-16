@@ -14,52 +14,66 @@ export default function VideoSingleFilePage() {
         if (!file) return alert('Bạn chưa chọn file MP4!');
         setStreaming(true);
 
-        // Upload
-        const fd = new FormData();
-        fd.append('file', file);
-        const up = await fetch('https://upload-audio-worker-729288097042.asia-southeast1.run.app/upload', {
-            method: 'POST', body: fd
-        });
-        const ud = await up.json();
-        setUploadedKey(ud.key);
+        try {
+            // ✅ Upload file lên Cloud Run worker
+            const fd = new FormData();
+            fd.append('file', file);
+            const up = await fetch('https://upload-audio-worker-729288097042.asia-southeast1.run.app/upload', {
+                method: 'POST',
+                body: fd
+            });
+            const ud = await up.json();
+            const { key } = ud;
+            setUploadedKey(key);
 
-        const roomName = `room-${Date.now()}`;
-        const tokenRes = await fetch(`/api/token?room=${roomName}&identity=${roomName}&role=publisher`);
-        const { token } = await tokenRes.json();
+            // ✅ Tạo token từ API nội bộ `/api/token`
+            const roomName = `room-${Date.now()}`;
+            const tokenRes = await fetch(`/api/token?room=${roomName}&identity=${roomName}&role=publisher`);
+            const { token } = await tokenRes.json();
 
-        const room = new Room();
-        roomRef.current = room;
-        await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, token);
+            const room = new Room();
+            roomRef.current = room;
+            await room.connect('wss://onlook-jvtj33oo.livekit.cloud', token);
 
-        // Tạo ingress
-        const ingressRes = await fetch('http://localhost:4001/ingress', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ roomName, key: ud.key }),
-        }).then(r => r.json());
-        setIngressId(ingressRes.ingressId);
+            // ✅ Gọi worker `ingress` trên GKE qua IP thật
+            const ingressRes = await fetch('http://35.198.242.28/ingress', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roomName, key }),
+            }).then(r => r.json());
+            setIngressId(ingressRes.ingressId);
 
-        // Hiển thị preview video (mute)
-        const vid = videoRef.current!;
-        vid.src = `https://pub-${process.env.NEXT_PUBLIC_R2_ACCOUNT_ID}.r2.dev/${ud.key}`;
-        vid.muted = true;
-        vid.play().catch(console.warn);
+            // ✅ Hiển thị video preview từ R2
+            const vid = videoRef.current!;
+            vid.src = `https://pub-97130163a49f578e8cd93a8adc5c5994.r2.dev/${key}`;
+            vid.muted = true;
+            vid.play().catch(console.warn);
+        } catch (err) {
+            console.error('Lỗi khi bắt đầu livestream:', err);
+            alert('Không thể khởi động livestream. Vui lòng thử lại.');
+            setStreaming(false);
+        }
     }
 
     async function handleStop() {
-        if (ingressId || uploadedKey) {
-            await fetch('http://localhost:4002/stop', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ingressId, key: uploadedKey }),
-            });
+        try {
+            // ✅ Gọi worker `stop` qua IP thật
+            if (ingressId || uploadedKey) {
+                await fetch('http://34.143.208.97/stop', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ingressId, key: uploadedKey }),
+                });
+            }
+            if (roomRef.current) {
+                await roomRef.current.disconnect();
+                roomRef.current = null;
+            }
+        } catch (err) {
+            console.warn('Lỗi khi dừng stream:', err);
         }
-        if (roomRef.current) {
-            await roomRef.current.disconnect();
-            roomRef.current = null;
-        }
-        setStreaming(false);
 
+        setStreaming(false);
         const vid = videoRef.current;
         if (vid) {
             vid.pause();
