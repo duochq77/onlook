@@ -3,20 +3,17 @@ kind: ScaledObject
 metadata:
   name: livekit-ingress-scaled
   namespace: livekit
-  labels:
-    scaledobject.keda.sh/name: livekit-ingress-scaled
 spec:
   scaleTargetRef:
     name: livekit-ingress
     kind: Deployment
-  pollingInterval: 15            # Thời gian giữa mỗi lần KEDA kiểm tra metric (giây)
-  cooldownPeriod: 300            # Thời gian chờ sau khi scale về xuống
+  pollingInterval: 15
+  cooldownPeriod: 300
   minReplicaCount: 0
   maxReplicaCount: 5
   triggers:
   - type: prometheus
     metadata:
-      serverAddress: http://prometheus-server.monitoring.svc.cluster.local
+      serverAddress: http://prometheus-server.monitoring.svc.cluster.local:9090
       query: livekit_ingress_available
-      metricName: livekit_ingress_available
       threshold: "1"
