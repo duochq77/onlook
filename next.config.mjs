@@ -14,7 +14,6 @@ const nextConfig = {
     experimental: {
         serverActions: {} // object chứ không phải boolean
     },
-    // bỏ swcMinify vì version NextJS bạn dùng không nhận
-}
+};
 
-export default nextConfig
+export default nextConfig;
