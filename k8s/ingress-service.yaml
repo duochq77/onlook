@@ -4,10 +4,9 @@ metadata:
   name: livekit-ingress
   namespace: livekit
 spec:
-  type: LoadBalancer  # ✅ Đã đổi từ ClusterIP
   selector:
     app: livekit-ingress
   ports:
-    - protocol: TCP
-      port: 4001
-      targetPort: 4001
+  - protocol: TCP
+    port: 80
+    targetPort: 4001

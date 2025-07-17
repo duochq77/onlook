@@ -14,10 +14,10 @@ spec:
         app: delete-service
     spec:
       containers:
-        - name: delete-worker
-          image: gcr.io/onlook-main/worker-delete:v1
-          ports:
-            - containerPort: 4002
-          envFrom:
-            - secretRef:
-                name: livekit-secret
+      - name: delete
+        image: gcr.io/onlook-main/onlook-delete:v1
+        envFrom:
+        - secretRef:
+            name: livekit-secret
+        ports:
+        - containerPort: 4002

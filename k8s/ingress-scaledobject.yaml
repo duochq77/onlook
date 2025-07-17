@@ -1,11 +1,12 @@
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: ingress-worker-scaled
+  name: livekit-ingress-scaled
   namespace: livekit
 spec:
   scaleTargetRef:
     name: livekit-ingress
+    kind: Deployment
   pollingInterval: 15
   cooldownPeriod: 300
   minReplicaCount: 0
@@ -13,7 +14,7 @@ spec:
   triggers:
     - type: prometheus
       metadata:
-        serverAddress: http://prometheus.monitoring.svc.cluster.local:9090
-        metricName: ingress_worker_trigger
-        query: ingress_worker_trigger
+        serverAddress: http://prometheus-server.monitoring.svc.cluster.local
+        metricName: livekit_ingress_available
+        query: livekit_ingress_available
         threshold: "1"
