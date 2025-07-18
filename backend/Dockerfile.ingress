@@ -1,19 +1,29 @@
-# ===== Stage 1: Build TypeScript =====
-FROM node:18-alpine AS build
+# Stage 1: Build
+FROM node:20-alpine AS build
 WORKDIR /app
 
+# Copy cấu hình và cài dependencies
 COPY package*.json tsconfig.json ./
 RUN npm install
-COPY ingress.ts ./
+
+# Copy toàn bộ mã nguồn (bao gồm ingress.ts và các thư viện phụ)
+COPY . .
+
+# Biên dịch TypeScript
 RUN npx tsc
 
-# ===== Stage 2: Production nhẹ gọn =====
-FROM node:18-alpine AS production
+# Stage 2: Deploy
+FROM node:20-alpine
 WORKDIR /app
 
+# Cài các dependency production
 COPY package*.json ./
 RUN npm ci --only=production
+
+# Copy mã đã biên dịch
 COPY --from=build /app/dist ./dist
 
-EXPOSE 4001
+EXPOSE 8080
+
+# Khởi động worker
 CMD ["node", "dist/ingress.js"]

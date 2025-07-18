@@ -4,54 +4,55 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
-const http_1 = require("http");
+const formidable_1 = require("formidable");
+const fs_1 = require("fs");
+const client_s3_1 = require("@aws-sdk/client-s3");
 const dotenv_1 = __importDefault(require("dotenv"));
-const execa_1 = require("execa");
 const livekit_server_sdk_1 = require("livekit-server-sdk");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
-app.use(express_1.default.json());
-const port = process.env.INGRESS_PORT || 4001;
-const livekit = new livekit_server_sdk_1.IngressClient(process.env.LIVEKIT_URL, process.env.LIVEKIT_API_KEY, process.env.LIVEKIT_API_SECRET);
-app.post('/api/ing', async (req, res) => {
-    try {
-        const { inputUrl, outputPath } = req.body;
-        const opts = {
-            roomName: 'your-room',
-            participantIdentity: 'ingress-' + Date.now(),
-            participantName: 'ingress-bot',
-            video: new livekit_server_sdk_1.IngressVideoOptions({
-                encodingOptions: {
-                    case: 'preset',
-                    value: livekit_server_sdk_1.IngressVideoEncodingPreset.H264_720P_30FPS_3_LAYERS,
-                },
-            }),
-            audio: new livekit_server_sdk_1.IngressAudioOptions({
-                encodingOptions: {
-                    case: 'preset',
-                    value: livekit_server_sdk_1.IngressAudioEncodingPreset.OPUS_STEREO_96KBPS,
-                },
-            }),
-        };
-        const ingress = await livekit.createIngress(livekit_server_sdk_1.IngressInput.WHIP_INPUT, opts);
-        const ff = (0, execa_1.execa)('ffmpeg', [
-            '-i', inputUrl,
-            '-c', 'copy',
-            outputPath,
-        ]);
-        ff.stdout?.pipe(process.stdout);
-        ff.stderr?.pipe(process.stderr);
-        res.json({ success: true, streamKey: ingress.streamKey });
-    }
-    catch (e) {
-        if (e instanceof Error) {
-            console.error(e);
-            res.status(500).json({ success: false, error: e.message });
-        }
-        else {
-            console.error(e);
-            res.status(500).json({ success: false, error: 'Unknown error' });
-        }
-    }
+const PORT = process.env.PORT || 8080;
+app.get('/', (_, res) => {
+    res.send('✅ Ingress worker is running');
 });
-(0, http_1.createServer)(app).listen(port, () => console.log(`✅ ingress-service listening on port ${port}`));
+app.post('/upload', async (req, res) => {
+    const form = new formidable_1.IncomingForm({ uploadDir: '/tmp', keepExtensions: true });
+    form.parse(req, async (err, fields, files) => {
+        if (err || !files.file) {
+            return res.status(500).json({ error: 'Lỗi khi xử lý upload' });
+        }
+        const file = Array.isArray(files.file) ? files.file[0] : files.file;
+        const filePath = file.filepath;
+        const fileName = `video-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.mp4`;
+        const r2 = new client_s3_1.S3Client({
+            region: 'auto',
+            endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+            credentials: {
+                accessKeyId: process.env.R2_ACCESS_KEY_ID,
+                secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+            },
+        });
+        const uploadCmd = new client_s3_1.PutObjectCommand({
+            Bucket: process.env.R2_BUCKET_NAME,
+            Key: fileName,
+            Body: (0, fs_1.createReadStream)(filePath),
+            ContentType: 'video/mp4',
+        });
+        try {
+            await r2.send(uploadCmd);
+            console.log(`✅ Đã upload video lên R2: ${fileName}`);
+            const room = fileName.replace('.mp4', ''); // tên phòng giống tên file
+            const svc = new livekit_server_sdk_1.RoomServiceClient(process.env.LIVEKIT_URL, process.env.LIVEKIT_API_KEY, process.env.LIVEKIT_API_SECRET);
+            await svc.createRoom({ name: room });
+            console.log(`🎬 Đã tạo phòng livestream: ${room}`);
+            return res.status(200).json({ message: 'Thành công', roomName: room, fileKey: fileName });
+        }
+        catch (e) {
+            console.error('❌ Upload hoặc tạo phòng thất bại:', e);
+            return res.status(500).json({ error: 'Upload hoặc tạo phòng thất bại' });
+        }
+    });
+});
+app.listen(PORT, () => {
+    console.log(`🚀 Ingress worker listening on port ${PORT}`);
+});

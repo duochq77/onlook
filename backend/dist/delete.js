@@ -5,28 +5,34 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const dotenv_1 = __importDefault(require("dotenv"));
-const node_fetch_1 = __importDefault(require("node-fetch"));
+const r2_1 = require("./utils/r2");
+const livekit_1 = require("./utils/livekit");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
+const PORT = process.env.PORT || 8080;
 app.use(express_1.default.json());
-const port = process.env.DELETE_PORT || 4002;
-app.post('/api/end', async (req, res) => {
-    try {
-        const { key } = req.body;
-        const resp = await (0, node_fetch_1.default)(`https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${key}`, { method: 'DELETE' });
-        if (!resp.ok)
-            throw new Error(`Delete failed: ${resp.status}`);
-        res.json({ success: true });
+// Endpoint kiểm tra trạng thái service
+app.get('/', (_, res) => {
+    res.send('✅ Delete worker is running');
+});
+// Endpoint nhận yêu cầu xoá video và dừng phòng
+app.post('/', async (req, res) => {
+    const { room, key } = req.body;
+    if (!room || !key) {
+        return res.status(400).json({ error: 'Thiếu ROOM hoặc FILE_KEY' });
     }
-    catch (e) {
-        if (e instanceof Error) {
-            console.error(e);
-            res.status(500).json({ success: false, error: e.message });
-        }
-        else {
-            console.error(e);
-            res.status(500).json({ success: false, error: 'Unknown error' });
-        }
+    try {
+        console.log(`🛑 Dừng phòng LiveKit: ${room}`);
+        await (0, livekit_1.stopRoom)(room);
+        console.log(`🧹 Xóa file từ R2: ${key}`);
+        await (0, r2_1.deleteFromR2)(key);
+        res.status(200).json({ message: '✅ Đã xoá video và dừng livestream' });
+    }
+    catch (err) {
+        console.error('❌ Lỗi xử lý:', err);
+        res.status(500).json({ error: 'Xoá thất bại', detail: String(err) });
     }
 });
-app.listen(port, () => console.log(`✅ delete-service listening on port ${port}`));
+app.listen(PORT, () => {
+    console.log(`🚀 Delete worker listening on port ${PORT}`);
+});
