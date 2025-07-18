@@ -15,8 +15,22 @@ app.get('/', (_, res) => {
     res.send('✅ Ingress worker is running')
 })
 
+// ✅ CORS cho OPTIONS (preflight)
+app.options('/upload', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+    res.status(204).end()
+})
+
 app.post('/upload', async (req, res) => {
+    // ✅ CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+
     const form = new IncomingForm({ uploadDir: '/tmp', keepExtensions: true })
+
     form.parse(req, async (err, fields, files) => {
         if (err || !files.file) {
             return res.status(500).json({ error: 'Lỗi khi xử lý upload' })
