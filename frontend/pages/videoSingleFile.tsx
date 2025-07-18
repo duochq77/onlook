@@ -23,7 +23,8 @@ export default function VideoSingleFile() {
         const formData = new FormData()
         formData.append('file', file)
 
-        const ingressUrl = process.env.NEXT_PUBLIC_INGRESS_WORKER_URL || 'https://onlook-ingress-url-from-env/upload'
+        // ✅ Sửa tại đây: không gắn sẵn /upload
+        const ingressUrl = process.env.NEXT_PUBLIC_INGRESS_WORKER_URL || 'https://onlook-ingress-url-from-env'
 
         try {
             const res = await fetch(`${ingressUrl}/upload`, {
@@ -65,7 +66,7 @@ export default function VideoSingleFile() {
 
         setStatus('🛑 Đang dừng livestream...')
 
-        const deleteUrl = process.env.NEXT_PUBLIC_DELETE_WORKER_URL || 'https://onlook-delete-url-from-env/delete'
+        const deleteUrl = process.env.NEXT_PUBLIC_DELETE_WORKER_URL || 'https://onlook-delete-url-from-env'
 
         try {
             const res = await fetch(`${deleteUrl}/delete`, {
