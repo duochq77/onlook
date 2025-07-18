@@ -1,19 +1,19 @@
-# ===== Stage 1: Build TypeScript =====
-FROM node:18-alpine AS build
+# Stage 1: Build
+FROM node:20-alpine AS build
 WORKDIR /app
 
 COPY package*.json tsconfig.json ./
 RUN npm install
-COPY delete.ts ./
-RUN npx tsc
+COPY . .
+RUN npx tsc --project tsconfig.json
 
-# ===== Stage 2: Production nhẹ gọn =====
-FROM node:18-alpine AS production
+# Stage 2: Deploy
+FROM node:20-alpine
 WORKDIR /app
 
 COPY package*.json ./
 RUN npm ci --only=production
 COPY --from=build /app/dist ./dist
 
-EXPOSE 4002
+EXPOSE 8080
 CMD ["node", "dist/delete.js"]
