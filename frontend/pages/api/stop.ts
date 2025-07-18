@@ -1,7 +1,4 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import dotenv from 'dotenv'
-
-dotenv.config()
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {

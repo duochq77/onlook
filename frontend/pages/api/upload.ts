@@ -1,10 +1,7 @@
-import { IncomingForm } from 'formidable'
+import { IncomingForm, File as FormidableFile } from 'formidable'
 import fs from 'fs'
 import { createReadStream } from 'fs'
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
-import dotenv from 'dotenv'
-
-dotenv.config()
 
 export const config = {
     api: {
@@ -12,6 +9,7 @@ export const config = {
     },
 }
 
+// Cấu hình Cloudflare R2
 const R2 = new S3Client({
     region: 'auto',
     endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
@@ -29,11 +27,11 @@ export default async function handler(req: any, res: any) {
             return res.status(500).json({ error: 'Lỗi khi xử lý upload' })
         }
 
-        const file = Array.isArray(files.file) ? files.file[0] : files.file
+        // Xử lý file đầu vào từ Formidable
+        const file = Array.isArray(files.file) ? files.file[0] : files.file as FormidableFile
         const filePath = file.filepath
         const originalName = file.originalFilename || 'upload.mp4'
 
-        // Tránh trùng tên file bằng cách thêm timestamp
         const key = `${Date.now()}-${originalName}`
 
         const uploadCommand = new PutObjectCommand({
@@ -47,7 +45,7 @@ export default async function handler(req: any, res: any) {
             await R2.send(uploadCommand)
             res.status(200).json({
                 message: '✅ Upload thành công',
-                key, // Trả về key để sử dụng sau (ví dụ gửi vào biến môi trường FILE_KEY)
+                key,
             })
         } catch (e) {
             res.status(500).json({ error: '❌ Upload thất bại', detail: String(e) })

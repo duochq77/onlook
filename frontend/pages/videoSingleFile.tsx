@@ -9,7 +9,7 @@ export default function VideoSingleFile() {
     const [status, setStatus] = useState('')
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
+        if (e.target.files?.[0]) {
             setFile(e.target.files[0])
         }
     }
@@ -23,22 +23,34 @@ export default function VideoSingleFile() {
         const formData = new FormData()
         formData.append('file', file)
 
+        const ingressUrl = process.env.NEXT_PUBLIC_INGRESS_WORKER_URL || 'https://onlook-ingress-url-from-env/upload'
+
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_INGRESS_WORKER_URL}/upload`, {
+            const res = await fetch(`${ingressUrl}/upload`, {
                 method: 'POST',
                 body: formData,
             })
 
-            const data = await res.json()
+            const text = await res.text()
+            let data: any = {}
+
+            try {
+                data = JSON.parse(text)
+            } catch (e) {
+                console.error('❌ Không thể parse JSON:', text)
+                setStatus('❌ Upload thất bại (response không hợp lệ)')
+                return
+            }
+
             if (res.ok) {
                 setRoom(data.roomName)
                 setFileKey(data.fileKey)
                 setStatus(`🚀 Đã tạo room: ${data.roomName}, file: ${data.fileKey}`)
             } else {
-                setStatus('❌ Upload thất bại')
+                setStatus(`❌ Upload thất bại: ${data.error || 'Không rõ nguyên nhân'}`)
             }
         } catch (err) {
-            console.error('Lỗi:', err)
+            console.error('❌ Lỗi khi upload:', err)
             setStatus('❌ Lỗi khi upload video')
         } finally {
             setIsUploading(false)
@@ -53,12 +65,25 @@ export default function VideoSingleFile() {
 
         setStatus('🛑 Đang dừng livestream...')
 
+        const deleteUrl = process.env.NEXT_PUBLIC_DELETE_WORKER_URL || 'https://onlook-delete-url-from-env/delete'
+
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_DELETE_WORKER_URL}/delete`, {
+            const res = await fetch(`${deleteUrl}/delete`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ roomName: room, fileKey: fileKey }),
+                body: JSON.stringify({ roomName: room, fileKey }),
             })
+
+            const text = await res.text()
+            let data: any = {}
+
+            try {
+                data = JSON.parse(text)
+            } catch (e) {
+                console.error('❌ Không thể parse JSON khi dừng:', text)
+                setStatus('❌ Lỗi khi dừng: Phản hồi không hợp lệ')
+                return
+            }
 
             if (res.ok) {
                 setStatus('✅ Đã dừng livestream và xoá file thành công')
@@ -66,11 +91,10 @@ export default function VideoSingleFile() {
                 setFileKey('')
                 setFile(null)
             } else {
-                const data = await res.json()
                 setStatus(`❌ Lỗi khi dừng: ${data.error || 'Không rõ nguyên nhân'}`)
             }
         } catch (err) {
-            console.error('Lỗi:', err)
+            console.error('❌ Lỗi khi gọi delete worker:', err)
             setStatus('❌ Lỗi khi gọi worker delete')
         }
     }
