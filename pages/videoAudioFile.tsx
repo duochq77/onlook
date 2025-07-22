@@ -20,15 +20,21 @@ export default function VideoAudioFile() {
     const STORAGE_PATH = 'stream-files'
 
     useEffect(() => {
-        const stored = localStorage.getItem('latestJobId')
-        if (stored && !jobId) {
-            console.log('📦 Khôi phục jobId từ localStorage:', stored)
-            setJobId(stored)
-        }
-
-        // Reset file input sau khi reload
+        // Reset file input khi reload
         setVideoFile(null)
         setAudioFile(null)
+
+        const stored = localStorage.getItem('latestJobId')
+        const expired = localStorage.getItem('expiredAt')
+
+        if (stored && expired && Date.now() < parseInt(expired) && !jobId) {
+            console.log('📦 Khôi phục jobId từ localStorage:', stored)
+            setJobId(stored)
+        } else {
+            // Xoá nếu đã hết hạn
+            localStorage.removeItem('latestJobId')
+            localStorage.removeItem('expiredAt')
+        }
     }, [])
 
     const handleUpload = async () => {
@@ -104,9 +110,9 @@ export default function VideoAudioFile() {
         console.log('📨 Đã gửi job thành công:', newJobId)
         setStatus('⏳ Đã gửi job. Đang chờ xử lý...')
 
-        // 🧼 Reset input sau upload
-        setVideoFile(null)
-        setAudioFile(null)
+        // Lưu thời gian hết hạn
+        const expiresAt = Date.now() + 5 * 60 * 1000
+        localStorage.setItem('expiredAt', expiresAt.toString())
     }
 
     useEffect(() => {
@@ -125,8 +131,13 @@ export default function VideoAudioFile() {
                 console.log('✅ File đã sẵn sàng tải về:', data.downloadUrl)
                 setDownloadUrl(data.downloadUrl)
                 setStatus('✅ File đã sẵn sàng tải về.')
-                if (!readyAt) setReadyAt(Date.now())
-                localStorage.removeItem('latestJobId') // 🧹 Xoá sau khi job xong
+                if (!readyAt) {
+                    setReadyAt(Date.now())
+
+                    // Sau khi sẵn sàng, dọn localStorage
+                    localStorage.removeItem('latestJobId')
+                    localStorage.removeItem('expiredAt')
+                }
             } else {
                 console.log('📉 File chưa sẵn sàng hoặc không có downloadUrl.')
                 setDownloadUrl('')
