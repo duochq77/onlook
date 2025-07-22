@@ -25,6 +25,10 @@ export default function VideoAudioFile() {
             console.log('📦 Khôi phục jobId từ localStorage:', stored)
             setJobId(stored)
         }
+
+        // Reset file input sau khi reload
+        setVideoFile(null)
+        setAudioFile(null)
     }, [])
 
     const handleUpload = async () => {
@@ -99,10 +103,14 @@ export default function VideoAudioFile() {
 
         console.log('📨 Đã gửi job thành công:', newJobId)
         setStatus('⏳ Đã gửi job. Đang chờ xử lý...')
+
+        // 🧼 Reset input sau upload
+        setVideoFile(null)
+        setAudioFile(null)
     }
 
     useEffect(() => {
-        if (!jobId) return
+        if (!jobId || jobId.startsWith('undefined')) return
 
         const interval = setInterval(async () => {
             const outputName = `merged-${jobId}.mp4`
@@ -118,6 +126,7 @@ export default function VideoAudioFile() {
                 setDownloadUrl(data.downloadUrl)
                 setStatus('✅ File đã sẵn sàng tải về.')
                 if (!readyAt) setReadyAt(Date.now())
+                localStorage.removeItem('latestJobId') // 🧹 Xoá sau khi job xong
             } else {
                 console.log('📉 File chưa sẵn sàng hoặc không có downloadUrl.')
                 setDownloadUrl('')
