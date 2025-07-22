@@ -20,22 +20,13 @@ export default function VideoAudioFile() {
     const STORAGE_PATH = 'stream-files'
 
     useEffect(() => {
-        // Reset file input khi reload
-        setVideoFile(null)
-        setAudioFile(null)
-
+        // Không khôi phục jobId nếu chưa chọn file lại
         const stored = localStorage.getItem('latestJobId')
-        const expired = localStorage.getItem('expiredAt')
-
-        if (stored && expired && Date.now() < parseInt(expired) && !jobId) {
+        if (stored && !jobId && videoFile && audioFile) {
             console.log('📦 Khôi phục jobId từ localStorage:', stored)
             setJobId(stored)
-        } else {
-            // Xoá nếu đã hết hạn
-            localStorage.removeItem('latestJobId')
-            localStorage.removeItem('expiredAt')
         }
-    }, [])
+    }, [videoFile, audioFile])
 
     const handleUpload = async () => {
         if (!videoFile || !audioFile) {
@@ -43,7 +34,7 @@ export default function VideoAudioFile() {
             return
         }
 
-        const newJobId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        const newJobId = crypto.randomUUID()
         setJobId(newJobId)
         localStorage.setItem('latestJobId', newJobId)
 
@@ -62,10 +53,11 @@ export default function VideoAudioFile() {
 
         const { error: videoErr } = await supabase.storage
             .from(STORAGE_PATH)
-            .upload(`input-videos/${videoName}`, videoFile, { upsert: true })
+            .upload(`input-videos/${videoName}`, videoFile, { upsert: false })
+
         const { error: audioErr } = await supabase.storage
             .from(STORAGE_PATH)
-            .upload(`input-audios/${audioName}`, audioFile, { upsert: true })
+            .upload(`input-audios/${audioName}`, audioFile, { upsert: false })
 
         if (videoErr || audioErr) {
             console.error('❌ Upload lỗi:', videoErr || audioErr)
@@ -109,14 +101,10 @@ export default function VideoAudioFile() {
 
         console.log('📨 Đã gửi job thành công:', newJobId)
         setStatus('⏳ Đã gửi job. Đang chờ xử lý...')
-
-        // Lưu thời gian hết hạn
-        const expiresAt = Date.now() + 5 * 60 * 1000
-        localStorage.setItem('expiredAt', expiresAt.toString())
     }
 
     useEffect(() => {
-        if (!jobId || jobId.startsWith('undefined')) return
+        if (!jobId) return
 
         const interval = setInterval(async () => {
             const outputName = `merged-${jobId}.mp4`
@@ -131,13 +119,7 @@ export default function VideoAudioFile() {
                 console.log('✅ File đã sẵn sàng tải về:', data.downloadUrl)
                 setDownloadUrl(data.downloadUrl)
                 setStatus('✅ File đã sẵn sàng tải về.')
-                if (!readyAt) {
-                    setReadyAt(Date.now())
-
-                    // Sau khi sẵn sàng, dọn localStorage
-                    localStorage.removeItem('latestJobId')
-                    localStorage.removeItem('expiredAt')
-                }
+                if (!readyAt) setReadyAt(Date.now())
             } else {
                 console.log('📉 File chưa sẵn sàng hoặc không có downloadUrl.')
                 setDownloadUrl('')
