@@ -19,14 +19,19 @@ export default function VideoAudioFile() {
 
     const STORAGE_PATH = 'stream-files'
 
+    // ✅ Mỗi lần load trang là dọn sạch mọi thứ
     useEffect(() => {
-        // Không khôi phục jobId nếu chưa chọn file lại
-        const stored = localStorage.getItem('latestJobId')
-        if (stored && !jobId && videoFile && audioFile) {
-            console.log('📦 Khôi phục jobId từ localStorage:', stored)
-            setJobId(stored)
-        }
-    }, [videoFile, audioFile])
+        localStorage.removeItem('latestJobId')
+        localStorage.removeItem('expiredAt')
+        localStorage.removeItem('manualUpload')
+
+        setJobId('')
+        setVideoFile(null)
+        setAudioFile(null)
+        setDownloadUrl('')
+        setReadyAt(null)
+        setStatus('')
+    }, [])
 
     const handleUpload = async () => {
         if (!videoFile || !audioFile) {
