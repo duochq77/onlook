@@ -1,4 +1,3 @@
-// ✅ create-process-job.ts - Đã fix lỗi 500 và thư mục upload
 import express from 'express'
 import cors from 'cors'
 import { IncomingForm } from 'formidable'
@@ -10,14 +9,21 @@ import { createClient } from 'redis'
 const app = express()
 const port = process.env.PORT || 8080
 
-app.use(cors())
-app.options('*', cors())
+// ✅ CORS: Cho phép mọi nguồn, xử lý preflight
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+    if (req.method === 'OPTIONS') return res.status(204).end()
+    next()
+})
 
-// 🔍 In log biến môi trường để debug Cloud Run
+// ✅ Log biến môi trường khi khởi động
 console.log('🔧 R2_ACCOUNT_ID:', process.env.R2_ACCOUNT_ID)
-console.log('🔧 NEXT_PUBLIC_R2_BUCKET:', process.env.NEXT_PUBLIC_R2_BUCKET)
+console.log('🔧 R2_PUBLIC_BUCKET_2:', process.env.R2_PUBLIC_BUCKET_2)
 console.log('🔧 REDIS_HOST:', process.env.REDIS_HOST)
 
+// ✅ Tạo Redis client toàn cục
 const redis = createClient({
     socket: {
         host: process.env.REDIS_HOST,
@@ -26,14 +32,20 @@ const redis = createClient({
     password: process.env.REDIS_PASSWORD,
 })
 
+// ✅ Kết nối Redis 1 lần khi app start
+redis.connect()
+    .then(() => console.log('✅ Redis connected'))
+    .catch((err) => {
+        console.error('⚠️ Redis connect failed, vẫn tiếp tục chạy:', err.message)
+    })
+
 const UPLOAD_DIR = '/tmp/uploads'
 
 app.post('/create', async (req, res) => {
     const form = new IncomingForm({ uploadDir: UPLOAD_DIR, keepExtensions: true })
 
     try {
-        await redis.connect()
-        await fs.mkdir(UPLOAD_DIR, { recursive: true }) // 🧩 Quan trọng
+        await fs.mkdir(UPLOAD_DIR, { recursive: true })
 
         form.parse(req, async (err, fields, files) => {
             if (err) {
@@ -44,7 +56,9 @@ app.post('/create', async (req, res) => {
             try {
                 const video = Array.isArray(files.video) ? files.video[0] : files.video
                 const audio = Array.isArray(files.audio) ? files.audio[0] : files.audio
-                if (!video || !audio) return res.status(400).json({ error: 'Missing files' })
+                if (!video || !audio) {
+                    return res.status(400).json({ error: 'Missing files' })
+                }
 
                 const jobId = `job-${Date.now()}-${randomUUID().slice(0, 8)}`
                 const videoKey = `inputs/${jobId}-video.${mime.extension(video.mimetype!) || 'mp4'}`
@@ -53,6 +67,11 @@ app.post('/create', async (req, res) => {
 
                 await uploadToR2(video.filepath, videoKey)
                 await uploadToR2(audio.filepath, audioKey)
+
+                if (!redis.isOpen) {
+                    console.error('❌ Redis chưa sẵn sàng, không thể push job')
+                    return res.status(500).json({ error: 'Redis is not connected' })
+                }
 
                 const payload = JSON.stringify({
                     videoUrl: r2PublicUrl(videoKey),
@@ -64,15 +83,13 @@ app.post('/create', async (req, res) => {
 
                 return res.status(200).json({ success: true, jobId, outputKey })
             } catch (innerErr) {
-                console.error('❌ Lỗi xử lý file hoặc Redis:', innerErr)
+                console.error('❌ Lỗi xử lý nội dung file hoặc Redis:', innerErr)
                 return res.status(500).json({ error: 'Lỗi xử lý nội dung file' })
             }
         })
     } catch (err) {
         console.error('❌ Tổng thể thất bại:', err)
         return res.status(500).json({ error: 'Internal Server Error' })
-    } finally {
-        await redis.disconnect()
     }
 })
 
@@ -94,7 +111,7 @@ async function uploadToR2(filePath: string, key: string) {
 }
 
 function r2PublicUrl(key: string) {
-    return `https://${process.env.NEXT_PUBLIC_R2_BUCKET}.r2.dev/${key}`
+    return `https://${process.env.R2_PUBLIC_BUCKET_2}.r2.dev/${key}`
 }
 
 app.listen(port, () => {

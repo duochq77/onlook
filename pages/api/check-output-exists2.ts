@@ -1,4 +1,4 @@
-// pages/api/check-output-exists2.ts
+// ✅ check-output-exists2.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3'
@@ -16,31 +16,21 @@ const client = new S3Client({
 })
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-    if (req.method !== 'GET') {
-        return res.status(405).json({ error: 'Method Not Allowed' })
-    }
+    if (req.method !== 'GET') return res.status(405).json({ error: 'Method Not Allowed' })
 
-    const { outputName } = req.query
-    if (!outputName || typeof outputName !== 'string') {
-        return res.status(400).json({ error: 'Missing outputName' })
-    }
+    const { jobId } = req.query
+    if (!jobId || typeof jobId !== 'string') return res.status(400).json({ error: 'Missing jobId' })
+
+    const outputName = `outputs/merged-${jobId}.mp4`
 
     try {
-        const headCmd = new HeadObjectCommand({
-            Bucket: BUCKET,
-            Key: outputName,
-        })
-
+        const headCmd = new HeadObjectCommand({ Bucket: BUCKET, Key: outputName })
         await client.send(headCmd)
-
         const fileUrl = `${ENDPOINT}/${outputName}`
         return res.status(200).json({ exists: true, downloadUrl: fileUrl })
     } catch (err: any) {
-        if (err.$metadata?.httpStatusCode === 404) {
-            return res.status(200).json({ exists: false })
-        }
-
-        console.error('❌ Lỗi khi kiểm tra file:', err)
+        if (err.$metadata?.httpStatusCode === 404) return res.status(200).json({ exists: false })
+        console.error('❌ Lỗi check-output:', err)
         return res.status(500).json({ error: 'Internal Server Error' })
     }
 }
