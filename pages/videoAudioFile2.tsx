@@ -16,32 +16,42 @@ export default function VideoAudioFile2() {
         form.append("video", videoFile)
         form.append("audio", audioFile)
 
-        const res = await fetch("https://create-process-job-729288097042.asia-southeast1.run.app/", {
-            method: "POST",
-            body: form,
-        })
+        try {
+            const res = await fetch("https://create-process-job-729288097042.asia-southeast1.run.app/create", {
+                method: "POST",
+                body: form,
+            })
 
-        if (!res.ok) {
-            console.error("❌ Upload error", await res.text())
-            return alert("Tạo job thất bại (upload lỗi)")
+            if (!res.ok) {
+                const errText = await res.text()
+                console.error("❌ Upload error", errText)
+                return alert("Lỗi khi upload file: " + res.status)
+            }
+
+            const data = await res.json()
+            if (!data.jobId) return alert("Tạo job thất bại")
+            console.log("🎯 jobId:", data.jobId)
+            setJobId(data.jobId)
+        } catch (err) {
+            console.error("❌ Upload exception", err)
+            alert("Có lỗi khi gửi yêu cầu")
         }
-
-        const data = await res.json()
-        if (!data.jobId) return alert("Tạo job thất bại (không có jobId)")
-        console.log("🎯 jobId:", data.jobId)
-        setJobId(data.jobId)
     }
 
     useEffect(() => {
         if (!jobId) return
 
         intervalRef.current = setInterval(async () => {
-            const res = await fetch(`/api/check-output-exists2?jobId=${jobId}`)
-            const data = await res.json()
+            try {
+                const res = await fetch(`/api/check-output-exists2?jobId=${jobId}`)
+                const data = await res.json()
 
-            if (data.exists && data.downloadUrl) {
-                clearInterval(intervalRef.current!)
-                setOutputUrl(data.downloadUrl)
+                if (data.exists && data.downloadUrl) {
+                    clearInterval(intervalRef.current!)
+                    setOutputUrl(data.downloadUrl)
+                }
+            } catch (err) {
+                console.error("❌ Polling error:", err)
             }
         }, 4000)
 
@@ -53,8 +63,18 @@ export default function VideoAudioFile2() {
     return (
         <div className="p-4 space-y-4">
             <h1 className="text-xl font-bold">Upload Video + Audio để xử lý (R2)</h1>
-            <input type="file" accept="video/*" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
-            <input type="file" accept="audio/*" onChange={(e) => setAudioFile(e.target.files?.[0] || null)} />
+
+            <input
+                type="file"
+                accept="video/*"
+                onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+            />
+            <input
+                type="file"
+                accept="audio/*"
+                onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
+            />
+
             <button
                 className="px-4 py-2 bg-blue-600 text-white rounded"
                 onClick={handleUpload}
