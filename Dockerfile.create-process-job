@@ -1,0 +1,24 @@
+# Dockerfile.create-process-job
+
+FROM node:18-alpine AS build
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+RUN npx tsc -p tsconfig.worker.json
+
+# -------- Production image --------
+FROM node:18-alpine
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install --only=production
+
+COPY --from=build /app/dist ./dist
+
+ENV PORT=8080
+EXPOSE 8080
+
+CMD ["node", "dist/worker/create-process-job.js"]
