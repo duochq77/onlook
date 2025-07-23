@@ -123,12 +123,13 @@ const processJob = async (job: any) => {
         await downloadFile(job.videoUrl, inputVideo)
         await downloadFile(job.audioUrl, inputAudio)
 
+        // 🧼 Tách audio khỏi video
         await new Promise<void>((res, rej) => {
             ffmpeg()
                 .input(inputVideo)
                 .outputOptions(['-an', '-c:v', 'copy', '-y'])
                 .output(cleanVideo)
-                .on('end', res)
+                .on('end', () => res()) // ✅ FIXED
                 .on('error', rej)
                 .run()
         })
@@ -183,6 +184,7 @@ const startWorker = async () => {
 }
 startWorker()
 
+// Health check server (tuỳ chọn)
 const app = express()
 app.use(express.json())
 app.get('/', (_req, res) => res.send('🟢 process-video-worker2 đang chạy'))

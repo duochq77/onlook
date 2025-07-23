@@ -1,29 +1,30 @@
 {
     "compilerOptions": {
-        "target": "ES2020", // ✅ Hỗ trợ private identifiers (#)
+        "target": "ES2020",
         "module": "CommonJS",
         "moduleResolution": "node",
         "outDir": "dist/worker",
         "rootDir": "worker",
-        "esModuleInterop": true, // ✅ Cho phép import mặc định từ express, cors,...
+        "esModuleInterop": true,
         "resolveJsonModule": true,
         "forceConsistentCasingInFileNames": true,
         "strict": true,
-        "skipLibCheck": true, // ✅ Bỏ qua lỗi từ các thư viện Redis, mime...
+        "skipLibCheck": true,
         "typeRoots": [
             "./node_modules/@types",
             "./types"
         ],
         "types": [
             "node"
-        ] // ✅ Thêm type node để nhận diện global types (fs, path, etc.)
+        ]
     },
     "include": [
         "worker/**/*.ts"
     ],
     "exclude": [
         "node_modules",
+        "dist",
         ".next",
-        "dist"
+        ".vercel"
     ]
 }

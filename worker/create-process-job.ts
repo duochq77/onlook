@@ -1,4 +1,4 @@
-// ✅ create-process-job.ts - Express version (Cloud Run worker)
+// ✅ create-process-job.ts - Đã fix lỗi 500 và thư mục upload
 import express from 'express'
 import cors from 'cors'
 import { IncomingForm } from 'formidable'
@@ -12,6 +12,11 @@ const port = process.env.PORT || 8080
 
 app.use(cors())
 app.options('*', cors())
+
+// 🔍 In log biến môi trường để debug Cloud Run
+console.log('🔧 R2_ACCOUNT_ID:', process.env.R2_ACCOUNT_ID)
+console.log('🔧 NEXT_PUBLIC_R2_BUCKET:', process.env.NEXT_PUBLIC_R2_BUCKET)
+console.log('🔧 REDIS_HOST:', process.env.REDIS_HOST)
 
 const redis = createClient({
     socket: {
@@ -28,34 +33,43 @@ app.post('/create', async (req, res) => {
 
     try {
         await redis.connect()
+        await fs.mkdir(UPLOAD_DIR, { recursive: true }) // 🧩 Quan trọng
 
         form.parse(req, async (err, fields, files) => {
-            if (err) return res.status(500).json({ error: 'Form parse error' })
+            if (err) {
+                console.error('❌ Form parse error:', err)
+                return res.status(500).json({ error: 'Form parse error' })
+            }
 
-            const video = Array.isArray(files.video) ? files.video[0] : files.video
-            const audio = Array.isArray(files.audio) ? files.audio[0] : files.audio
-            if (!video || !audio) return res.status(400).json({ error: 'Missing files' })
+            try {
+                const video = Array.isArray(files.video) ? files.video[0] : files.video
+                const audio = Array.isArray(files.audio) ? files.audio[0] : files.audio
+                if (!video || !audio) return res.status(400).json({ error: 'Missing files' })
 
-            const jobId = `job-${Date.now()}-${randomUUID().slice(0, 8)}`
-            const videoKey = `inputs/${jobId}-video.${mime.extension(video.mimetype!) || 'mp4'}`
-            const audioKey = `inputs/${jobId}-audio.${mime.extension(audio.mimetype!) || 'mp3'}`
-            const outputKey = `outputs/merged-${jobId}.mp4`
+                const jobId = `job-${Date.now()}-${randomUUID().slice(0, 8)}`
+                const videoKey = `inputs/${jobId}-video.${mime.extension(video.mimetype!) || 'mp4'}`
+                const audioKey = `inputs/${jobId}-audio.${mime.extension(audio.mimetype!) || 'mp3'}`
+                const outputKey = `outputs/merged-${jobId}.mp4`
 
-            await uploadToR2(video.filepath, videoKey)
-            await uploadToR2(audio.filepath, audioKey)
+                await uploadToR2(video.filepath, videoKey)
+                await uploadToR2(audio.filepath, audioKey)
 
-            const payload = JSON.stringify({
-                videoUrl: r2PublicUrl(videoKey),
-                audioUrl: r2PublicUrl(audioKey),
-                outputKey,
-            })
+                const payload = JSON.stringify({
+                    videoUrl: r2PublicUrl(videoKey),
+                    audioUrl: r2PublicUrl(audioKey),
+                    outputKey,
+                })
 
-            await redis.zAdd('process-jobs', [{ score: Date.now(), value: payload }])
+                await redis.zAdd('process-jobs', [{ score: Date.now(), value: payload }])
 
-            return res.status(200).json({ success: true, jobId, outputKey })
+                return res.status(200).json({ success: true, jobId, outputKey })
+            } catch (innerErr) {
+                console.error('❌ Lỗi xử lý file hoặc Redis:', innerErr)
+                return res.status(500).json({ error: 'Lỗi xử lý nội dung file' })
+            }
         })
     } catch (err) {
-        console.error('❌ Upload failed:', err)
+        console.error('❌ Tổng thể thất bại:', err)
         return res.status(500).json({ error: 'Internal Server Error' })
     } finally {
         await redis.disconnect()
