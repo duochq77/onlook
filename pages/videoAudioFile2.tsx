@@ -16,13 +16,18 @@ export default function VideoAudioFile2() {
         form.append("video", videoFile)
         form.append("audio", audioFile)
 
-        const res = await fetch("https://create-process-job-729288097042.asia-southeast1.run.app", {
+        const res = await fetch("https://create-process-job-729288097042.asia-southeast1.run.app/", {
             method: "POST",
             body: form,
         })
 
+        if (!res.ok) {
+            console.error("❌ Upload error", await res.text())
+            return alert("Tạo job thất bại (upload lỗi)")
+        }
+
         const data = await res.json()
-        if (!data.jobId) return alert("Tạo job thất bại")
+        if (!data.jobId) return alert("Tạo job thất bại (không có jobId)")
         console.log("🎯 jobId:", data.jobId)
         setJobId(data.jobId)
     }
@@ -31,7 +36,7 @@ export default function VideoAudioFile2() {
         if (!jobId) return
 
         intervalRef.current = setInterval(async () => {
-            const res = await fetch(`/api/check-output-exists?jobId=${jobId}`)
+            const res = await fetch(`/api/check-output-exists2?jobId=${jobId}`)
             const data = await res.json()
 
             if (data.exists && data.downloadUrl) {
