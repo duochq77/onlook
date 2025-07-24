@@ -4,103 +4,97 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
+const cors_1 = __importDefault(require("cors"));
 const formidable_1 = require("formidable");
-const promises_1 = __importDefault(require("fs/promises"));
-const mime_types_1 = __importDefault(require("mime-types"));
-const crypto_1 = require("crypto");
-const redis_1 = require("redis");
+const client_s3_1 = require("@aws-sdk/client-s3");
+const ioredis_1 = __importDefault(require("ioredis"));
+const fs_1 = __importDefault(require("fs"));
 const app = (0, express_1.default)();
-const port = process.env.PORT || 8080;
-// ✅ CORS: Cho phép mọi nguồn, xử lý preflight
-app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    if (req.method === 'OPTIONS')
-        return res.status(204).end();
-    next();
-});
-// ✅ Log biến môi trường khi khởi động
-console.log('🔧 R2_ACCOUNT_ID:', process.env.R2_ACCOUNT_ID);
-console.log('🔧 R2_PUBLIC_BUCKET_2:', process.env.R2_PUBLIC_BUCKET_2);
-console.log('🔧 REDIS_HOST:', process.env.REDIS_HOST);
-// ✅ Tạo Redis client toàn cục
-const redis = (0, redis_1.createClient)({
-    socket: {
-        host: process.env.REDIS_HOST,
-        port: Number(process.env.REDIS_PORT),
-    },
-    password: process.env.REDIS_PASSWORD,
-});
-// ✅ Kết nối Redis 1 lần khi app start
-redis.connect()
-    .then(() => console.log('✅ Redis connected'))
-    .catch((err) => {
-    console.error('⚠️ Redis connect failed, vẫn tiếp tục chạy:', err.message);
-});
-const UPLOAD_DIR = '/tmp/uploads';
-app.post('/create', async (req, res) => {
-    const form = new formidable_1.IncomingForm({ uploadDir: UPLOAD_DIR, keepExtensions: true });
-    try {
-        await promises_1.default.mkdir(UPLOAD_DIR, { recursive: true });
-        form.parse(req, async (err, fields, files) => {
-            if (err) {
-                console.error('❌ Form parse error:', err);
-                return res.status(500).json({ error: 'Form parse error' });
-            }
-            try {
-                const video = Array.isArray(files.video) ? files.video[0] : files.video;
-                const audio = Array.isArray(files.audio) ? files.audio[0] : files.audio;
-                if (!video || !audio) {
-                    return res.status(400).json({ error: 'Missing files' });
-                }
-                const jobId = `job-${Date.now()}-${(0, crypto_1.randomUUID)().slice(0, 8)}`;
-                const videoKey = `inputs/${jobId}-video.${mime_types_1.default.extension(video.mimetype) || 'mp4'}`;
-                const audioKey = `inputs/${jobId}-audio.${mime_types_1.default.extension(audio.mimetype) || 'mp3'}`;
-                const outputKey = `outputs/merged-${jobId}.mp4`;
-                await uploadToR2(video.filepath, videoKey);
-                await uploadToR2(audio.filepath, audioKey);
-                if (!redis.isOpen) {
-                    console.error('❌ Redis chưa sẵn sàng, không thể push job');
-                    return res.status(500).json({ error: 'Redis is not connected' });
-                }
-                const payload = JSON.stringify({
-                    videoUrl: r2PublicUrl(videoKey),
-                    audioUrl: r2PublicUrl(audioKey),
-                    outputKey,
-                });
-                await redis.zAdd('process-jobs', [{ score: Date.now(), value: payload }]);
-                return res.status(200).json({ success: true, jobId, outputKey });
-            }
-            catch (innerErr) {
-                console.error('❌ Lỗi xử lý nội dung file hoặc Redis:', innerErr);
-                return res.status(500).json({ error: 'Lỗi xử lý nội dung file' });
-            }
-        });
+const port = parseInt(process.env.PORT || '8080', 10);
+app.use((0, cors_1.default)());
+app.options('*', (0, cors_1.default)());
+// === Kiểm tra ENV bắt buộc ===
+const requiredEnv = [
+    'R2_BUCKET_NAME',
+    'R2_ACCOUNT_ID',
+    'R2_ACCESS_KEY_ID',
+    'R2_SECRET_ACCESS_KEY',
+    'REDIS_HOST',
+    'REDIS_PORT',
+    'REDIS_PASSWORD',
+];
+for (const key of requiredEnv) {
+    if (!process.env[key]) {
+        throw new Error(`❌ Thiếu biến môi trường: ${key}`);
     }
-    catch (err) {
-        console.error('❌ Tổng thể thất bại:', err);
-        return res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-async function uploadToR2(filePath, key) {
-    const file = await promises_1.default.readFile(filePath);
-    const endpoint = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${key}`;
-    const res = await fetch(endpoint, {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/octet-stream',
-            'Content-Length': file.length.toString(),
-            'x-amz-acl': 'public-read',
-        },
-        body: file,
-    });
-    if (!res.ok)
-        throw new Error(`Upload failed: ${res.status} ${res.statusText}`);
 }
-function r2PublicUrl(key) {
-    return `https://${process.env.R2_PUBLIC_BUCKET_2}.r2.dev/${key}`;
+// === Redis TCP (ioredis + TLS) ===
+const redis = new ioredis_1.default({
+    host: process.env.REDIS_HOST,
+    port: parseInt(process.env.REDIS_PORT, 10),
+    password: process.env.REDIS_PASSWORD,
+    maxRetriesPerRequest: 2,
+    connectTimeout: 5000,
+    tls: {} // Bắt buộc cho Upstash Redis TCP
+});
+redis.on('error', (err) => {
+    console.error('❌ Redis error:', err);
+});
+// === Cloudflare R2 (S3-compatible) ===
+const s3 = new client_s3_1.S3Client({
+    region: 'auto',
+    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    },
+});
+app.post('/create', (req, res) => {
+    const form = new formidable_1.IncomingForm({ multiples: false, keepExtensions: true });
+    form.parse(req, async (err, fields, files) => {
+        if (err) {
+            console.error('❌ Lỗi parse form:', err);
+            return res.status(500).json({ error: 'Lỗi xử lý form dữ liệu.' });
+        }
+        try {
+            const rawVideo = files.video;
+            const rawAudio = files.audio;
+            if (!rawVideo || !rawAudio) {
+                return res.status(400).json({ error: 'Thiếu video hoặc audio' });
+            }
+            const video = Array.isArray(rawVideo) ? rawVideo[0] : rawVideo;
+            const audio = Array.isArray(rawAudio) ? rawAudio[0] : rawAudio;
+            const id = Date.now();
+            const unique = Math.random().toString(36).substring(2, 8);
+            const videoKey = `inputs/${id}-${unique}-video.mp4`;
+            const audioKey = `inputs/${id}-${unique}-audio.mp3`;
+            const outputKey = `outputs/merged-${id}-${unique}.mp4`;
+            // ⬆️ Upload lên R2
+            await uploadToR2(video.filepath, videoKey, video.mimetype || 'video/mp4');
+            await uploadToR2(audio.filepath, audioKey, audio.mimetype || 'audio/mpeg');
+            // 📥 Push job vào Redis
+            const job = { id, videoKey, audioKey, outputKey };
+            await redis.zadd('process-jobs', Date.now(), JSON.stringify(job));
+            console.log('✅ Đã đẩy job vào Redis:', job);
+            res.status(200).json({ success: true, outputKey });
+        }
+        catch (error) {
+            console.error('❌ Lỗi xử lý job:', error);
+            res.status(500).json({ error: 'Xử lý thất bại', detail: String(error) });
+        }
+    });
+});
+async function uploadToR2(filePath, key, contentType) {
+    const fileStream = fs_1.default.createReadStream(filePath);
+    const uploadParams = {
+        Bucket: process.env.R2_BUCKET_NAME,
+        Key: key,
+        Body: fileStream,
+        ContentType: contentType,
+    };
+    await s3.send(new client_s3_1.PutObjectCommand(uploadParams));
+    console.log(`📦 Uploaded to R2: ${key}`);
 }
 app.listen(port, () => {
-    console.log(`🚀 create-process-job worker listening on port ${port}`);
+    console.log(`🚀 create-process-job worker running on port ${port}`);
 });

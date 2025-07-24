@@ -1,6 +1,8 @@
-# Dockerfile.create-process-job
+# ========================
+# 🧱 STAGE 1: Build phase
+# ========================
+FROM node:20 AS build
 
-FROM node:18-alpine AS build
 WORKDIR /app
 
 COPY package*.json ./
@@ -9,16 +11,22 @@ RUN npm install
 COPY . .
 RUN npx tsc -p tsconfig.worker.json
 
-# -------- Production image --------
-FROM node:18-alpine
+# =============================
+# 📦 STAGE 2: Production phase
+# =============================
+FROM node:20-slim
+
 WORKDIR /app
 
+# Chỉ copy cần thiết cho runtime
 COPY package*.json ./
-RUN npm install --only=production
+RUN npm ci --only=production
 
 COPY --from=build /app/dist ./dist
 
-ENV PORT=8080
+# Copy public (nếu cần upload frontend file dùng formidable)
+COPY public ./public
+
 EXPOSE 8080
 
 CMD ["node", "dist/worker/create-process-job.js"]
