@@ -12,24 +12,16 @@ const axios_1 = __importDefault(require("axios"));
 const child_process_1 = require("child_process");
 const fluent_ffmpeg_1 = __importDefault(require("fluent-ffmpeg"));
 const client_s3_1 = require("@aws-sdk/client-s3");
-// 🔐 Đọc secrets từ CSI mount
-const readSecret = (key) => {
-    try {
-        return fs_1.default.readFileSync(`/mnt/secrets-store/${key}`, 'utf8').trim();
-    }
-    catch (e) {
-        throw new Error(`❌ Lỗi đọc secret ${key}: ${e}`);
-    }
-};
-// ENV cho Cloudflare R2 + Redis
-const R2_BUCKET = readSecret('R2_BUCKET_NAME');
-const R2_ENDPOINT = readSecret('R2_ENDPOINT');
-const R2_ACCESS_KEY_ID = readSecret('R2_ACCESS_KEY_ID');
-const R2_SECRET_ACCESS_KEY = readSecret('R2_SECRET_ACCESS_KEY');
-const REDIS_HOST = readSecret('REDIS_HOST');
-const REDIS_PORT = readSecret('REDIS_PORT');
-const REDIS_PASSWORD = readSecret('REDIS_PASSWORD');
-const PORT = readSecret('PORT') || '8080';
+// ✅ Đọc từ process.env
+const R2_BUCKET = process.env.R2_BUCKET_NAME;
+const R2_ENDPOINT = process.env.R2_ENDPOINT;
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
+const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
+const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL; // 👈 thêm dòng này
+const REDIS_HOST = process.env.REDIS_HOST;
+const REDIS_PORT = parseInt(process.env.REDIS_PORT);
+const REDIS_PASSWORD = process.env.REDIS_PASSWORD;
+const PORT = parseInt(process.env.PORT || '8080');
 const r2Client = new client_s3_1.S3Client({
     region: 'auto',
     endpoint: R2_ENDPOINT,
@@ -40,7 +32,7 @@ const r2Client = new client_s3_1.S3Client({
 });
 const redis = new ioredis_1.default({
     host: REDIS_HOST,
-    port: parseInt(REDIS_PORT),
+    port: REDIS_PORT,
     password: REDIS_PASSWORD,
     tls: {},
     retryStrategy: (times) => Math.min(times * 200, 2000),
@@ -98,15 +90,17 @@ const processJob = async (job) => {
     const cleanVideo = path_1.default.join(tmp, 'clean.mp4');
     const outputFile = path_1.default.join(tmp, 'merged.mp4');
     try {
-        await downloadFile(job.videoUrl, inputVideo);
-        await downloadFile(job.audioUrl, inputAudio);
-        // 🧼 Tách audio khỏi video
+        // 🔁 Tái tạo public URL nếu cần (chắc ăn)
+        const videoUrl = `${R2_PUBLIC_URL}/${job.videoUrl.split('/').pop()}`;
+        const audioUrl = `${R2_PUBLIC_URL}/${job.audioUrl.split('/').pop()}`;
+        await downloadFile(videoUrl, inputVideo);
+        await downloadFile(audioUrl, inputAudio);
         await new Promise((res, rej) => {
             (0, fluent_ffmpeg_1.default)()
                 .input(inputVideo)
                 .outputOptions(['-an', '-c:v', 'copy', '-y'])
                 .output(cleanVideo)
-                .on('end', () => res()) // ✅ FIXED
+                .on('end', () => res())
                 .on('error', rej)
                 .run();
         });
@@ -149,7 +143,7 @@ const startWorker = async () => {
     console.log('🚀 Worker đang chạy...');
     while (true) {
         try {
-            const raw = await redis.rpop('video-process-jobs');
+            const raw = await redis.rpop('process-jobs');
             if (raw) {
                 const job = JSON.parse(raw);
                 await processJob(job);
@@ -164,10 +158,9 @@ const startWorker = async () => {
     }
 };
 startWorker();
-// Health check server (tuỳ chọn)
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
 app.get('/', (_req, res) => res.send('🟢 process-video-worker2 đang chạy'));
-app.listen(Number(PORT), () => {
+app.listen(PORT, () => {
     console.log(`🌐 Server listening on port ${PORT}`);
 });

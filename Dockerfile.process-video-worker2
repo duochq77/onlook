@@ -10,6 +10,9 @@ RUN npx tsc -p tsconfig.worker.json
 
 FROM node:18-alpine
 
+# ✅ Cài ffmpeg đầy đủ
+RUN apk add --no-cache ffmpeg
+
 WORKDIR /app
 COPY --from=build /app/dist ./dist
 COPY package*.json ./

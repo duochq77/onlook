@@ -14,9 +14,9 @@ app.options('*', cors())
 // === Kiểm tra ENV bắt buộc ===
 const requiredEnv = [
     'R2_BUCKET_NAME',
-    'R2_ACCOUNT_ID',
     'R2_ACCESS_KEY_ID',
     'R2_SECRET_ACCESS_KEY',
+    'R2_PUBLIC_URL',            // ✅ Dùng public URL như https://pub-...r2.dev
     'REDIS_HOST',
     'REDIS_PORT',
     'REDIS_PASSWORD',
@@ -76,15 +76,16 @@ app.post('/create', (req, res) => {
 
             const videoKey = `inputs/${id}-${unique}-video.mp4`
             const audioKey = `inputs/${id}-${unique}-audio.mp3`
-            const outputKey = `merged-${id}-${unique}.mp4` // 👈 Tên file gọn gàng
-            const videoUrl = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${videoKey}`
-            const audioUrl = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${audioKey}`
+            const outputKey = `merged-${id}-${unique}.mp4`
+
+            const videoUrl = `${process.env.R2_PUBLIC_URL}/${videoKey}`
+            const audioUrl = `${process.env.R2_PUBLIC_URL}/${audioKey}`
 
             // ⬆️ Upload lên R2
             await uploadToR2(video.filepath, videoKey, video.mimetype || 'video/mp4')
             await uploadToR2(audio.filepath, audioKey, audio.mimetype || 'audio/mpeg')
 
-            // 📥 Push job vào Redis (dùng LIST cho worker RPOP)
+            // 📥 Push job vào Redis
             const job = {
                 jobId: id,
                 videoUrl,

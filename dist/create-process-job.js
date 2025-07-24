@@ -1,83 +1,103 @@
 import express from 'express';
-import dotenv from 'dotenv';
+import cors from 'cors';
+import { IncomingForm } from 'formidable';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import Redis from 'ioredis';
-import formidable from 'formidable';
 import fs from 'fs';
-dotenv.config();
 const app = express();
-const port = process.env.PORT || 8080;
-// Kiểm tra biến môi trường bắt buộc
-const requiredEnv = ['REDIS_HOST', 'REDIS_PORT', 'REDIS_PASSWORD', 'R2_BUCKET_NAME', 'R2_ACCOUNT_ID'];
+const port = parseInt(process.env.PORT || '8080', 10);
+app.use(cors());
+app.options('*', cors());
+// === Kiểm tra ENV bắt buộc ===
+const requiredEnv = [
+    'R2_BUCKET_NAME',
+    'R2_ACCOUNT_ID',
+    'R2_ACCESS_KEY_ID',
+    'R2_SECRET_ACCESS_KEY',
+    'REDIS_HOST',
+    'REDIS_PORT',
+    'REDIS_PASSWORD',
+];
 for (const key of requiredEnv) {
     if (!process.env[key]) {
-        throw new Error(`❌ Missing required env: ${key}`);
+        throw new Error(`❌ Thiếu biến môi trường: ${key}`);
     }
 }
-// Khởi tạo Redis
+// === Redis TCP (LIST + TLS) ===
 const redis = new Redis({
     host: process.env.REDIS_HOST,
-    port: parseInt(process.env.REDIS_PORT || '6379'),
+    port: parseInt(process.env.REDIS_PORT, 10),
     password: process.env.REDIS_PASSWORD,
     maxRetriesPerRequest: 2,
     connectTimeout: 5000,
+    tls: {} // Bắt buộc với Upstash Redis TCP
 });
 redis.on('error', (err) => {
     console.error('❌ Redis error:', err);
 });
-app.post('/create', async (req, res) => {
-    const form = formidable({ multiples: false, keepExtensions: true });
+// === Cloudflare R2 (S3-compatible) ===
+const s3 = new S3Client({
+    region: 'auto',
+    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    },
+});
+// === API POST /create
+app.post('/create', (req, res) => {
+    const form = new IncomingForm({ multiples: false, keepExtensions: true });
     form.parse(req, async (err, fields, files) => {
+        if (err) {
+            console.error('❌ Lỗi parse form:', err);
+            return res.status(500).json({ error: 'Lỗi xử lý form dữ liệu.' });
+        }
         try {
-            if (err)
-                throw err;
-            const videoFile = Array.isArray(files.video) ? files.video[0] : files.video;
-            const audioFile = Array.isArray(files.audio) ? files.audio[0] : files.audio;
-            if (!videoFile || !audioFile) {
-                return res.status(400).json({ error: 'Thiếu file video hoặc audio' });
+            const rawVideo = files.video;
+            const rawAudio = files.audio;
+            if (!rawVideo || !rawAudio) {
+                return res.status(400).json({ error: 'Thiếu video hoặc audio' });
             }
+            const video = Array.isArray(rawVideo) ? rawVideo[0] : rawVideo;
+            const audio = Array.isArray(rawAudio) ? rawAudio[0] : rawAudio;
             const id = Date.now();
             const unique = Math.random().toString(36).substring(2, 8);
-            const baseName = `merged-${id}-${unique}.mp4`;
             const videoKey = `inputs/${id}-${unique}-video.mp4`;
             const audioKey = `inputs/${id}-${unique}-audio.mp3`;
-            const outputKey = `outputs/${baseName}`;
-            await uploadToR2(videoFile.filepath, videoKey);
-            await uploadToR2(audioFile.filepath, audioKey);
+            const outputKey = `merged-${id}-${unique}.mp4`; // 👈 Tên file gọn gàng
+            const videoUrl = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${videoKey}`;
+            const audioUrl = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${audioKey}`;
+            // ⬆️ Upload lên R2
+            await uploadToR2(video.filepath, videoKey, video.mimetype || 'video/mp4');
+            await uploadToR2(audio.filepath, audioKey, audio.mimetype || 'audio/mpeg');
+            // 📥 Push job vào Redis (dùng LIST cho worker RPOP)
             const job = {
-                id,
-                videoKey,
-                audioKey,
-                outputKey,
+                jobId: id,
+                videoUrl,
+                audioUrl,
+                outputName: outputKey,
             };
-            await redis.zadd('process-jobs', Date.now(), JSON.stringify(job));
-            return res.json({ success: true, outputKey });
+            await redis.lpush('process-jobs', JSON.stringify(job));
+            console.log('✅ Đã đẩy job vào Redis:', job);
+            res.status(200).json({ success: true, outputKey });
         }
         catch (error) {
-            console.error('❌ Job failed:', error);
-            return res.status(500).json({ error: 'Xử lý thất bại' });
+            console.error('❌ Lỗi xử lý job:', error);
+            res.status(500).json({ error: 'Xử lý thất bại', detail: String(error) });
         }
     });
 });
-async function uploadToR2(localFilePath, key) {
-    const fileBuffer = await fs.promises.readFile(localFilePath);
-    const uploadUrl = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${process.env.R2_BUCKET_NAME}/${key}`;
-    const res = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/octet-stream',
-            'x-amz-acl': 'public-read',
-        },
-        body: fileBuffer,
-    });
-    if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Upload failed ${res.status}: ${errText}`);
-    }
-    console.log(`✅ Uploaded to R2: ${key}`);
+async function uploadToR2(filePath, key, contentType) {
+    const fileStream = fs.createReadStream(filePath);
+    const uploadParams = {
+        Bucket: process.env.R2_BUCKET_NAME,
+        Key: key,
+        Body: fileStream,
+        ContentType: contentType,
+    };
+    await s3.send(new PutObjectCommand(uploadParams));
+    console.log(`📦 Uploaded to R2: ${key}`);
 }
 app.listen(port, () => {
-    console.log(`🚀 create-process-job worker listening on port ${port}`);
-    console.log(`🌐 R2_ACCOUNT_ID: ${process.env.R2_ACCOUNT_ID}`);
-    console.log(`🌐 R2_BUCKET_NAME: ${process.env.R2_BUCKET_NAME}`);
-    console.log(`🌐 REDIS_HOST: ${process.env.REDIS_HOST}`);
+    console.log(`🚀 create-process-job worker running on port ${port}`);
 });
