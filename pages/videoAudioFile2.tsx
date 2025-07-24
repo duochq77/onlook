@@ -29,9 +29,10 @@ export default function VideoAudioFile2() {
             }
 
             const data = await res.json()
-            if (!data.jobId) return alert("Tạo job thất bại")
-            console.log("🎯 jobId:", data.jobId)
-            setJobId(data.jobId)
+            if (!data.outputKey) return alert("Tạo job thất bại")
+
+            console.log("🎯 jobId (outputKey):", data.outputKey)
+            setJobId(data.outputKey) // ✅ sử dụng outputKey làm jobId
         } catch (err) {
             console.error("❌ Upload exception", err)
             alert("Có lỗi khi gửi yêu cầu")

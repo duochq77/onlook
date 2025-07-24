@@ -28,14 +28,14 @@ for (const key of requiredEnv) {
         throw new Error(`❌ Thiếu biến môi trường: ${key}`);
     }
 }
-// === Redis TCP (ioredis + TLS) ===
+// === Redis TCP (LIST + TLS) ===
 const redis = new ioredis_1.default({
     host: process.env.REDIS_HOST,
     port: parseInt(process.env.REDIS_PORT, 10),
     password: process.env.REDIS_PASSWORD,
     maxRetriesPerRequest: 2,
     connectTimeout: 5000,
-    tls: {} // Bắt buộc cho Upstash Redis TCP
+    tls: {} // Bắt buộc với Upstash Redis TCP
 });
 redis.on('error', (err) => {
     console.error('❌ Redis error:', err);
@@ -49,6 +49,7 @@ const s3 = new client_s3_1.S3Client({
         secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
     },
 });
+// === API POST /create
 app.post('/create', (req, res) => {
     const form = new formidable_1.IncomingForm({ multiples: false, keepExtensions: true });
     form.parse(req, async (err, fields, files) => {
@@ -68,13 +69,20 @@ app.post('/create', (req, res) => {
             const unique = Math.random().toString(36).substring(2, 8);
             const videoKey = `inputs/${id}-${unique}-video.mp4`;
             const audioKey = `inputs/${id}-${unique}-audio.mp3`;
-            const outputKey = `outputs/merged-${id}-${unique}.mp4`;
+            const outputKey = `merged-${id}-${unique}.mp4`; // 👈 Tên file gọn gàng
+            const videoUrl = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${videoKey}`;
+            const audioUrl = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${audioKey}`;
             // ⬆️ Upload lên R2
             await uploadToR2(video.filepath, videoKey, video.mimetype || 'video/mp4');
             await uploadToR2(audio.filepath, audioKey, audio.mimetype || 'audio/mpeg');
-            // 📥 Push job vào Redis
-            const job = { id, videoKey, audioKey, outputKey };
-            await redis.zadd('process-jobs', Date.now(), JSON.stringify(job));
+            // 📥 Push job vào Redis (dùng LIST cho worker RPOP)
+            const job = {
+                jobId: id,
+                videoUrl,
+                audioUrl,
+                outputName: outputKey,
+            };
+            await redis.lpush('process-jobs', JSON.stringify(job));
             console.log('✅ Đã đẩy job vào Redis:', job);
             res.status(200).json({ success: true, outputKey });
         }
