@@ -59,3 +59,4 @@ google-service-account.json
 # 🚀 Vercel
 .vercel
 
+node_modules/
