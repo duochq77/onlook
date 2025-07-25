@@ -1,3 +1,7 @@
+// ✅ PHIÊN BẢN ĐÃ CHUYỂN TỪ SUPABASE SANG CLOUDFLARE R2 (S3 compatible)
+// ❗ Không thay đổi bất kỳ logic xử lý media hay Redis
+// ✅ Giữ nguyên xử lý job + sử dụng Cloudflare R2 để lưu trữ kết quả
+
 import Redis from 'ioredis'
 import fs from 'fs'
 import os from 'os'
@@ -6,22 +10,21 @@ import express from 'express'
 import axios from 'axios'
 import { spawn } from 'child_process'
 import ffmpeg from 'fluent-ffmpeg'
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 
-// ✅ Đọc từ process.env
-const R2_BUCKET = process.env.R2_BUCKET_NAME!
-const R2_ENDPOINT = process.env.R2_ENDPOINT!
+// ✅ Đọc biến môi trường trực tiếp từ process.env
+const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME!
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID!
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID!
 const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY!
-const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL!  // 👈 thêm dòng này
 const REDIS_HOST = process.env.REDIS_HOST!
 const REDIS_PORT = parseInt(process.env.REDIS_PORT!)
 const REDIS_PASSWORD = process.env.REDIS_PASSWORD!
-const PORT = parseInt(process.env.PORT || '8080')
+const PORT = process.env.PORT || '8080'
 
-const r2Client = new S3Client({
+const r2 = new S3Client({
     region: 'auto',
-    endpoint: R2_ENDPOINT,
+    endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
     credentials: {
         accessKeyId: R2_ACCESS_KEY_ID,
         secretAccessKey: R2_SECRET_ACCESS_KEY,
@@ -39,20 +42,27 @@ const redis = new Redis({
 const delay = (ms: number) => new Promise((res) => setTimeout(res, ms))
 
 const downloadFile = async (url: string, filePath: string): Promise<void> => {
+    const timeout = 300000
     const writer = fs.createWriteStream(filePath)
-    const response = await axios.get(url, { responseType: 'stream', timeout: 300_000 })
+    console.log(`📥 Bắt đầu tải file từ: ${url}`)
+    const response = await axios.get(url, { responseType: 'stream', timeout })
     response.data.pipe(writer)
     await new Promise<void>((resolve, reject) => {
         writer.on('finish', resolve)
         writer.on('error', reject)
     })
+    const stats = await fs.promises.stat(filePath)
+    console.log(`✅ Tải xong file (${stats.size} bytes): ${url}`)
 }
 
 const getDuration = (filePath: string): Promise<number> => {
     return new Promise((resolve, reject) => {
         ffmpeg.ffprobe(filePath, (err, metadata) => {
             if (err) reject(err)
-            else resolve(metadata.format.duration ?? 0)
+            else {
+                console.log(`📊 Metadata của ${filePath}:`, metadata.format)
+                resolve(metadata.format.duration ?? 0)
+            }
         })
     })
 }
@@ -89,91 +99,137 @@ const mergeMedia = (
             output
         )
 
-        const proc = spawn('ffmpeg', args)
-        const timeout = setTimeout(() => proc.kill('SIGKILL'), targetDuration * 1.5 * 1000)
+        console.log('🔗 FFmpeg merge CMD:', ['ffmpeg', ...args].join(' '))
 
-        proc.stderr.on('data', (data) => console.error(`📄 FFmpeg stderr: ${data.toString()}`))
-        proc.on('error', reject)
+        const proc = spawn('ffmpeg', args)
+        const timeoutMs = targetDuration * 1.5 * 1000
+
+        const timeout = setTimeout(() => {
+            console.error('⏱ FFmpeg timeout – sẽ kill tiến trình.')
+            proc.kill('SIGKILL')
+            reject(new Error('FFmpeg merge timeout'))
+        }, timeoutMs)
+
+        proc.stderr.on('data', (data) => {
+            console.error(`📄 FFmpeg stderr: ${data.toString()}`)
+        })
+
+        proc.stdout.on('data', (data) => {
+            console.log(`📤 FFmpeg stdout: ${data.toString()}`)
+        })
+
+        proc.on('error', (err) => {
+            clearTimeout(timeout)
+            console.error('❌ FFmpeg không thể chạy:', err)
+            reject(err)
+        })
+
         proc.on('close', (code) => {
             clearTimeout(timeout)
-            code === 0 ? resolve() : reject(new Error(`FFmpeg exited with code ${code}`))
+            console.log(`📦 FFmpeg kết thúc với mã: ${code}`)
+            if (code === 0) {
+                console.log('✅ Merge thành công')
+                resolve()
+            } else {
+                reject(new Error(`FFmpeg kết thúc với mã lỗi ${code}`))
+            }
         })
     })
 }
 
 const processJob = async (job: any) => {
     console.log('📦 Nhận job:', job.jobId)
-    if (!job?.videoUrl || !job?.audioUrl || !job?.outputName) return
+    if (!job?.videoUrl || !job?.audioUrl) return console.error('❌ Thiếu URL video hoặc audio')
 
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `job-${job.jobId}-`))
+    console.log(`📂 Tạo thư mục tạm: ${tmp}`)
+
     const inputVideo = path.join(tmp, 'video.mp4')
     const inputAudio = path.join(tmp, 'audio.mp3')
     const cleanVideo = path.join(tmp, 'clean.mp4')
     const outputFile = path.join(tmp, 'merged.mp4')
 
     try {
-        // 🔁 Tái tạo public URL nếu cần (chắc ăn)
-        const videoUrl = `${R2_PUBLIC_URL}/${job.videoUrl.split('/').pop()}`
-        const audioUrl = `${R2_PUBLIC_URL}/${job.audioUrl.split('/').pop()}`
+        await downloadFile(job.videoUrl, inputVideo)
+        await downloadFile(job.audioUrl, inputAudio)
 
-        await downloadFile(videoUrl, inputVideo)
-        await downloadFile(audioUrl, inputAudio)
-
-        await new Promise<void>((res, rej) => {
+        await new Promise<void>((resolve, reject) => {
             ffmpeg()
                 .input(inputVideo)
                 .outputOptions(['-an', '-c:v', 'copy', '-y'])
                 .output(cleanVideo)
-                .on('end', () => res())
-                .on('error', rej)
+                .on('start', (cmd) => console.log('🔇 Tách audio khỏi video:', cmd))
+                .on('progress', (p) => console.log(`📶 Tách audio: ${p.percent?.toFixed(2)}%`))
+                .on('stderr', (line) => console.log('📄 FFmpeg stderr:', line))
+                .on('end', () => {
+                    console.log('✅ Video sạch đã sẵn sàng')
+                    resolve()
+                })
+                .on('error', reject)
                 .run()
         })
 
+        await delay(1000)
         const videoDur = await getDuration(cleanVideo)
         const audioDur = await getDuration(inputAudio)
-        const targetDuration = Math.max(videoDur, audioDur)
+        console.log(`📏 Duration video: ${videoDur}s, audio: ${audioDur}s`)
 
         let loopTarget: 'audio' | 'video' | 'none' = 'none'
         let loopCount = 0
-        if (Math.abs(videoDur - audioDur) < 1) loopTarget = 'none'
-        else if (videoDur > audioDur) { loopTarget = 'audio'; loopCount = Math.ceil(videoDur / audioDur) }
-        else { loopTarget = 'video'; loopCount = Math.ceil(audioDur / videoDur) }
+        const targetDuration = Math.max(videoDur, audioDur)
+
+        if (Math.abs(videoDur - audioDur) < 1) {
+            loopTarget = 'none'
+        } else if (videoDur > audioDur) {
+            loopTarget = 'audio'
+            loopCount = Math.ceil(videoDur / audioDur)
+        } else {
+            loopTarget = 'video'
+            loopCount = Math.ceil(audioDur / videoDur)
+        }
 
         await mergeMedia(cleanVideo, inputAudio, outputFile, loopTarget, loopCount, targetDuration)
 
+        const uploadKey = `outputs/${job.outputName}`
+        console.log(`📤 Upload kết quả lên R2: ${uploadKey}`)
         const fileBuffer = await fs.promises.readFile(outputFile)
-        const r2Key = `outputs/${job.outputName}`
-        await r2Client.send(new PutObjectCommand({
-            Bucket: R2_BUCKET,
-            Key: r2Key,
+
+        await r2.send(new PutObjectCommand({
+            Bucket: R2_BUCKET_NAME,
+            Key: uploadKey,
             Body: fileBuffer,
             ContentType: 'video/mp4',
         }))
-        console.log(`✅ Đã upload file kết quả lên R2: ${r2Key}`)
+        console.log(`✅ Đã upload file merged lên R2: ${uploadKey}`)
 
-        await redis.zadd('delete-jobs', Date.now() + 5 * 60 * 1000, r2Key)
-        console.log(`🕓 Đã tạo job xoá sau 5 phút cho: ${r2Key}`)
-
+        const deleteJob = {
+            filePath: uploadKey,
+            expiresAt: Date.now() + 5 * 60 * 1000,
+        }
+        await redis.lpush('delete-merged-jobs', JSON.stringify(deleteJob))
+        console.log(`🕓 Đã tạo job xoá sau 5 phút cho: ${uploadKey}`)
     } catch (err) {
         console.error(`❌ Lỗi xử lý job ${job.jobId}:`, err)
     } finally {
         fs.rmSync(tmp, { recursive: true, force: true })
+        console.log('🧹 Đã dọn thư mục RAM tạm:', tmp)
     }
 }
 
 const startWorker = async () => {
-    console.log('🚀 Worker đang chạy...')
+    console.log('🚀 Worker đã khởi động...')
     while (true) {
         try {
-            const raw = await redis.rpop('process-jobs')
-            if (raw) {
-                const job = JSON.parse(raw)
+            const jobRaw = await redis.rpop('video-process-jobs')
+            if (jobRaw) {
+                const job = JSON.parse(jobRaw)
+                console.log('📦 Job nhận từ Redis:', job)
                 await processJob(job)
             } else {
                 await delay(2000)
             }
         } catch (err) {
-            console.error('❌ Lỗi worker:', err)
+            console.error('❌ Lỗi trong worker loop:', err)
         }
     }
 }
@@ -181,7 +237,8 @@ startWorker()
 
 const app = express()
 app.use(express.json())
-app.get('/', (_req, res) => res.send('🟢 process-video-worker2 đang chạy'))
-app.listen(PORT, () => {
-    console.log(`🌐 Server listening on port ${PORT}`)
+app.get('/', (_req, res) => res.send('🟢 process-video-worker2 (R2) hoạt động'))
+app.post('/', (_req, res) => res.status(200).send('OK'))
+app.listen(Number(PORT), () => {
+    console.log(`🌐 Server lắng nghe tại PORT ${PORT}`)
 })

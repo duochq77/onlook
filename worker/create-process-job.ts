@@ -1,122 +1,60 @@
-import express from 'express'
-import cors from 'cors'
-import { IncomingForm, File } from 'formidable'
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
+import type { NextApiRequest, NextApiResponse } from 'next'
 import Redis from 'ioredis'
-import fs from 'fs'
 
-const app = express()
-const port = parseInt(process.env.PORT || '8080', 10)
+let redis: Redis | null = null
 
-app.use(cors())
-app.options('*', cors())
-
-// === Kiểm tra ENV bắt buộc ===
-const requiredEnv = [
-    'R2_BUCKET_NAME',
-    'R2_ACCESS_KEY_ID',
-    'R2_SECRET_ACCESS_KEY',
-    'R2_PUBLIC_URL',            // ✅ Dùng public URL như https://pub-...r2.dev
-    'REDIS_HOST',
-    'REDIS_PORT',
-    'REDIS_PASSWORD',
-]
-for (const key of requiredEnv) {
-    if (!process.env[key]) {
-        throw new Error(`❌ Thiếu biến môi trường: ${key}`)
+function getRedisClient() {
+    if (!redis) {
+        redis = new Redis({
+            host: process.env.REDIS_HOST!,
+            port: Number(process.env.REDIS_PORT!),
+            username: process.env.REDIS_USERNAME!,
+            password: process.env.REDIS_PASSWORD!,
+            tls: {},
+            retryStrategy: (times) => Math.min(times * 200, 2000),
+        })
     }
+    return redis
 }
 
-// === Redis TCP (LIST + TLS) ===
-const redis = new Redis({
-    host: process.env.REDIS_HOST!,
-    port: parseInt(process.env.REDIS_PORT!, 10),
-    password: process.env.REDIS_PASSWORD!,
-    maxRetriesPerRequest: 2,
-    connectTimeout: 5000,
-    tls: {} // Bắt buộc với Upstash Redis TCP
-})
-
-redis.on('error', (err) => {
-    console.error('❌ Redis error:', err)
-})
-
-// === Cloudflare R2 (S3-compatible) ===
-const s3 = new S3Client({
-    region: 'auto',
-    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: {
-        accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-    },
-})
-
-// === API POST /create
-app.post('/create', (req, res) => {
-    const form = new IncomingForm({ multiples: false, keepExtensions: true })
-
-    form.parse(req, async (err, fields, files) => {
-        if (err) {
-            console.error('❌ Lỗi parse form:', err)
-            return res.status(500).json({ error: 'Lỗi xử lý form dữ liệu.' })
-        }
-
-        try {
-            const rawVideo = files.video
-            const rawAudio = files.audio
-            if (!rawVideo || !rawAudio) {
-                return res.status(400).json({ error: 'Thiếu video hoặc audio' })
-            }
-
-            const video = Array.isArray(rawVideo) ? rawVideo[0] : rawVideo
-            const audio = Array.isArray(rawAudio) ? rawAudio[0] : rawAudio
-
-            const id = Date.now()
-            const unique = Math.random().toString(36).substring(2, 8)
-
-            const videoKey = `inputs/${id}-${unique}-video.mp4`
-            const audioKey = `inputs/${id}-${unique}-audio.mp3`
-            const outputKey = `merged-${id}-${unique}.mp4`
-
-            const videoUrl = `${process.env.R2_PUBLIC_URL}/${videoKey}`
-            const audioUrl = `${process.env.R2_PUBLIC_URL}/${audioKey}`
-
-            // ⬆️ Upload lên R2
-            await uploadToR2(video.filepath, videoKey, video.mimetype || 'video/mp4')
-            await uploadToR2(audio.filepath, audioKey, audio.mimetype || 'audio/mpeg')
-
-            // 📥 Push job vào Redis
-            const job = {
-                jobId: id,
-                videoUrl,
-                audioUrl,
-                outputName: outputKey,
-            }
-
-            await redis.lpush('process-jobs', JSON.stringify(job))
-            console.log('✅ Đã đẩy job vào Redis:', job)
-
-            res.status(200).json({ success: true, outputKey })
-        } catch (error) {
-            console.error('❌ Lỗi xử lý job:', error)
-            res.status(500).json({ error: 'Xử lý thất bại', detail: String(error) })
-        }
-    })
-})
-
-async function uploadToR2(filePath: string, key: string, contentType: string) {
-    const fileStream = fs.createReadStream(filePath)
-    const uploadParams = {
-        Bucket: process.env.R2_BUCKET_NAME!,
-        Key: key,
-        Body: fileStream,
-        ContentType: contentType,
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method Not Allowed' })
     }
 
-    await s3.send(new PutObjectCommand(uploadParams))
-    console.log(`📦 Uploaded to R2: ${key}`)
-}
+    const { jobId, videoUrl, audioUrl, outputName } = req.body
+    console.log('📥 Nhận request:', { jobId, videoUrl, audioUrl, outputName })
 
-app.listen(port, () => {
-    console.log(`🚀 create-process-job worker running on port ${port}`)
-})
+    if (!jobId || !videoUrl || !audioUrl || !outputName) {
+        console.error('❌ Thiếu tham số trong body:', req.body)
+        return res.status(400).json({ error: 'Thiếu tham số jobId, videoUrl, audioUrl, outputName' })
+    }
+
+    const timestamp = Date.now()
+    const finalOutputName = outputName.endsWith('.mp4') ? outputName : `${outputName}.mp4`
+
+    const jobPayload = {
+        jobId,
+        videoUrl,
+        audioUrl,
+        outputName: finalOutputName,
+        createdAt: timestamp,
+    }
+
+    try {
+        const redis = getRedisClient()
+        console.log('📦 Đang đẩy job vào Redis TCP:', jobPayload)
+        const pushResult = await redis.lpush('video-process-jobs', JSON.stringify(jobPayload))
+        console.log('✅ Redis lpush result:', pushResult)
+
+        const outputKey = `merged-${jobId}.mp4`
+        return res.status(200).json({
+            message: 'Đã tạo job thành công',
+            jobId,
+            outputKey, // ✅ Bổ sung trả về đúng outputKey cho UI
+        })
+    } catch (err: any) {
+        console.error('❌ Lỗi Redis khi push job:', err)
+        return res.status(500).json({ error: 'Không thể tạo job', details: err.message })
+    }
+}
